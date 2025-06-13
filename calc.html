@@ -1090,26 +1090,28 @@ function init() {
 function handleDynamicClicks(e) {
     const target = e.target.closest('[data-action]');
     if (!target) return;
+
     const action = target.dataset.action;
     const id = target.dataset.id;
+
     switch (action) {
         // --- Session & Sharing ---
         case 'admin-clear-session': clearSessionData(); break;
         case 'save-session': saveSession(); break;
         case 'load-session':
-    const savedJSON = localStorage.getItem('galifreyCalcSession');
-    if (savedJSON) {
-        const savedData = JSON.parse(savedJSON);
-        if (loadSession(savedData)) { // Use the pure data-loading function
-            showToast("Session loaded successfully!", "success");
-            trackAnalytics('session_loaded', { source: 'LocalStorage' });
-            renderAll(); // Manually trigger a re-render
-        } else {
-            showToast("Could not load session. Data may be corrupt.", "error");
-        }
-    }
-    target.closest('#load-session-banner').classList.add('hidden');
-    break;
+            const savedJSON = localStorage.getItem('galifreyCalcSession');
+            if (savedJSON) {
+                const savedData = JSON.parse(savedJSON);
+                if (loadSession(savedData)) {
+                    showToast("Session loaded successfully!", "success");
+                    trackAnalytics('session_loaded', { source: 'LocalStorage' });
+                    renderAll(); 
+                } else {
+                    showToast("Could not load session. Data may be corrupt.", "error");
+                }
+            }
+            target.closest('#load-session-banner').classList.add('hidden');
+            break;
         case 'dismiss-load-banner': target.closest('#load-session-banner').classList.add('hidden'); break;
         case 'share-build': shareBuild(); break;
 
@@ -1126,8 +1128,15 @@ function handleDynamicClicks(e) {
         case 'close-alternatives-modal': document.getElementById('alternatives-modal-overlay').style.display = 'none'; break;
 
         // --- Core Calculator Actions ---
+        
+        // *** THIS IS THE CORRECTED PART ***
+        // This case was missing, which is why the button was unresponsive.
+        case 'select-proposal':
+            selectProposal(target.dataset.proposalType);
+            break;
+        // **********************************
+            
         case 'select-package': selectPackage(id); break;
-        case 'select-proposal': selectProposal(target.dataset.proposalType); break;
         case 'toggle-service': if (e.target.closest('.service-config')) return; toggleService(id); break;
         case 'add-ad-channel-confirm': addAdChannel(); break;
         case 'remove-ad-channel': removeAdChannel(id); break;
