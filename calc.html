@@ -918,46 +918,53 @@ let selections = {
 function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const sharedDataParam = urlParams.get('s');
-    let loadedFromUrl = false;
+    let sessionLoadedFromUrl = false;
 
-    // First, try to load from a shared URL parameter
+    // Priority 1: Load from a shared URL parameter.
     if (sharedDataParam) {
         try {
             const decoded = atob(sharedDataParam);
             const decompressed = pako.inflate(decoded, { to: 'string' });
             const sharedSelections = JSON.parse(decompressed);
-            loadSession(sharedSelections);
-            loadedFromUrl = true; // Mark that we loaded successfully from the URL
+            
+            // Use the new, pure loadSession function to update the state.
+            if (loadSession(sharedSelections)) {
+                sessionLoadedFromUrl = true;
+                showToast("Shared session loaded successfully!", "success");
+                trackAnalytics('session_loaded', { source: 'URL' });
 
-            // Attempt to clean the URL, but let it fail silently if blocked
-            try {
-                const cleanUrl = new URL(window.location);
-                cleanUrl.searchParams.delete('s');
-                window.history.replaceState({}, document.title, cleanUrl.href);
-            } catch (urlError) {
-                // Do nothing. This is not critical.
-                console.warn("URL cleaning was blocked by the environment.");
+                // Clean the URL to prevent reloading the same shared data on refresh.
+                try {
+                    const cleanUrl = new URL(window.location);
+                    cleanUrl.searchParams.delete('s');
+                    window.history.replaceState({}, document.title, cleanUrl.href);
+                } catch (urlError) {
+                    console.warn("URL cleaning was blocked by the environment.");
+                }
+            } else {
+                 throw new Error("Invalid session data format from URL.");
             }
         } catch (e) {
-            // If any part of loading from URL fails, do not show an error.
-            // Just fall back to checking local storage.
-            console.error("Failed to load from shared URL, falling back:", e);
+            console.error("Failed to load from shared URL:", e);
+            showToast("Could not load the shared link. It may be invalid or corrupted.", "error");
         }
     }
-    
-    // If we didn't load from a URL, check for a locally saved session.
-    if (!loadedFromUrl) {
-        const savedSession = localStorage.getItem('galifreyCalcSession');
-        if (savedSession) {
+
+    // Priority 2: If no URL session, check for a local session to show the "Load" banner.
+    if (!sessionLoadedFromUrl) {
+        const savedSessionJSON = localStorage.getItem('galifreyCalcSession');
+        if (savedSessionJSON) {
             document.getElementById('load-session-banner').classList.remove('hidden');
         }
     }
 
-    // Continue with normal setup
+    // Standard application setup.
     activeCampaign = urlParams.get('campaign');
     loadConfig();
     setupEventListeners();
     listenForQuotes();
+
+    // A single, final render call to draw the UI with either the shared data or the default state.
     renderAll();
 }
 
@@ -1062,7 +1069,20 @@ function handleDynamicClicks(e) {
         // --- Session & Sharing ---
         case 'admin-clear-session': clearSessionData(); break;
         case 'save-session': saveSession(); break;
-        case 'load-session': loadSession(); target.closest('#load-session-banner').classList.add('hidden'); break;
+        case 'load-session':
+    const savedJSON = localStorage.getItem('galifreyCalcSession');
+    if (savedJSON) {
+        const savedData = JSON.parse(savedJSON);
+        if (loadSession(savedData)) { // Use the pure data-loading function
+            showToast("Session loaded successfully!", "success");
+            trackAnalytics('session_loaded', { source: 'LocalStorage' });
+            renderAll(); // Manually trigger a re-render
+        } else {
+            showToast("Could not load session. Data may be corrupt.", "error");
+        }
+    }
+    target.closest('#load-session-banner').classList.add('hidden');
+    break;
         case 'dismiss-load-banner': target.closest('#load-session-banner').classList.add('hidden'); break;
         case 'share-build': shareBuild(); break;
 
@@ -2624,30 +2644,21 @@ function renderSubmittedQuotes(quotes = []) {
         }
         // END: REPLACE THIS FUNCTION
 
-        function loadSession(sessionData) {
+function loadSession(dataToLoad) {
     try {
-        // If data is passed, use it. Otherwise, get from localStorage.
-        const dataToLoad = sessionData || JSON.parse(localStorage.getItem('galifreyCalcSession'));
-        if (!dataToLoad) {
-            showToast("No saved session found.", "error");
-            return;
-        }
-
-        if (dataToLoad.phases && dataToLoad.clientContext) {
+        if (dataToLoad && dataToLoad.phases && dataToLoad.clientContext) {
+            // Ensure complex types are correctly reconstructed after JSON parsing.
             dataToLoad.packagesToCompare = new Set(dataToLoad.packagesToCompare || []);
+            
+            // Overwrite the global `selections` variable with the loaded data.
             selections = dataToLoad;
-            showToast("Session loaded successfully!", "success");
-            // --- NEW: Analytics Tracking ---
-            trackAnalytics('session_loaded', { source: sessionData ? 'URL' : 'LocalStorage' });
-            // -----------------------------
-            renderAll();
-        } else {
-            throw new Error("Invalid session data format.");
+            return true; // Return true on success.
         }
+        // Return false if the data format is invalid.
+        return false;
     } catch (e) {
-        console.error("Failed to load session:", e);
-        showToast("Could not load session data. It may be corrupted.", "error");
-        localStorage.removeItem('galifreyCalcSession'); // Clear bad data
+        console.error("Error processing session data:", e);
+        return false;
     }
 }
 
@@ -2781,14 +2792,36 @@ function toggleService(serviceId) {
     const service = findService(serviceId);
     if (!service) return;
 
-    if (phase.services[serviceId]) {
+    if (phase.services[serviceId]) { // This is a DESELECTION
         if (phase.services[serviceId].locked) {
             showToast(`${service.name} is locked by the selected package and cannot be removed.`, "error");
             return;
         }
+        
         delete phase.services[serviceId];
         trackAnalytics('service_deselected', { serviceId });
-    } else {
+
+        // --- FIX: CHECK FOR AND REMOVE DEPENDENTS ---
+        const newlyRemovedServiceName = service.name;
+        const removedDependents = [];
+
+        // Check all other selected services to see if they depended on the one just removed.
+        for (const selectedId in phase.services) {
+            const selectedService = findService(selectedId);
+            if (selectedService?.dependencies?.includes(serviceId)) {
+                delete phase.services[selectedId];
+                removedDependents.push(selectedService.name);
+                trackAnalytics('service_deselected', { serviceId: selectedId, reason: 'dependency_removed' });
+            }
+        }
+        
+        if (removedDependents.length > 0) {
+            const message = `${newlyRemovedServiceName} deselected, also removing dependent services: ${removedDependents.join(', ')}.`;
+            showToast(message, 'info');
+        }
+        // --- END FIX ---
+
+    } else { // This is a SELECTION
         phase.services[serviceId] = {
             quantity: 1,
             mods: createDefaultModsForService(service),
