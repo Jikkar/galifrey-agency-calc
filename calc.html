@@ -861,51 +861,53 @@ const defaultConfig = {
         const { jsPDF } = window.jspdf;
         // START: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
-        function init() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const sharedDataParam = urlParams.get('s');
-            let loadedFromUrl = false;
+        // START: REPLACE THIS FUNCTION
+function init() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedDataParam = urlParams.get('s');
 
-            // Logic to load data on page start
-            if (sharedDataParam) {
-                try {
-                    const decoded = atob(sharedDataParam);
-                    const decompressed = pako.inflate(decoded, { to: 'string' });
-                    const sharedSelections = JSON.parse(decompressed);
-                    loadSession(sharedSelections);
-                    loadedFromUrl = true; // Mark that we loaded successfully from the URL
+    // Default to checking for a local session
+    let checkForLocalStorage = true;
 
-                    // After successful loading, TRY to clean the URL.
-                    // This is in a separate try...catch so it fails silently if blocked.
-                    try {
-                        const cleanUrl = new URL(window.location);
-                        cleanUrl.searchParams.delete('s');
-                        window.history.replaceState({}, document.title, cleanUrl.href);
-                    } catch (urlError) {
-                        console.warn("Could not clean URL, likely due to security restrictions in the environment. This is non-critical.");
-                    }
+    // First, try to load from a shared URL parameter
+    if (sharedDataParam) {
+        try {
+            const decoded = atob(sharedDataParam);
+            const decompressed = pako.inflate(decoded, { to: 'string' });
+            const sharedSelections = JSON.parse(decompressed);
+            loadSession(sharedSelections);
+            checkForLocalStorage = false; // Successfully loaded from URL, so don't check localStorage
 
-                } catch (e) {
-                    console.error("Failed to load from shared URL:", e);
-                    showToast("The shared link is invalid or corrupted.", "error");
-                }
+            // Attempt to clean the URL, but don't let it cause a user-facing error
+            try {
+                const cleanUrl = new URL(window.location);
+                cleanUrl.searchParams.delete('s');
+                window.history.replaceState({}, document.title, cleanUrl.href);
+            } catch (urlError) {
+                console.warn("Could not clean URL. This is non-critical.");
             }
-            
-            // If we didn't load from a URL, check for a local session.
-            if (!loadedFromUrl) {
-                const savedSession = localStorage.getItem('galifreyCalcSession');
-                if (savedSession) {
-                    document.getElementById('load-session-banner').classList.remove('hidden');
-                }
-            }
-
-            // Continue with normal setup
-            activeCampaign = urlParams.get('campaign');
-            loadConfig();
-            setupEventListeners();
-            listenForQuotes();
-            renderAll();
+        } catch (e) {
+            console.error("Failed to load from shared URL:", e);
+            showToast("The shared link is invalid or corrupted.", "error");
         }
+    }
+
+    // If we didn't load from a URL, check for a locally saved session
+    if (checkForLocalStorage) {
+        const savedSession = localStorage.getItem('galifreyCalcSession');
+        if (savedSession) {
+            document.getElementById('load-session-banner').classList.remove('hidden');
+        }
+    }
+
+    // Continue with normal setup
+    activeCampaign = urlParams.get('campaign');
+    loadConfig();
+    setupEventListeners();
+    listenForQuotes();
+    renderAll();
+}
+// END: REPLACE THIS FUNCTION
         // END: REPLACE THIS FUNCTION
         function loadConfig() {
             const savedConfig = localStorage.getItem('galifreyCalcConfig');
@@ -1195,81 +1197,84 @@ const defaultConfig = {
         }
         // END: ADD THIS MISSING FUNCTION
         // START: REPLACE THIS FUNCTION
-        function renderPackages() {
-            const container = document.getElementById('content-packages');
-            if (!container) return;
-            const campaignModifier = activeCampaign ? config.settings.campaignModifiers[activeCampaign] : null;
-            const globalAdjust = campaignModifier?.globalAdjust;
+        // START: REPLACE THIS FUNCTION
+function renderPackages() {
+    const container = document.getElementById('content-packages');
+    if (!container) return;
+    const campaignModifier = activeCampaign ? config.settings.campaignModifiers[activeCampaign] : null;
+    const globalAdjust = campaignModifier?.globalAdjust;
 
-            // --- NEW: Render the "Compare Selected" button if needed ---
-            const compareButtonHtml = selections.packagesToCompare.size >= 2 ? `
-                <div class="flex justify-end mb-6">
-                    <button data-action="compare-packages" class="btn btn-secondary">
-                        Compare Selected (${selections.packagesToCompare.size})
-                    </button>
+    const compareButtonHtml = selections.packagesToCompare.size >= 2 ? `
+        <div class="flex justify-end mb-6">
+            <button data-action="compare-packages" class="btn btn-secondary">
+                Compare Selected (${selections.packagesToCompare.size})
+            </button>
+        </div>
+    ` : '';
+
+    container.innerHTML = `
+        ${compareButtonHtml}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            ${config.packages.map(pkg => {
+                const tempSelections = {
+                    phases: [{ id: 'temp-phase', name: 'Temp Phase', services: {}, adChannels: {} }],
+                    clientContext: {}, overrides: {}, appliedCoupon: null, teamAugmentation: {}
+                };
+                pkg.services.forEach(s => {
+                    const service = findService(s.id);
+                    if (!service) return;
+                    tempSelections.phases[0].services[s.id] = {
+                        quantity: s.quantity || 1,
+                        mods: s.mods || createDefaultModsForService(service),
+                        termMonths: 1
+                    };
+                });
+                const { oneTime, monthly } = calculateTotals(tempSelections).totals;
+                const totalValue = oneTime + monthly;
+                const isRecommended = checkPackageRecommendation(pkg.id);
+                let displayPrice = getCampaignPackagePrice(pkg.id) ?? pkg.displayPrice;
+                if (getCampaignPackagePrice(pkg.id) === null && globalAdjust?.value) {
+                    if (globalAdjust.type === 'percent') {
+                        displayPrice *= (1 + globalAdjust.value);
+                    } else {
+                        displayPrice += globalAdjust.value;
+                    }
+                }
+                const savings = totalValue > 0 && displayPrice > 0 ? totalValue - displayPrice : 0;
+                const isCheckedForCompare = selections.packagesToCompare.has(pkg.id);
+
+                return `
+                <div class="package-card bg-white rounded-2xl shadow-md p-6 flex flex-col hover:shadow-xl transition-shadow duration-300">
+                    ${isRecommended ? `<div class="recommendation-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" ></path></svg>Recommended</div>` : ''}
+                    ${savings > 0 ? `<div class="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-xl">SAVE ${formatCurrency(savings)}</div>` : ''}
+                    <h3 class="text-2xl font-bold text-indigo-600">${pkg.name}</h3>
+                    <p class="text-gray-500 mt-2 flex-grow">${pkg.desc}</p>
+                    <div class="my-6">
+                        <span class="text-4xl font-extrabold text-gray-900">${formatCurrency(displayPrice)}</span>
+                        ${totalValue > 0 && savings > 0 ? `<span class="text-gray-500 line-through ml-2">${formatCurrency(totalValue)}</span>` : ''}
+                    </div>
+                    <ul class="space-y-2 text-sm text-gray-600 mb-6 flex-grow">
+                        ${(pkg.features || '').split(',').map(f => `
+                            <li class="flex items-center">
+                                <svg class="w-4 h-4 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                ${f.trim()}
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <button data-action="select-package" data-id="${pkg.id}" class="mt-auto w-full btn btn-primary">Select Package</button>
+                    
+                    <div class="mt-4 pt-4 border-t border-gray-200 text-center">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" data-change-action="toggle-compare-package" data-id="${pkg.id}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" ${isCheckedForCompare ? 'checked' : ''}>
+                            <span class="ml-2 text-sm text-gray-600">Compare</span>
+                        </label>
+                    </div>
                 </div>
-            ` : '';
-
-            container.innerHTML = `
-                ${compareButtonHtml}
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    ${config.packages.map(pkg => {
-                        const tempSelections = {
-                            phases: [{ id: 'temp-phase', name: 'Temp Phase', services: {}, adChannels: {} }],
-                            clientContext: {}, overrides: {}, appliedCoupon: null, teamAugmentation: {}
-                        };
-                        pkg.services.forEach(s => {
-                            const service = findService(s.id);
-                            if (!service) return;
-                            tempSelections.phases[0].services[s.id] = {
-                                quantity: s.quantity || 1,
-                                mods: s.mods || createDefaultModsForService(service),
-                                termMonths: 1
-                            };
-                        });
-                        const { oneTime, monthly } = calculateTotals(tempSelections).totals;
-                        const totalValue = oneTime + monthly;
-                        const isRecommended = checkPackageRecommendation(pkg.id);
-                        let displayPrice = getCampaignPackagePrice(pkg.id) ?? pkg.displayPrice;
-                        if (getCampaignPackagePrice(pkg.id) === null && globalAdjust?.value) {
-                            if (globalAdjust.type === 'percent') {
-                                displayPrice *= (1 + globalAdjust.value);
-                            } else {
-                                displayPrice += globalAdjust.value;
-                            }
-                        }
-                        const savings = totalValue > 0 && displayPrice > 0 ? totalValue - displayPrice : 0;
-                        
-                        // --- NEW: Check if this package is selected for comparison ---
-                        const isCheckedForCompare = selections.packagesToCompare.has(pkg.id);
-
-                        return `
-                        <div class="package-card bg-white rounded-2xl shadow-md p-6 flex flex-col hover:shadow-xl transition-shadow duration-300">
-                            ${isRecommended ? `...` : ''} <!-- Recommendation badge logic unchanged -->
-                            ${savings > 0 ? `<div class="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-xl">SAVE ${formatCurrency(savings)}</div>` : ''}
-                            <h3 class="text-2xl font-bold text-indigo-600">${pkg.name}</h3>
-                            <p class="text-gray-500 mt-2 flex-grow">${pkg.desc}</p>
-                            <div class="my-6">
-                                <span class="text-4xl font-extrabold text-gray-900">${formatCurrency(displayPrice)}</span>
-                                ${totalValue > 0 && savings > 0 ? `<span class="text-gray-500 line-through ml-2">${formatCurrency(totalValue)}</span>` : ''}
-                            </div>
-                            <ul class="space-y-2 text-sm text-gray-600 mb-6 flex-grow">
-                                ${(pkg.features || '').split(',').map(f => `...`).join('')} <!-- Features logic unchanged -->
-                            </ul>
-                            <button data-action="select-package" data-id="${pkg.id}" class="mt-auto w-full btn btn-primary">Select Package</button>
-                            
-                            <!-- NEW: Compare Checkbox in Footer -->
-                            <div class="mt-4 pt-4 border-t border-gray-200 text-center">
-                                <label class="inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" data-change-action="toggle-compare-package" data-id="${pkg.id}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" ${isCheckedForCompare ? 'checked' : ''}>
-                                    <span class="ml-2 text-sm text-gray-600">Compare</span>
-                                </label>
-                            </div>
-                        </div>
-                    `}).join('')}
-                </div>
-            `;
-        }
+            `}).join('')}
+        </div>
+    `;
+}
+// END: REPLACE THIS FUNCTION
         // END: REPLACE THIS FUNCTION
         function renderBuilder() {
             const container = document.getElementById('content-builder');
