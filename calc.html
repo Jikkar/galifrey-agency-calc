@@ -2498,31 +2498,32 @@ function renderCompetitorSnapshotPanel() {
         // END: REPLACE THIS FUNCTION
 
         function loadSession(sessionData) {
-            try {
-                // If data is passed, use it. Otherwise, get from localStorage.
-                const dataToLoad = sessionData || JSON.parse(localStorage.getItem('galifreyCalcSession'));
-                if (!dataToLoad) {
-                    showToast("No saved session found.", "error");
-                    return;
-                }
-
-                // A simple check to see if it's a valid selections object
-                if (dataToLoad.phases && dataToLoad.clientContext) {
-                    // Restore the Set object for packagesToCompare
-                    dataToLoad.packagesToCompare = new Set(dataToLoad.packagesToCompare || []);
-                    selections = dataToLoad;
-                    showToast("Session loaded successfully!", "success");
-                    trackAnalytics('session_loaded');
-                    renderAll();
-                } else {
-                    throw new Error("Invalid session data format.");
-                }
-            } catch (e) {
-                console.error("Failed to load session:", e);
-                showToast("Could not load session data. It may be corrupted.", "error");
-                localStorage.removeItem('galifreyCalcSession'); // Clear bad data
-            }
+    try {
+        // If data is passed, use it. Otherwise, get from localStorage.
+        const dataToLoad = sessionData || JSON.parse(localStorage.getItem('galifreyCalcSession'));
+        if (!dataToLoad) {
+            showToast("No saved session found.", "error");
+            return;
         }
+
+        if (dataToLoad.phases && dataToLoad.clientContext) {
+            dataToLoad.packagesToCompare = new Set(dataToLoad.packagesToCompare || []);
+            selections = dataToLoad;
+            showToast("Session loaded successfully!", "success");
+            // --- NEW: Analytics Tracking ---
+            trackAnalytics('session_loaded', { source: sessionData ? 'URL' : 'LocalStorage' });
+            // -----------------------------
+            renderAll();
+        } else {
+            throw new Error("Invalid session data format.");
+        }
+    } catch (e) {
+        console.error("Failed to load session:", e);
+        showToast("Could not load session data. It may be corrupted.", "error");
+        localStorage.removeItem('galifreyCalcSession'); // Clear bad data
+    }
+}
+
 
         // START: REPLACE THIS FUNCTION
         function shareBuild() {
@@ -2733,6 +2734,11 @@ function updateClientContext(field, value, target) {
     if (field === 'competitors') {
         const index = parseInt(target.dataset.index, 10);
         selections.clientContext.competitors[index] = value;
+        // --- NEW: Analytics Tracking for competitor URLs ---
+        if (value.trim() !== '') {
+            trackAnalytics('competitor_url_entered', { url: value });
+        }
+        // --------------------------------------------------
     } else if (field === 'marketingHistory') {
         const historySet = new Set(selections.clientContext.marketingHistory);
         if (target.checked) {
@@ -2755,8 +2761,14 @@ function updateClientContext(field, value, target) {
     // Re-calculate totals if an ROI-related field changes
     if (['monthlyTraffic', 'conversionRate', 'avgSaleValue'].includes(field)) {
         renderSummary();
+        // --- NEW: Analytics Tracking for ROI inputs ---
+        if (value.trim() !== '') {
+            trackAnalytics('roi_data_entered', { field: field, value: value });
+        }
+        // ----------------------------------------------
     }
 }
+
 // END: REPLACE THIS FUNCTION
         // START: ADD THIS NEW FUNCTION
         function updateTeamAugmentationHours(roleId, hours) {
@@ -2764,10 +2776,17 @@ function updateClientContext(field, value, target) {
                 delete selections.teamAugmentation[roleId];
             } else {
                 selections.teamAugmentation[roleId] = { hours: hours };
+                // --- NEW: Analytics Tracking ---
+                const role = (config.teamAugmentationRoles || []).find(r => r.id === roleId);
+                if (role) {
+                    trackAnalytics('team_role_added', { roleName: role.name, hours: hours });
+                }
+                // -----------------------------
             }
-            renderAugmentationCalculator(); // Re-render this tab to update costs/savings
-            renderSummary(); // Re-render the main summary
+            renderAugmentationCalculator();
+            renderSummary();
         }
+
         // END: ADD THIS NEW FUNCTION
         function clearBuilder() {
             if (confirm("Are you sure you want to clear all selections and phases from the campaign builder? This will also clear the business information you entered.")) {
