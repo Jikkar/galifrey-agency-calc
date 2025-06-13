@@ -1091,8 +1091,17 @@ function handleDynamicClicks(e) {
     const target = e.target.closest('[data-action]');
     if (!target) return;
 
+    // This check prevents the document-level listener from interfering with
+    // the more specific listener we're adding to the proposals modal.
+    if (target.closest('#alternatives-content')) {
+        return;
+    }
+
     const action = target.dataset.action;
     const id = target.dataset.id;
+    
+    // For debugging: log the action to the console to confirm it's being captured.
+    // console.log(`Action triggered: ${action}`, target);
 
     switch (action) {
         // --- Session & Sharing ---
@@ -1128,14 +1137,8 @@ function handleDynamicClicks(e) {
         case 'close-alternatives-modal': document.getElementById('alternatives-modal-overlay').style.display = 'none'; break;
 
         // --- Core Calculator Actions ---
+        // Note: 'select-proposal' is now intentionally removed from this switch statement.
         
-        // *** THIS IS THE CORRECTED PART ***
-        // This case was missing, which is why the button was unresponsive.
-        case 'select-proposal':
-            selectProposal(target.dataset.proposalType);
-            break;
-        // **********************************
-            
         case 'select-package': selectPackage(id); break;
         case 'toggle-service': if (e.target.closest('.service-config')) return; toggleService(id); break;
         case 'add-ad-channel-confirm': addAdChannel(); break;
@@ -4153,13 +4156,12 @@ function calculateTotals(currentSelections) {
             return growthSelections;
         }
 function generateAlternativeProposals() {
+    const overlay = document.getElementById('alternatives-modal-overlay');
     const container = document.getElementById('alternatives-content');
     container.innerHTML = '<p class="text-center col-span-3">Generating proposals...</p>';
-    document.getElementById('alternatives-modal-overlay').style.display = 'flex';
+    overlay.style.display = 'flex';
 
-    // Create a pristine, deep copy of the current selections to work from.
     const originalSelections = JSON.parse(JSON.stringify(selections));
-    // *** FIX: Manually restore the Set object that is lost during the stringify/parse deep copy.
     originalSelections.packagesToCompare = new Set(selections.packagesToCompare);
     
     const { totals: originalTotals } = calculateTotals(originalSelections);
@@ -4170,13 +4172,7 @@ function generateAlternativeProposals() {
         return;
     }
 
-    // --- PROPOSAL 1: BUDGET FOCUS (-30%) ---
     const budgetSelections = createBudgetProposal(originalSelections);
-    
-    // --- PROPOSAL 2: YOUR CURRENT SELECTION ---
-    // This is just the untouched original copy.
-
-    // --- PROPOSAL 3: GROWTH ACCELERATOR (+30%) ---
     const growthSelections = createGrowthProposal(originalSelections);
 
     const proposals = [
@@ -4195,7 +4191,7 @@ function generateAlternativeProposals() {
         if (!p.isCurrent && originalInvestment > 0) {
             const diffPercent = ((totalInvestment - originalInvestment) / originalInvestment) * 100;
             if (Math.abs(diffPercent) > 1) {
-                    diffHtml = `<span class="text-xs font-bold ${diffPercent > 0 ? 'text-green-600' : 'text-red-600'}">(${diffPercent > 0 ? '+' : ''}${diffPercent.toFixed(0)}%)</span>`;
+                diffHtml = `<span class="text-xs font-bold ${diffPercent > 0 ? 'text-green-600' : 'text-red-600'}">(${diffPercent > 0 ? '+' : ''}${diffPercent.toFixed(0)}%)</span>`;
             }
         }
 
@@ -4212,8 +4208,8 @@ function generateAlternativeProposals() {
                 <ul class="text-xs space-y-1 list-disc list-inside mb-6 flex-grow">
                     ${hasSelections ? breakdown.items.map(i => `<li>${i.name}</li>`).join('') : '<li class="list-none text-gray-400">No services in this proposal.</li>'}
                 </ul>
-                <button class="mt-auto w-full font-bold py-2 px-4 rounded-lg transition-colors ${p.isCurrent ? 'bg-indigo-600 text-white' : 'bg-white hover:bg-indigo-100 border'}"
-                        data-action="select-proposal" data-proposal-type="${p.type}" ${!hasSelections && !p.isCurrent ? 'disabled class="bg-gray-200 text-gray-400 cursor-not-allowed"' : ''}>
+                <button class="proposal-button mt-auto w-full font-bold py-2 px-4 rounded-lg transition-colors ${p.isCurrent ? 'bg-indigo-600 text-white' : 'bg-white hover:bg-indigo-100 border'}"
+                        data-proposal-type="${p.type}" ${!hasSelections && !p.isCurrent ? 'disabled' : ''}>
                     ${p.isCurrent ? "Keep This Selection" : "Switch to This Proposal"}
                 </button>
             </div>
@@ -4222,31 +4218,31 @@ function generateAlternativeProposals() {
     
     container.innerHTML = html;
     
-    // Store the fully generated proposal objects in a temporary global variable for easy access.
-    // Because `originalSelections` was fixed, all derived proposal objects are now also correct.
     window.tempProposals = {
         budget: proposals[0].selections,
         current: proposals[1].selections,
         growth: proposals[2].selections
     };
+    
+    // *** KEY FIX: Add a specific, direct event listener to the container ***
+    container.onclick = function(event) {
+        const button = event.target.closest('.proposal-button');
+        if (button && !button.disabled) {
+            const proposalType = button.dataset.proposalType;
+            selectProposal(proposalType);
+        }
+    };
 }
 function selectProposal(proposalType) {
     if (window.tempProposals && window.tempProposals[proposalType]) {
-        // Since the objects in `tempProposals` are now correct, we can perform a safe deep copy.
         const newSelections = JSON.parse(JSON.stringify(window.tempProposals[proposalType]));
-        
-        // *** FIX: Restore the Set object, which is still lost in this final deep copy.
         newSelections.packagesToCompare = new Set(window.tempProposals[proposalType].packagesToCompare);
-        
-        // Assign the fully corrected object to the global state.
         selections = newSelections;
         
-        // Clean up and update UI
         document.getElementById('alternatives-modal-overlay').style.display = 'none';
         window.tempProposals = null;
         showToast("Proposal updated!", "success");
         
-        // This function will now correctly render the newly selected state without errors.
         renderAll(); 
     } else {
         showToast("Could not switch proposal. Please try again.", "error");
