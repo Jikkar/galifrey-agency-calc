@@ -2131,6 +2131,7 @@ const defaultConfig = {
                 }
             }
         }
+        // START: REPLACE THIS FUNCTION
         function selectPackage(packageId) {
             const pkg = findPackage(packageId);
             if (!pkg) return;
@@ -2139,26 +2140,32 @@ const defaultConfig = {
                 showToast("Cannot select package: No active phase.", "error");
                 return;
             }
-            // Clear any existing services in that phase and add the new package services
-            phase.services = {};
+
+            phase.services = {}; // Clear existing services in the active phase
+            
             pkg.services.forEach(s => {
                 const service = findService(s.id);
                 if (!service) return;
-                // CORRECTED LOGIC: Merge default mods with package-specific mods
+
                 const defaultMods = createDefaultModsForService(service);
                 const packageMods = s.mods || {};
                 const finalMods = { ...defaultMods, ...packageMods };
+
+                // Carry over the locked status from the package config
                 phase.services[s.id] = {
                     quantity: s.quantity || 1,
-                    mods: finalMods, // Use the final merged object
+                    mods: finalMods,
                     termMonths: config.settings.retainerTerms[0]?.months || 1,
+                    locked: s.locked || false 
                 };
             });
+
             trackAnalytics('package_selected', { packageId });
             renderAll();
             switchTab('builder');
             showToast(`${pkg.name} package added to builder.`, 'info');
         }
+        // END: REPLACE THIS FUNCTION
         function toggleService(serviceId) {
             const phase = selections.phases.find(p => p.id === selections.activePhaseId);
             if (!phase) {
@@ -2561,6 +2568,7 @@ const defaultConfig = {
             tempModifiers = [];
         }
         // START: REPLACE THIS FUNCTION
+        // START: REPLACE THIS FUNCTION
         function handleAdminSaveEdit(e) {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -2593,10 +2601,9 @@ const defaultConfig = {
                         minImpact: parseFloat(formData.get('roiMinImpact')) || 0,
                         maxImpact: parseFloat(formData.get('roiMaxImpact')) || 0,
                     },
-                    // --- NEW: Saving new properties ---
-                    dependencies: formData.getAll('dependencies'), // .getAll() for multi-select
+                    dependencies: formData.getAll('dependencies'),
                     corequisite: formData.get('corequisite'),
-                    tags: formData.get('tags').split(',').map(tag => tag.trim()).filter(Boolean), // Split string into array
+                    tags: formData.get('tags').split(',').map(tag => tag.trim()).filter(Boolean),
                     timelineDependsOn: formData.get('timelineDependsOn')
                 };
 
@@ -2607,23 +2614,26 @@ const defaultConfig = {
                 }
             } else if (type === 'package') {
                 const id = formData.get('id');
-                const originalPackage = findPackage(id);
                 const packageIndex = config.packages.findIndex(p => p.id === id);
                 const packageData = {
-                    id: id, name: formData.get('name'), desc: formData.get('desc'),
+                    id: id,
+                    name: formData.get('name'),
+                    desc: formData.get('desc'),
                     displayPrice: parseFloat(formData.get('displayPrice')) || 0,
                     features: formData.get('features'),
                     services: []
                 };
+                // UPDATED: Now reads the checkbox state
                 document.querySelectorAll('#package-services-container .package-service-row').forEach(row => {
                     const serviceId = row.querySelector('.package-service-id').value;
                     const quantity = parseInt(row.querySelector('.package-service-quantity').value, 10) || 1;
+                    const isLocked = row.querySelector('.package-service-locked').checked;
                     if (serviceId) {
-                        const originalServiceInPackage = originalPackage?.services.find(s => s.id === serviceId);
                         packageData.services.push({
                             id: serviceId,
                             quantity: quantity,
-                            mods: originalServiceInPackage?.mods || {}
+                            mods: {}, // Mods for packages are set in defaultConfig, not this editor
+                            locked: isLocked
                         });
                     }
                 });
@@ -2676,6 +2686,7 @@ const defaultConfig = {
             closeEditModal();
         }
         // END: REPLACE THIS FUNCTION
+        // END: REPLACE THIS FUNCTION
         // #endregion
         // #region ########## MODIFIER & PACKAGE EDITING LOGIC ##########
         function moveCategory(categoryId, direction) {
@@ -2696,34 +2707,43 @@ const defaultConfig = {
             renderAdminPanel();
             renderBuilder();
         }
+        // START: REPLACE THIS FUNCTION
         function openPackageEditModal(pkg = {}) {
             const form = document.getElementById('edit-form');
             const overlay = document.getElementById('edit-modal-overlay');
             const modalTitle = document.querySelector('#edit-modal-content h3');
             modalTitle.textContent = pkg.id ? 'Edit Package' : 'Create New Package';
+
             form.innerHTML = `
                 <input type="hidden" name="id" value="${pkg.id || `pkg-${Date.now()}`}">
                 <input type="hidden" name="type" value="package">
-                <div><label class="block text-sm font-medium">Package Name</label><input type="text" name="name" value="${pkg.name || ''}" class="mt-1 block w-full p-2 border rounded-md" required></div>
-                <div><label class="block text-sm font-medium">Description</label><textarea name="desc" class="mt-1 block w-full p-2 border rounded-md h-20">${pkg.desc || ''}</textarea></div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-sm font-medium">Display Price</label><input type="number" name="displayPrice" value="${pkg.displayPrice || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
-                    <div><label class="block text-sm font-medium">Features (comma-separated)</label><input type="text" name="features" value="${pkg.features || ''}" class="mt-1 block w-full p-2 border rounded-md"></div>
+                
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Package Name</label><input type="text" name="name" value="${pkg.name || ''}" class="mt-1 block w-full p-2 border rounded-md" required></div>
+                    <div><label class="block text-sm font-medium">Description</label><textarea name="desc" class="mt-1 block w-full p-2 border rounded-md h-20">${pkg.desc || ''}</textarea></div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="block text-sm font-medium">Display Price</label><input type="number" name="displayPrice" value="${pkg.displayPrice || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
+                        <div><label class="block text-sm font-medium">Features (comma-separated)</label><input type="text" name="features" value="${pkg.features || ''}" class="mt-1 block w-full p-2 border rounded-md"></div>
+                    </div>
                 </div>
-                 <div class="border-t pt-4 mt-4">
+
+                    <div class="border-t pt-4 mt-4">
                     <h4 class="text-lg font-semibold mb-2">Included Services</h4>
                     <div id="package-services-container" class="space-y-3">
                         ${renderPackageServiceRows(pkg.services || [])}
                     </div>
                     <button type="button" data-action="add-package-service" class="mt-3 bg-gray-200 py-2 px-4 rounded-lg text-sm hover:bg-gray-300">+ Add Service</button>
                 </div>
-                 <div class="flex justify-end gap-4 pt-4 border-t mt-6">
+
+                    <div class="flex justify-end gap-4 pt-4 border-t mt-6">
                     <button type="button" data-action="close-modal" class="bg-gray-200 py-2 px-4 rounded-lg text-sm hover:bg-gray-300">Cancel</button>
                     <button type="submit" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Save Changes</button>
                 </div>
             `;
             overlay.style.display = 'flex';
         }
+        // END: REPLACE THIS FUNCTION
         // NEW: Modal for adding/editing marketing discounts
         function openDiscountEditModal(discount = {}) {
             const form = document.getElementById('edit-form');
@@ -2787,17 +2807,23 @@ const defaultConfig = {
             toggleTargetSelect(); // Initial call
             overlay.style.display = 'flex';
         }
+        // START: REPLACE THIS FUNCTION
         function renderPackageServiceRows(services) {
             if (!services || services.length === 0) return '<p class="text-gray-500 text-sm">No services in this package.</p>';
             const serviceOptions = config.services.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
             return services.map(s => `
                 <div class="grid grid-cols-12 gap-2 items-center package-service-row">
-                    <div class="col-span-8"><select class="w-full p-2 border rounded-md package-service-id">${serviceOptions.replace(`value="${s.id}"`, `value="${s.id}" selected`)}</select></div>
-                    <div class="col-span-3"><input type="number" min="1" value="${s.quantity || 1}" class="w-full p-2 border rounded-md package-service-quantity"></div>
+                    <div class="col-span-6"><select class="w-full p-2 border rounded-md package-service-id">${serviceOptions.replace(`value="${s.id}"`, `value="${s.id}" selected`)}</select></div>
+                    <div class="col-span-2"><input type="number" min="1" value="${s.quantity || 1}" class="w-full p-2 border rounded-md package-service-quantity"></div>
+                    <div class="col-span-3 flex items-center justify-center">
+                        <input type="checkbox" ${s.locked ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 package-service-locked">
+                        <label class="ml-2 text-sm">Locked</label>
+                    </div>
                     <div class="col-span-1 text-right"><button type="button" data-action="remove-package-service" class="text-red-500 hover:text-red-700 font-bold text-lg">&times;</button></div>
                 </div>
             `).join('');
         }
+        // END: REPLACE THIS FUNCTION
         function addPackageServiceRow() {
             const container = document.getElementById('package-services-container');
             if (container.querySelector('p')) container.innerHTML = '';
