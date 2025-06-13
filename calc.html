@@ -2421,6 +2421,7 @@ const defaultConfig = {
                 if (discount) openDiscountEditModal(discount);
             }
         }
+        // START: REPLACE THIS FUNCTION
         function openEditModal(item = {}, type) {
             const form = document.getElementById('edit-form');
             const overlay = document.getElementById('edit-modal-overlay');
@@ -2432,22 +2433,62 @@ const defaultConfig = {
                 const priorities = ['Core', 'Recommended', 'Upsell'];
                 const roi = item.roiMetrics || {};
                 const timeline = item.timeline || {};
+
+                // Create options for service dropdowns
+                const serviceOptions = config.services
+                    .filter(s => s.id !== item.id) // Exclude the service being edited
+                    .map(s => `<option value="${s.id}">${s.name}</option>`)
+                    .join('');
+
                 form.innerHTML = `
                     <input type="hidden" name="id" value="${item.id || `s-${Date.now()}`}">
                     <input type="hidden" name="type" value="service">
-                    <div><label class="block text-sm font-medium">Service Name</label><input type="text" name="name" value="${item.name || ''}" class="mt-1 block w-full p-2 border rounded-md" required></div>
-                    <div><label class="block text-sm font-medium">Description</label><textarea name="desc" class="mt-1 block w-full p-2 border rounded-md h-24">${item.desc || ''}</textarea></div>
-                    <div><label class="block text-sm font-medium">Value Propositions (one per line)</label><textarea name="valuePropositions" class="mt-1 block w-full p-2 border rounded-md h-24">${(item.valuePropositions || []).join('\n')}</textarea></div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="block text-sm font-medium">Base Price</label><input type="number" name="price" value="${item.price || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
-                        <div><label class="block text-sm font-medium">Setup Fee</label><input type="number" name="setupFee" value="${item.setupFee || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
+                    
+                    <div class="space-y-4">
+                        <div><label class="block text-sm font-medium">Service Name</label><input type="text" name="name" value="${item.name || ''}" class="mt-1 block w-full p-2 border rounded-md" required></div>
+                        <div><label class="block text-sm font-medium">Description</label><textarea name="desc" class="mt-1 block w-full p-2 border rounded-md h-24">${item.desc || ''}</textarea></div>
+                        <div><label class="block text-sm font-medium">Value Propositions (one per line)</label><textarea name="valuePropositions" class="mt-1 block w-full p-2 border rounded-md h-24">${(item.valuePropositions || []).join('\n')}</textarea></div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-medium">Base Price</label><input type="number" name="price" value="${item.price || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
+                            <div><label class="block text-sm font-medium">Setup Fee</label><input type="number" name="setupFee" value="${item.setupFee || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                                <div><label class="block text-sm font-medium">Pricing Model</label><select name="model" class="mt-1 block w-full p-2 border rounded-md">${pricingModels.map(m => `<option value="${m}" ${item.model === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+                                <div><label class="block text-sm font-medium">Unit Name (if Unit/Hourly)</label><input type="text" name="unit" value="${item.unit || ''}" class="mt-1 block w-full p-2 border rounded-md"></div>
+                        </div>
+                        
+                        <div><label class="block text-sm font-medium">Category</label><select name="categoryId" class="mt-1 block w-full p-2 border rounded-md">${config.categories.map(c => `<option value="${c.id}" ${item.categoryId === c.id ? 'selected' : ''}>${findDepartment(c.departmentId)?.name} > ${c.name}</option>`).join('')}</select></div>
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
-                         <div><label class="block text-sm font-medium">Pricing Model</label><select name="model" class="mt-1 block w-full p-2 border rounded-md">${pricingModels.map(m => `<option value="${m}" ${item.model === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
-                         <div><label class="block text-sm font-medium">Unit Name (if Unit/Hourly)</label><input type="text" name="unit" value="${item.unit || ''}" class="mt-1 block w-full p-2 border rounded-md"></div>
+
+                    <!-- NEW: Dependencies, Co-requisites, and Tags -->
+                    <div class="border-t pt-4 mt-4">
+                        <h4 class="text-lg font-semibold mb-2">Service Logic & Rules</h4>
+                        <div class="p-3 bg-gray-50 rounded-lg space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium">Dependencies (select multiple with Ctrl/Cmd)</label>
+                                <p class="text-xs text-gray-500 mb-1">This service can only be selected IF the following are already selected.</p>
+                                <select name="dependencies" multiple class="mt-1 block w-full p-2 border rounded-md h-24">
+                                    ${config.services.filter(s => s.id !== item.id).map(s => `<option value="${s.id}" ${(item.dependencies || []).includes(s.id) ? 'selected' : ''}>${s.name}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium">Co-requisite</label>
+                                <p class="text-xs text-gray-500 mb-1">Automatically adds the selected service when this service is chosen.</p>
+                                <select name="corequisite" class="mt-1 block w-full p-2 border rounded-md">
+                                    <option value="">None</option>
+                                    ${config.services.filter(s => s.id !== item.id).map(s => `<option value="${s.id}" ${item.corequisite === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium">Tags (comma-separated)</label>
+                                <p class="text-xs text-gray-500 mb-1">Used for generating thematic proposals.</p>
+                                <input type="text" name="tags" value="${(item.tags || []).join(', ')}" class="mt-1 block w-full p-2 border rounded-md">
+                            </div>
+                        </div>
                     </div>
-                     <div><label class="block text-sm font-medium">Category</label><select name="categoryId" class="mt-1 block w-full p-2 border rounded-md">${config.categories.map(c => `<option value="${c.id}" ${item.categoryId === c.id ? 'selected' : ''}>${findDepartment(c.departmentId)?.name} > ${c.name}</option>`).join('')}</select></div>
-                    <!-- UPDATED ROI & TIMELINE SECTION -->
+
                     <div class="border-t pt-4 mt-4">
                         <h4 class="text-lg font-semibold mb-2">Strategy, ROI & Timeline</h4>
                         <div class="p-3 bg-gray-50 rounded-lg space-y-4">
@@ -2459,12 +2500,18 @@ const defaultConfig = {
                                 <div><label class="block text-sm font-medium">Timeline Phase Name</label><input type="text" name="timelinePhaseName" value="${timeline.phaseName || ''}" class="mt-1 w-full p-2 border rounded-md" placeholder="e.g., Phase 1: Onboarding"></div>
                                 <div><label class="block text-sm font-medium">Est. Duration (Weeks)</label><input type="number" name="timelineDuration" value="${timeline.durationWeeks || 0}" class="mt-1 w-full p-2 border rounded-md"></div>
                             </div>
-                            <!-- START: New Checkbox -->
+                            <div>
+                                <label class="block text-sm font-medium">Timeline Dependency</label>
+                                <p class="text-xs text-gray-500 mb-1">This service's timeline will start after the selected service finishes.</p>
+                                <select name="timelineDependsOn" class="mt-1 block w-full p-2 border rounded-md">
+                                    <option value="">None</option>
+                                    ${config.services.filter(s => s.id !== item.id).map(s => `<option value="${s.id}" ${item.timelineDependsOn === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
+                                </select>
+                            </div>
                             <div class="flex items-center">
                                 <input type="checkbox" name="timelineHidden" id="timelineHidden" ${timeline.hidden ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                 <label for="timelineHidden" class="ml-2 block text-sm font-medium text-gray-900">Hide this service from the Visual Timeline</label>
                             </div>
-                            <!-- END: New Checkbox -->
                             <div>
                                 <h5 class="font-semibold text-md mb-2">ROI Metrics (Optional)</h5>
                                 <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -2472,13 +2519,14 @@ const defaultConfig = {
                                     <div><label class="block text-xs font-medium">Unit</label><input type="text" name="roiMetricUnit" value="${roi.metricUnit || '%'}" class="mt-1 w-full p-1 border rounded-md text-sm"></div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mt-2">
-                                     <div class="md:col-span-2"></div>
+                                        <div class="md:col-span-2"></div>
                                     <div><label class="block text-xs font-medium">Min. Impact</label><input type="number" name="roiMinImpact" value="${roi.minImpact || ''}" class="mt-1 w-full p-1 border rounded-md text-sm"></div>
                                     <div><label class="block text-xs font-medium">Max. Impact</label><input type="number" name="roiMaxImpact" value="${roi.maxImpact || ''}" class="mt-1 w-full p-1 border rounded-md text-sm"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
+
                     <div class="border-t pt-4 mt-4">
                         <h4 class="text-lg font-semibold mb-2">Customization Modifiers</h4>
                         <div id="service-modifiers-container" class="space-y-3">
@@ -2488,8 +2536,8 @@ const defaultConfig = {
                     </div>
                 `;
             } else if (type === 'category') {
-                 modalTitle.textContent = 'Edit Category';
-                 form.innerHTML = `
+                    modalTitle.textContent = 'Edit Category';
+                    form.innerHTML = `
                     <input type="hidden" name="originalId" value="${item.id}">
                     <input type="hidden" name="type" value="category">
                     <div><label class="block text-sm font-medium">Category Name</label><input type="text" name="name" value="${item.name}" class="mt-1 block w-full p-2 border rounded-md" required></div>
@@ -2497,7 +2545,7 @@ const defaultConfig = {
                     <div class="mt-2 p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 text-sm">
                         <p><strong>Warning:</strong> Changing the ID will automatically update all services currently in this category. Use with caution.</p>
                     </div>
-                 `;
+                    `;
             }
             form.innerHTML += `
                 <div class="flex justify-end gap-4 pt-4 border-t mt-6">
@@ -2507,10 +2555,12 @@ const defaultConfig = {
             `;
             overlay.style.display = 'flex';
         }
+        // END: REPLACE THIS FUNCTION
         function closeEditModal() {
             document.getElementById('edit-modal-overlay').style.display = 'none';
             tempModifiers = [];
         }
+        // START: REPLACE THIS FUNCTION
         function handleAdminSaveEdit(e) {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -2519,9 +2569,15 @@ const defaultConfig = {
                 const id = formData.get('id');
                 const serviceIndex = config.services.findIndex(s => s.id === id);
                 updateTempModifiersFromDOM();
+                
                 const serviceData = {
-                    id: id, name: formData.get('name'), desc: formData.get('desc'), price: parseFloat(formData.get('price')) || 0,
-                    setupFee: parseFloat(formData.get('setupFee')) || 0, model: formData.get('model'), categoryId: formData.get('categoryId'),
+                    id: id,
+                    name: formData.get('name'),
+                    desc: formData.get('desc'),
+                    price: parseFloat(formData.get('price')) || 0,
+                    setupFee: parseFloat(formData.get('setupFee')) || 0,
+                    model: formData.get('model'),
+                    categoryId: formData.get('categoryId'),
                     unit: formData.get('unit'),
                     modifiers: tempModifiers,
                     valuePropositions: formData.get('valuePropositions').split('\n').filter(vp => vp.trim() !== ''),
@@ -2529,15 +2585,21 @@ const defaultConfig = {
                     timeline: {
                         phaseName: formData.get('timelinePhaseName'),
                         durationWeeks: parseInt(formData.get('timelineDuration'), 10) || 0,
-                        hidden: formData.get('timelineHidden') === 'on' // <-- ADD THIS LINE
+                        hidden: formData.get('timelineHidden') === 'on'
                     },
                     roiMetrics: {
                         metricName: formData.get('roiMetricName'),
                         metricUnit: formData.get('roiMetricUnit'),
                         minImpact: parseFloat(formData.get('roiMinImpact')) || 0,
                         maxImpact: parseFloat(formData.get('roiMaxImpact')) || 0,
-                    }
+                    },
+                    // --- NEW: Saving new properties ---
+                    dependencies: formData.getAll('dependencies'), // .getAll() for multi-select
+                    corequisite: formData.get('corequisite'),
+                    tags: formData.get('tags').split(',').map(tag => tag.trim()).filter(Boolean), // Split string into array
+                    timelineDependsOn: formData.get('timelineDependsOn')
                 };
+
                 if (serviceIndex > -1) {
                     config.services[serviceIndex] = serviceData;
                 } else {
@@ -2613,6 +2675,7 @@ const defaultConfig = {
             renderAdminPanel();
             closeEditModal();
         }
+        // END: REPLACE THIS FUNCTION
         // #endregion
         // #region ########## MODIFIER & PACKAGE EDITING LOGIC ##########
         function moveCategory(categoryId, direction) {
