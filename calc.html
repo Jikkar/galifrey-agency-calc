@@ -13,6 +13,10 @@
  </script>
  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js">
  </script>
+ <!-- START: Add these for Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+<!-- END: Add these for Firebase -->
  <link rel="preconnect" href="https://fonts.googleapis.com">
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
@@ -602,6 +606,40 @@
  </div>
  <script>
   document.addEventListener('DOMContentLoaded', function() {
+    // ########## FIREBASE INITIALIZATION ##########
+        const firebaseConfig = {
+            apiKey: "AIzaSyCw4QA3yeLQHvOuCq6IO0qn4lIO2UzhlsU",
+            authDomain: "agency-calc.firebaseapp.com",
+            projectId: "agency-calc",
+            storageBucket: "agency-calc.firebasestorage.app",
+            messagingSenderId: "602758494985",
+            appId: "1:602758494985:web:61f0cdaf04088ad471f1d8",
+            measurementId: "G-DVV8FWWXXB"
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        let quotesListener = null; // To hold our real-time listener
+
+        // This function will listen for real-time updates from Firebase
+        function listenForQuotes() {
+            // Unsubscribe from any previous listener to avoid duplicates
+            if (quotesListener) {
+                quotesListener();
+            }
+
+            const quotesCollection = db.collection("submittedQuotes").orderBy("timestamp", "desc");
+            quotesListener = quotesCollection.onSnapshot((snapshot) => {
+                const quotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderSubmittedQuotes(quotes); // Re-render the list with fresh data
+                updateQuoteCountBadge(quotes.length);
+            }, (error) => {
+                console.error("Error fetching quotes: ", error);
+                showToast("Could not connect to the quotes database.", "error");
+            });
+        }
+        // ##############################################
         // #region ########## DEFAULT CONFIGURATION ##########
         const defaultConfig = {
             settings: {
@@ -917,15 +955,8 @@
             activeCampaign = urlParams.get('campaign');
             loadConfig();
             setupEventListeners();
+            listenForQuotes(); // <-- ADD THIS LINE
             renderAll();
-            // Show banner if a campaign is active
-            /*
-            if (activeCampaign && config.settings.campaignModifiers[activeCampaign]) {
-                const banner = document.getElementById('campaign-modifier-banner');
-                banner.textContent = `You are viewing special pricing for the "${activeCampaign}" campaign.`;
-                banner.classList.remove('hidden');
-            }
-            */
         }
         function loadConfig() {
             const savedConfig = localStorage.getItem('galifreyCalcConfig');
@@ -1484,37 +1515,10 @@
                     }
                 }).join('');
             }
-            // --- NEW: Timeline Settings ---
-            const timelineSettings = selectionData.timeline || { enabled: false, order: 0, duration: 0 };
-            html += `
-                <div class="mt-4 pt-4 border-t border-gray-200">
-                    <h6 class="font-semibold text-gray-800 mb-2">Timeline Settings</h6>
-                    <div class="space-y-3">
-                        <div class="flex items-center">
-                            <input type="checkbox" id="timeline-enabled-${service.id}" ${timelineSettings.enabled ? 'checked' : ''} 
-                                   data-change-action="update-timeline-setting" data-id="${service.id}" data-setting="enabled" 
-                                   class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                            <label for="timeline-enabled-${service.id}" class="ml-2 block text-sm text-gray-900">Include in Visual Timeline</label>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700">Order</label>
-                                <input type="number" value="${timelineSettings.order}" 
-                                       data-input-action="update-timeline-setting" data-id="${service.id}" data-setting="order" 
-                                       class="mt-1 w-full p-2 border rounded-md">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700">Est. Duration (Weeks)</label>
-                                <input type="number" value="${timelineSettings.duration}" 
-                                       data-input-action="update-timeline-setting" data-id="${service.id}" data-setting="duration"
-                                       class="mt-1 w-full p-2 border rounded-md">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
+            // Timeline settings UI is removed from here.
             return html;
         }
+
         // <immersive id="calc_fix_renderAdSpendSection">
         function renderAdSpendSection() {
             const isOpen = openAccordions.has('paid-media');
@@ -1719,18 +1723,18 @@
         // #endregion
         // #region ########## SUBMITTED QUOTES PANEL ##########
         // MODIFIED: Greatly expanded to show all new client data
-                function renderSubmittedQuotes() {
+        function renderSubmittedQuotes(quotes = []) {
             const container = document.getElementById('content-quotes');
             if (!container) return;
-            const quotes = JSON.parse(localStorage.getItem('submittedQuotes') || '[]');
+            
             let contentHtml = `
                 <div class="bg-white p-6 rounded-lg shadow-md">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="font-bold text-2xl">Submitted Quote Requests</h3>
-                        <button data-action="refresh-quotes" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2">
-                           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 110 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" ></path></svg>
-                            Refresh Quotes
-                        </button>
+                        <p class="text-sm text-green-600 flex items-center gap-2">
+                            <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span>
+                            Listening for new quotes in real-time
+                        </p>
                     </div>
             `;
             if (quotes.length === 0) {
@@ -1739,12 +1743,13 @@
                 contentHtml += `<div class="space-y-4">`;
                 quotes.forEach(quote => {
                     const { contact, summary, timestamp, id, selections: quoteSelections } = quote;
-                    // CORRECTED: The client context is nested inside the saved selections object
                     const clientContext = quoteSelections?.clientContext || {};
                     const summaryTotals = summary?.totals || {};
                     const { oneTime = 0, monthly = 0, adSpend = 0 } = summaryTotals;
                     const totalInvestment = monthly + adSpend;
-                    const submittedDate = new Date(timestamp).toLocaleString();
+                    // Handle Firebase timestamp object
+                    const submittedDate = timestamp ? new Date(timestamp.seconds * 1000).toLocaleString() : 'Just now';
+                    
                     let itemizedHtml = '';
                     if (quoteSelections?.phases && summary?.breakdown?.items) {
                         quoteSelections.phases.forEach(phase => {
@@ -1841,12 +1846,11 @@
             if (!value) return '';
             return `<div class="flex flex-col"><dt class="font-semibold">${label}:</dt><dd class="pl-2">${value}</dd></div>`;
         }
-        function updateQuoteCountBadge() {
+        function updateQuoteCountBadge(count) {
             const badge = document.getElementById('quote-count-badge');
             if (!badge) return;
-            const quotes = JSON.parse(localStorage.getItem('submittedQuotes') || '[]');
-            if (quotes.length > 0) {
-                badge.textContent = quotes.length;
+            if (count > 0) {
+                badge.textContent = count;
                 badge.classList.remove('hidden');
             } else {
                 badge.classList.add('hidden');
@@ -1856,12 +1860,15 @@
             if (!confirm(`Are you sure you want to permanently delete this quote? This cannot be undone.`)) {
                 return;
             }
-            let quotes = JSON.parse(localStorage.getItem('submittedQuotes') || '[]');
-            const updatedQuotes = quotes.filter(q => q.id !== quoteId);
-            localStorage.setItem('submittedQuotes', JSON.stringify(updatedQuotes));
-            showToast('Quote deleted successfully.', 'info');
-            renderSubmittedQuotes();
-            updateQuoteCountBadge();
+            db.collection("submittedQuotes").doc(quoteId).delete()
+            .then(() => {
+                showToast('Quote deleted successfully.', 'info');
+                // The real-time listener will automatically update the UI.
+            })
+            .catch((error) => {
+                console.error("Error removing document: ", error);
+                showToast("Could not delete quote. Please try again.", "error");
+            });
         }
         // #endregion
         function renderAdminDataManagement() {
@@ -2268,12 +2275,7 @@
                     quantity: 1,
                     mods: createDefaultModsForService(service),
                     termMonths: config.settings.retainerTerms[0]?.months || 1,
-                    // Add timeline settings to the selection
-                    timeline: { 
-                        enabled: !!(service.timeline && service.timeline.durationWeeks > 0), 
-                        order: 0, 
-                        duration: service.timeline?.durationWeeks || 0 
-                    }
+                    // NOTE: Timeline settings are no longer added here.
                 };
                  trackAnalytics('service_selected', { serviceId });
             }
@@ -2519,7 +2521,7 @@
                 if (discount) openDiscountEditModal(discount);
             }
         }
-                function openEditModal(item = {}, type) {
+        function openEditModal(item = {}, type) {
             const form = document.getElementById('edit-form');
             const overlay = document.getElementById('edit-modal-overlay');
             const modalTitle = document.querySelector('#edit-modal-content h3');
@@ -2529,7 +2531,7 @@
                 const pricingModels = ['Project', 'Monthly', 'Unit', 'Hourly', 'Quote'];
                 const priorities = ['Core', 'Recommended', 'Upsell'];
                 const roi = item.roiMetrics || {};
-                const timeline = item.timeline || {};
+                const timeline = item.timeline || {}; // Get existing timeline data
                 form.innerHTML = `
                     <input type="hidden" name="id" value="${item.id || `s-${Date.now()}`}">
                     <input type="hidden" name="type" value="service">
@@ -2545,7 +2547,7 @@
                          <div><label class="block text-sm font-medium">Unit Name (if Unit/Hourly)</label><input type="text" name="unit" value="${item.unit || ''}" class="mt-1 block w-full p-2 border rounded-md"></div>
                     </div>
                      <div><label class="block text-sm font-medium">Category</label><select name="categoryId" class="mt-1 block w-full p-2 border rounded-md">${config.categories.map(c => `<option value="${c.id}" ${item.categoryId === c.id ? 'selected' : ''}>${findDepartment(c.departmentId)?.name} > ${c.name}</option>`).join('')}</select></div>
-                    <!-- NEW ROI & TIMELINE SECTION -->
+                    <!-- UPDATED ROI & TIMELINE SECTION -->
                     <div class="border-t pt-4 mt-4">
                         <h4 class="text-lg font-semibold mb-2">Strategy, ROI & Timeline</h4>
                         <div class="p-3 bg-gray-50 rounded-lg space-y-4">
@@ -2554,8 +2556,9 @@
                                 <select name="priority" class="mt-1 block w-full p-2 border rounded-md">${priorities.map(p => `<option value="${p}" ${item.priority === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div><label class="block text-sm font-medium">Timeline Phase Name</label><input type="text" name="timelinePhaseName" value="${timeline.phaseName || ''}" class="mt-1 w-full p-2 border rounded-md" placeholder="e.g., Month 1: Onboarding"></div>
-                                <div><label class="block text-sm font-medium">Duration (Weeks)</label><input type="number" name="timelineDuration" value="${timeline.durationWeeks || 0}" class="mt-1 w-full p-2 border rounded-md"></div>
+                                <!-- These are the new fields -->
+                                <div><label class="block text-sm font-medium">Timeline Phase Name</label><input type="text" name="timelinePhaseName" value="${timeline.phaseName || ''}" class="mt-1 w-full p-2 border rounded-md" placeholder="e.g., Phase 1: Onboarding"></div>
+                                <div><label class="block text-sm font-medium">Est. Duration (Weeks)</label><input type="number" name="timelineDuration" value="${timeline.durationWeeks || 0}" class="mt-1 w-full p-2 border rounded-md"></div>
                             </div>
                             <div>
                                 <h5 class="font-semibold text-md mb-2">ROI Metrics (Optional)</h5>
@@ -2603,7 +2606,7 @@
             document.getElementById('edit-modal-overlay').style.display = 'none';
             tempModifiers = [];
         }
-                function handleAdminSaveEdit(e) {
+        function handleAdminSaveEdit(e) {
             e.preventDefault();
             const formData = new FormData(e.target);
             const type = formData.get('type');
@@ -2617,7 +2620,7 @@
                     unit: formData.get('unit'),
                     modifiers: tempModifiers,
                     valuePropositions: formData.get('valuePropositions').split('\n').filter(vp => vp.trim() !== ''),
-                    // --- NEW FIELDS ---
+                    // UPDATED FIELDS
                     priority: formData.get('priority'),
                     timeline: {
                         phaseName: formData.get('timelinePhaseName'),
@@ -3027,7 +3030,7 @@
             let allDiscounts = [];
             let allValueProps = [];
             let roiProjections = [];
-            let timelineData = []; // This will now be built from custom inputs
+            let timelineData = []; // This will now be built from master service config
             let breakdown = {
                 items: [],
                 serviceMonthlyCosts: {},
@@ -3043,12 +3046,12 @@
                     const selection = phase.services[serviceId];
                     if (!service) continue;
                     if (service.valuePropositions) allValueProps.push(...service.valuePropositions);
-                    // --- NEW Timeline data logic ---
-                    if (selection.timeline && selection.timeline.enabled && selection.timeline.duration > 0) {
+                    // --- NEW Timeline data logic from MASTER config ---
+                    if (service.timeline && service.timeline.durationWeeks > 0) {
                         timelineData.push({
                             name: service.name,
-                            order: selection.timeline.order || 0,
-                            duration: selection.timeline.duration || 0
+                            order: service.timeline.order || 0,
+                            duration: service.timeline.durationWeeks || 0
                         });
                     }
                     // ROI data
@@ -3950,25 +3953,22 @@
                 return;
             }
             const rawSummary = calculateTotals(selections);
-            // Overrides are now applied to the grand total, not calculated within the summary
             const finalOneTime = selections.overrides.oneTime !== null ? selections.overrides.oneTime : rawSummary.totals.oneTime;
             const finalMonthly = selections.overrides.monthly !== null ? selections.overrides.monthly : rawSummary.totals.monthly;
             const formData = new FormData(form);
             const quoteData = {
-                id: `quote-${Date.now()}`,
-                timestamp: new Date().toISOString(),
+                // NOTE: We no longer create a local ID. Firestore will generate one.
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(), // Use server time
                 contact: {
                     name: formData.get('name'),
                     email: formData.get('email'),
                     phone: formData.get('phone'),
                     businessName: formData.get('businessName'),
                 },
-                // CORRECTED: Store the entire selections object, which now includes the 'phases' array
                 selections: JSON.parse(JSON.stringify(selections)),
-                // Store the full calculated summary which is already phase-aware
                 summary: {
                     ...rawSummary,
-                    totals: { // Also store the final, overridden totals
+                    totals: {
                         oneTime: finalOneTime,
                         monthly: finalMonthly,
                         adSpend: rawSummary.totals.adSpend,
@@ -3976,17 +3976,19 @@
                 },
                 campaign: activeCampaign
             };
-            let submittedQuotes = JSON.parse(localStorage.getItem('submittedQuotes') || '[]');
-            submittedQuotes.unshift(quoteData);
-            localStorage.setItem('submittedQuotes', JSON.stringify(submittedQuotes));
-            document.getElementById('quote-modal-overlay').style.display = 'none';
-            form.reset();
-            trackAnalytics('quote_submitted');
-            showToast("Thank you! Your quote has been submitted for review.", "success");
-            if (isAdmin) {
-                renderSubmittedQuotes();
-                updateQuoteCountBadge();
-            }
+            
+            // NEW: Save to Firestore
+            db.collection("submittedQuotes").add(quoteData)
+            .then(() => {
+                document.getElementById('quote-modal-overlay').style.display = 'none';
+                form.reset();
+                trackAnalytics('quote_submitted');
+                showToast("Thank you! Your quote has been submitted for review.", "success");
+            })
+            .catch((error) => {
+                console.error("Error writing document: ", error);
+                showToast("Could not submit quote. Please try again.", "error");
+            });
         }
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
