@@ -308,6 +308,9 @@
             width: 1rem;
             height: 1rem;
         }
+        .version-item .version-actions a {
+            color: inherit; /* This ensures the links are visible */
+        }
         /* Star Rating */
         .star-rating { display: inline-flex; flex-direction: row-reverse; justify-content: flex-end; }
         .star-rating input[type="radio"] { display: none; }
@@ -2300,33 +2303,33 @@ function renderSubmittedQuotes(quotes = []) {
     `;
 }
         function renderAdminVersioning() {
-            const versions = Object.keys(localStorage)
-                .filter(key => key.startsWith('galifreyCalcConfig_'))
-                .map(key => ({ key, name: key.replace('galifreyCalcConfig_', '') }));
-            return `
-                <div>
-                    <h3 class="font-bold text-xl mb-4">Configuration Versions</h3>
-                    <div class="p-4 border rounded-lg bg-gray-50">
-                        <p class="text-sm text-gray-500 mb-3">Save snapshots of your configuration. This is useful for testing new pricing or rolling back changes.</p>
-                        <div class="flex items-center gap-2 mb-4">
-                             <input type="text" id="version-name-input" placeholder="Enter new version name" class="flex-grow p-2 border rounded-md">
-                             <button data-action="save-version" class="bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700">Save as New Version</button>
-                        </div>
-                        <h4 class="font-semibold text-md mb-2">Saved Versions:</h4>
-                        <div id="versions-list" class="space-y-2">
-                            ${versions.length > 0 ? versions.map(v => `
-                                <div class="p-2 bg-white border rounded-md flex justify-between items-center version-item">
-                                    <span class="font-medium">${v.name}</span>
-                                    <div class="space-x-2 opacity-0 version-actions transition-opacity">
-                                        <button data-action="load-version" data-key="${v.key}" class="text-sm text-blue-600 hover:underline">Load</button>
-                                        <button data-action="delete-version" data-key="${v.key}" class="text-sm text-red-600 hover:underline">Delete</button>
-                                    </div>
-                                </div>`).join('') : '<p class="text-gray-500">No versions saved.</p>'}
-                        </div>
-                    </div>
+    const versions = Object.keys(localStorage)
+        .filter(key => key.startsWith('galifreyCalcConfig_'))
+        .map(key => ({ key, name: key.replace('galifreyCalcConfig_', '') }));
+    return `
+        <div>
+            <h3 class="font-bold text-xl mb-4">Configuration Versions</h3>
+            <div class="p-4 border rounded-lg bg-gray-50">
+                <p class="text-sm text-gray-500 mb-3">Save snapshots of your configuration. This is useful for testing new pricing or rolling back changes.</p>
+                <div class="flex items-center gap-2 mb-4">
+                     <input type="text" id="version-name-input" placeholder="Enter new version name" class="flex-grow p-2 border rounded-md">
+                     <button data-action="save-version" class="bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700">Save as New Version</button>
                 </div>
-            `;
-        }
+                <h4 class="font-semibold text-md mb-2">Saved Versions:</h4>
+                <div id="versions-list" class="space-y-2">
+                    ${versions.length > 0 ? versions.map(v => `
+                        <div class="p-2 bg-white border rounded-md flex justify-between items-center version-item">
+                            <span class="font-medium">${v.name}</span>
+                            <div class="space-x-2 version-actions">
+                                <button data-action="load-version" data-key="${v.key}" class="text-sm text-blue-600 hover:underline">Load</button>
+                                <button data-action="delete-version" data-key="${v.key}" class="text-sm text-red-600 hover:underline">Delete</button>
+                            </div>
+                        </div>`).join('') : '<p class="text-gray-500">No versions saved.</p>'}
+                </div>
+            </div>
+        </div>
+    `;
+}
         // MODIFIED: Added discount and modifier analytics
         function renderAdminAnalytics() {
             const analytics = JSON.parse(localStorage.getItem('galifreyCalcAnalytics')) || {};
@@ -2454,20 +2457,20 @@ function renderSubmittedQuotes(quotes = []) {
             return desc;
         }
         function renderAdminPdfSettings() {
-            const s = config.settings;
-            return `
-                 <div>
-                    <h3 class="font-bold text-xl mb-4">General Settings</h3>
-                    <div class="p-4 border rounded-lg bg-gray-50 space-y-4">
-                        <div class="pt-4 border-t"><h4 class="font-semibold text-lg">PDF Export Customization</h4></div>
-                        <div><label class="block text-sm font-medium">Logo URL</label><input type="text" value="${s.pdfSettings.logoUrl}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.logoUrl" class="w-full p-2 border rounded-md"></div>
-                        <div><label class="block text-sm font-medium">Header Text</label><input type="text" value="${s.pdfSettings.headerText}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.headerText" class="w-full p-2 border rounded-md"></div>
-                        <div><label class="block text-sm font-medium">Introductory Paragraph</label><textarea data-change-action="update-admin-setting" data-path="settings.pdfSettings.introParagraph" class="w-full p-2 border rounded-md h-24">${s.pdfSettings.introParagraph}</textarea></div>
-                        <div><label class="block text-sm font-medium">Footer Text</label><input type="text" value="${s.pdfSettings.footerText}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.footerText" class="w-full p-2 border rounded-md"></div>
-                    </div>
-                </div>
-            `;
-        }
+    const s = config.settings;
+    return `
+         <div>
+            <h3 class="font-bold text-xl mb-4">General Settings</h3>
+            <div class="p-4 border rounded-lg bg-gray-50 space-y-4">
+                <div><h4 class="font-semibold text-lg">PDF Export Customization</h4><p class="text-xs text-gray-500">These settings are used when clicking "Export Full Summary to PDF" or exporting a submitted quote.</p></div>
+                <div><label class="block text-sm font-medium">Logo URL</label><input type="text" value="${s.pdfSettings.logoUrl}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.logoUrl" class="w-full p-2 border rounded-md"></div>
+                <div><label class="block text-sm font-medium">Header Text</label><input type="text" value="${s.pdfSettings.headerText}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.headerText" class="w-full p-2 border rounded-md"></div>
+                <div><label class="block text-sm font-medium">Introductory Paragraph</label><textarea data-change-action="update-admin-setting" data-path="settings.pdfSettings.introParagraph" class="w-full p-2 border rounded-md h-24">${s.pdfSettings.introParagraph}</textarea></div>
+                <div><label class="block text-sm font-medium">Footer Text</label><input type="text" value="${s.pdfSettings.footerText}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.footerText" class="w-full p-2 border rounded-md"></div>
+            </div>
+        </div>
+    `;
+}
         function renderAdminPackageManagement() {
             return `
                 <div>
@@ -3128,7 +3131,7 @@ function updateClientContext(field, value, target) {
         // #endregion
         // #region ########## ADMIN CRUD and MODAL LOGIC ##########
         // START: REPLACE THIS FUNCTION
-        function handleAdminAdd(target) {
+function handleAdminAdd(target) {
     const type = target.dataset.type;
     const id = target.dataset.id; // Used for category
     if (type === 'service') {
@@ -3159,7 +3162,7 @@ function updateClientContext(field, value, target) {
 }
         // END: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
-        function handleAdminEdit(target) {
+function handleAdminEdit(target) {
     const id = target.dataset.id;
     const type = target.dataset.type;
     if (type === 'service') {
@@ -3178,6 +3181,41 @@ function updateClientContext(field, value, target) {
         const role = (config.teamAugmentationRoles || []).find(r => r.id === id);
         if (role) openEditModal(role, 'team-augmentation-role');
     }
+}
+
+function handleAdminDelete(target) {
+    const id = target.dataset.id;
+    const type = target.dataset.type;
+
+    if (!confirm(`Are you sure you want to delete this ${type}? This cannot be undone.`)) {
+        return;
+    }
+
+    if (type === 'service') {
+        config.services = config.services.filter(s => s.id !== id);
+    } else if (type === 'package') {
+        config.packages = config.packages.filter(p => p.id !== id);
+    } else if (type === 'marketing-discount') { // This logic was missing
+        config.settings.marketingDiscounts = config.settings.marketingDiscounts.filter(d => d.id !== id);
+    } else if (type === 'team-augmentation-role') {
+        config.teamAugmentationRoles = (config.teamAugmentationRoles || []).filter(r => r.id !== id);
+    } else if (type === 'ad-channel') {
+        config.adChannels = (config.adChannels || []).filter(c => c.id !== id);
+    } else if (type === 'category') {
+        config.categories = config.categories.filter(c => c.id !== id);
+        config.services.forEach(s => {
+            if (s.categoryId === id) s.categoryId = ''; // Unassign services from deleted category
+        });
+    } else if (type === 'bundle-discount') {
+        config.settings.bundleDiscounts.splice(parseInt(id, 10), 1);
+    } else if (type === 'ad-tier') {
+        config.settings.adFeeTiers.splice(parseInt(id, 10), 1);
+    } else if (type === 'retainer-term') {
+        config.settings.retainerTerms.splice(parseInt(id, 10), 1);
+    }
+
+    showToast(`${type} deleted. Remember to save all changes.`, 'info');
+    renderAdminPanel();
 }
         // END: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
@@ -3328,7 +3366,7 @@ function handleAdminSaveEdit(e) {
     e.preventDefault();
     const formData = new FormData(e.target);
     const type = formData.get('type');
-    
+
     if (type === 'service') {
         const id = formData.get('id');
         const serviceIndex = config.services.findIndex(s => s.id === id);
@@ -3386,11 +3424,68 @@ function handleAdminSaveEdit(e) {
         if (packageIndex > -1) { config.packages[packageIndex] = packageData; } 
         else { config.packages.push(packageData); }
     } else if (type === 'team-augmentation-role') {
-        // ... this section is correct in the original file
+        const id = formData.get('id');
+        const roleIndex = (config.teamAugmentationRoles || []).findIndex(r => r.id === id);
+        const roleData = {
+            id: id,
+            name: formData.get('name'),
+            description: formData.get('description'),
+            costPerHr: parseFloat(formData.get('costPerHr')) || 0,
+            minHrsPerMonth: parseInt(formData.get('minHrsPerMonth'), 10) || 0,
+            fullTimeSalaryComparison: parseFloat(formData.get('fullTimeSalaryComparison')) || 0,
+        };
+        if (roleIndex > -1) { config.teamAugmentationRoles[roleIndex] = roleData; }
+        else { config.teamAugmentationRoles.push(roleData); }
     } else if (type === 'category') {
-        // ... this section is correct in the original file
-    } else if (type === 'marketing-discount') {
-       // ... this section is correct in the original file
+        const originalId = formData.get('originalId');
+        const categoryIndex = config.categories.findIndex(c => c.id === originalId);
+        if (categoryIndex > -1) {
+            config.categories[categoryIndex].id = formData.get('id');
+            config.categories[categoryIndex].name = formData.get('name');
+        }
+    } else if (type === 'ad-channel') {
+        const id = formData.get('id');
+        const channelIndex = (config.adChannels || []).findIndex(c => c.id === id);
+        const channelData = {
+            id: id,
+            name: formData.get('name'),
+            setupFee: parseFloat(formData.get('setupFee')) || 0,
+            feeModel: formData.get('feeModel'),
+        };
+        if (channelIndex > -1) { config.adChannels[channelIndex] = channelData; }
+        else { config.adChannels.push(channelData); }
+    } 
+    // *** THIS IS THE FIX ***
+    // This logic was missing, preventing coupons from being saved.
+    else if (type === 'marketing-discount') {
+        const id = formData.get('id');
+        const discountIndex = config.settings.marketingDiscounts.findIndex(d => d.id === id);
+        const discountType = formData.get('discountType');
+        let value = parseFloat(formData.get('value')) || 0;
+        if (discountType === 'percent') {
+            value = value / 100; // Convert to decimal for calculation
+        }
+        
+        const discountData = {
+            id: id,
+            code: formData.get('code').toUpperCase(),
+            type: discountType,
+            value: value,
+            applyTo: formData.get('applyTo'),
+            targetId: formData.get('targetId'),
+            startDate: formData.get('startDate'),
+            endDate: formData.get('endDate')
+        };
+        
+        if (discountIndex > -1) {
+            config.settings.marketingDiscounts[discountIndex] = discountData;
+        } else {
+            // Ensure the array exists before pushing
+            if (!config.settings.marketingDiscounts) {
+                config.settings.marketingDiscounts = [];
+            }
+            config.settings.marketingDiscounts.push(discountData);
+        }
     }
 
     showToast(`Item updated. Remember to click "Save All Changes" to persist your edits.`, 'info');
@@ -3745,21 +3840,20 @@ function calculateTotals(currentSelections) {
     let totals = { oneTime: 0, monthly: 0, adSpend: 0 };
     let preDiscountTotals = { oneTime: 0, monthly: 0 };
     let allDiscounts = [];
-    let breakdown = { items: [], serviceMonthlyCosts: {} };
-    let allValueProps = []; // Restored
-    let roiProjections = []; // Restored
-    let timelineData = []; // Restored
-    let forecast = {}; // Restored
+    let breakdown = { items: [], serviceMonthlyCosts: {}, phaseData: {} }; // Re-added phaseData
+    let allValueProps = [];
+    let roiProjections = [];
+    let timelineData = [];
+    let forecast = {};
 
-    // --- Step 1: Calculate Gross Costs from all selections ---
     source.phases.forEach(phase => {
-        // Services
+        let phaseOneTime = 0;
+        let phaseMonthly = 0;
         for (const serviceId in phase.services) {
             const service = findService(serviceId);
             const selection = phase.services[serviceId];
             if (!service) continue;
 
-            // Add value props, timeline data, etc. for other parts of the app
             if (service.valuePropositions) allValueProps.push(...service.valuePropositions);
             if (service.timeline && service.timeline.durationWeeks > 0 && !service.timeline.hidden) {
                 timelineData.push({ name: service.name, order: service.timeline.order || 0, duration: service.timeline.durationWeeks || 0 });
@@ -3815,23 +3909,26 @@ function calculateTotals(currentSelections) {
             if (serviceMonthly > 0) {
                 breakdown.serviceMonthlyCosts[serviceId] = (breakdown.serviceMonthlyCosts[serviceId] || 0) + serviceMonthly;
             }
-            totals.oneTime += serviceOneTime;
-            totals.monthly += serviceMonthly;
+            phaseOneTime += serviceOneTime;
+            phaseMonthly += serviceMonthly;
         }
 
-        // Ad Channels
         for (const selectionId in phase.adChannels) {
             const selection = phase.adChannels[selectionId];
             const channel = findAdChannel(selection.id);
             if (!channel) continue;
-            totals.oneTime += selection.setupFee;
-            totals.monthly += calculateAdFee(channel, selection.spend);
+            const managementFee = calculateAdFee(channel, selection.spend);
+            phaseOneTime += selection.setupFee;
+            phaseMonthly += managementFee;
             totals.adSpend += selection.spend;
-            breakdown.items.push({ name: `${channel.name} Management`, desc: `For ${formatCurrency(selection.spend)} ad spend`, cost: selection.setupFee + calculateAdFee(channel, selection.spend), type: 'Ad Spend', phaseId: phase.id });
+            breakdown.items.push({ name: `${channel.name} Management`, desc: `For ${formatCurrency(selection.spend)} ad spend`, cost: selection.setupFee + managementFee, type: 'Ad Spend', phaseId: phase.id });
         }
+        
+        breakdown.phaseData[phase.id] = { name: phase.name, oneTime: phaseOneTime, monthly: phaseMonthly };
+        totals.oneTime += phaseOneTime;
+        totals.monthly += phaseMonthly;
     });
 
-    // Team Augmentation
     for (const roleId in source.teamAugmentation) {
         const role = (config.teamAugmentationRoles || []).find(r => r.id === roleId);
         const selection = source.teamAugmentation[roleId];
@@ -3844,7 +3941,6 @@ function calculateTotals(currentSelections) {
 
     preDiscountTotals = { ...totals };
     
-    // --- Step 2: Apply Global Discounts ---
     source.phases.forEach(phase => {
         for(const serviceId in phase.services) {
             const service = findService(serviceId);
@@ -3876,7 +3972,6 @@ function calculateTotals(currentSelections) {
         const coupon = source.appliedCoupon;
         let discountAmount = 0;
         let discountableAmount = 0;
-        
         switch (coupon.applyTo) {
             case 'oneTime': discountableAmount = preDiscountTotals.oneTime; break;
             case 'monthly': discountableAmount = preDiscountTotals.monthly; break;
@@ -3889,27 +3984,20 @@ function calculateTotals(currentSelections) {
                 discountableAmount = itemsInCategory.reduce((sum, item) => sum + item.cost, 0);
                 break;
         }
-
-        if (coupon.type === 'percent') {
-            discountAmount = discountableAmount * coupon.value;
-        } else {
-            discountAmount = Math.min(discountableAmount, coupon.value);
-        }
-
+        if (coupon.type === 'percent') discountAmount = discountableAmount * coupon.value;
+        else discountAmount = Math.min(discountableAmount, coupon.value);
         if (discountAmount > 0) {
             allDiscounts.push({ name: `Coupon: ${coupon.code}`, amount: discountAmount });
-            if (coupon.applyTo === 'oneTime' || coupon.applyTo === 'service' || coupon.applyTo === 'category') {
-                 totals.oneTime -= discountAmount;
-            } else { // monthly
-                totals.monthly -= discountAmount;
-            }
+            if (coupon.applyTo === 'oneTime' || coupon.applyTo === 'service' || coupon.applyTo === 'category') totals.oneTime -= discountAmount;
+            else totals.monthly -= discountAmount;
         }
     }
     
     totals.oneTime = Math.max(0, totals.oneTime);
     totals.monthly = Math.max(0, totals.monthly);
 
-    return { totals, breakdown, discounts: allDiscounts, valueProps: allValueProps, roiProjections, timelineData, forecast };
+    // This object key was renamed from 'phaseData' to 'phaseTotals' to match the PDF function
+    return { totals, phaseTotals: breakdown.phaseData, breakdown, discounts: allDiscounts, valueProps: allValueProps, roiProjections, timelineData, forecast };
 }
 // END: REPLACE THIS FUNCTION
         // END: REPLACE THIS FUNCTION
@@ -4529,209 +4617,209 @@ function selectProposal(proposalType) {
             );
         }
         // NEW: Centralized PDF generation logic
-                function exportQuoteToPDF(clientContext, summaryData, overrides, campaign, filename) {
-            const { totals, phaseTotals, breakdown, discounts, valueProps, roiProjections, timelineData } = summaryData;
-            const finalOneTime = overrides.oneTime !== null ? overrides.oneTime : totals.oneTime;
-            const finalMonthly = overrides.monthly !== null ? overrides.monthly : totals.monthly;
-            const totalInvestment = finalMonthly + totals.adSpend;
-            const pdf = new jsPDF({unit: 'pt', format: 'a4'});
-            const settings = config.settings.pdfSettings;
-            const today = new Date().toLocaleDateString('en-US');
-            const pageMargin = 40;
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const contentWidth = pageWidth - (pageMargin * 2);
-            let yPos = 60;
-            const checkPageBreak = (neededHeight) => {
-                if (yPos + neededHeight > 780) {
-                    pdf.addPage();
-                    yPos = 60;
-                }
-            };
-            const addSectionTitle = (title) => {
-                checkPageBreak(40);
-                pdf.setFontSize(14);
-                pdf.setFont(undefined, 'bold');
-                pdf.setTextColor(17, 24, 39);
-                pdf.text(title, pageMargin, yPos);
-                yPos += 25;
-            };
-            const addDetailRow = (label, value) => {
-                if (!value || (Array.isArray(value) && value.length === 0)) return;
-                checkPageBreak(20);
-                pdf.setFontSize(10);
-                pdf.setFont(undefined, 'bold');
-                pdf.text(`${label}:`, pageMargin, yPos);
-                pdf.setFont(undefined, 'normal');
-                const valueX = pageMargin + 140;
-                const valueWidth = contentWidth - 140;
-                let processedValue = value;
-                if (label === 'Satisfaction' && !isNaN(value) && value > 0) {
-                    processedValue = `${'★'.repeat(value)}${'☆'.repeat(5-value)}`;
-                } else if (Array.isArray(value)) {
-                    processedValue = value.filter(v => v).join(', ');
-                }
-                const valueLines = pdf.splitTextToSize(String(processedValue), valueWidth);
-                checkPageBreak(valueLines.length * 12 + 8);
-                pdf.text(valueLines, valueX, yPos);
-                yPos += valueLines.length * 12 + 8;
-            };
-            // Header
-            pdf.setFontSize(22);
-            pdf.setFont(undefined, 'bold');
-            pdf.setTextColor(49, 46, 129);
-            pdf.text(settings.headerText, pageMargin, yPos);
-            if (campaign) {
-                pdf.setFontSize(10);
-                pdf.setFont(undefined, 'normal');
-                pdf.setTextColor(217, 119, 6);
-                pdf.text(`Pricing for campaign: ${campaign}`, pageMargin, yPos + 15);
-            }
-            pdf.setFontSize(10);
-            pdf.setFont(undefined, 'normal');
-            pdf.setTextColor(107, 114, 128);
-            pdf.text(`Date: ${today}`, pageWidth - pageMargin, yPos, { align: 'right' });
-            yPos += 30;
-            pdf.setDrawColor(229, 231, 235);
-            pdf.line(pageMargin, yPos, pageWidth - pageMargin, yPos);
-            yPos += 25;
-            // Intro
-            pdf.setFontSize(11);
-            pdf.setTextColor(55, 65, 81);
-            const introLines = pdf.splitTextToSize(settings.introParagraph, contentWidth);
-            checkPageBreak(introLines.length * 14 + 20);
-            pdf.text(introLines, pageMargin, yPos);
-            yPos += introLines.length * 14 + 20;
-            // Client Profile Section
-            if (clientContext && Object.values(clientContext).some(v => v)) {
-                addSectionTitle('Client Profile & Project Details');
-                addDetailRow('Business Stage', clientContext.businessStage);
-                addDetailRow('Primary Goal', clientContext.businessGoal);
-                addDetailRow('Future Goals', clientContext.futureGoals);
-                addDetailRow('Website', clientContext.website);
-                addDetailRow('Competitors', clientContext.competitors);
-                addDetailRow('Referral Source', clientContext.referralSource);
-                addDetailRow('Previous Provider', clientContext.previousProvider);
-                addDetailRow('Previous Services', clientContext.previousServices);
-                addDetailRow('Previous Budget ($/mo)', clientContext.previousBudget ? formatCurrency(clientContext.previousBudget) : null);
-                addDetailRow('Duration With Provider', clientContext.durationWithProvider);
-                addDetailRow('Reason for Switching', clientContext.reasonForSwitching);
-                addDetailRow('Satisfaction', clientContext.satisfaction);
-                addDetailRow('Avg. Lead Value', clientContext.avgLeadValue ? formatCurrency(clientContext.avgLeadValue) : null);
-                addDetailRow('Customer Lifetime Value', clientContext.avgClv ? formatCurrency(clientContext.avgClv) : null);
-                yPos += 15;
-                pdf.setDrawColor(229, 231, 235);
-                pdf.line(pageMargin, yPos, pageWidth - pageMargin, yPos);
-                yPos += 25;
-            }
-            // Itemized Estimate
-            addSectionTitle('Itemized Estimate');
-            if (phaseTotals && breakdown?.items) {
-                 for (const phaseId in phaseTotals) {
-                    const phase = phaseTotals[phaseId];
-                    const itemsInPhase = breakdown.items.filter(item => item.phaseId === phaseId);
-                    if (itemsInPhase.length === 0) continue;
-                    checkPageBreak(25);
-                    pdf.setFillColor(239, 246, 255); // blue-50
-                    pdf.rect(pageMargin, yPos, contentWidth, 25, 'F');
-                    pdf.setFontSize(12);
-                    pdf.setFont(undefined, 'bold');
-                    pdf.setTextColor(30, 64, 175); // blue-800
-                    pdf.text(phase.name, pageMargin + 10, yPos + 16);
-                    yPos += 25;
-                    itemsInPhase.forEach(item => {
-                        pdf.setFont(undefined, 'normal');
-                        pdf.setFontSize(10);
-                        pdf.setTextColor(55, 65, 81); // gray-700
-                        const itemLines = pdf.splitTextToSize(`${item.name} (${item.desc})`, contentWidth - 100);
-                        const rowHeight = Math.max(25, itemLines.length * 12 + 10);
-                        checkPageBreak(rowHeight);
-                        pdf.setDrawColor(229, 231, 235);
-                        pdf.line(pageMargin, yPos + rowHeight, pageWidth - pageMargin, yPos + rowHeight);
-                        pdf.text(itemLines, pageMargin + 15, yPos + 16);
-                        pdf.text(formatCurrency(item.cost), pageWidth - pageMargin - 10, yPos + 16, { align: 'right' });
-                        yPos += rowHeight;
-                    });
-                    checkPageBreak(30);
-                    pdf.setFontSize(10);
-                    pdf.setFont(undefined, 'bold');
-                    pdf.text(`Phase One-Time: ${formatCurrency(phase.oneTime)}`, pageWidth - pageMargin - 150, yPos + 15, { align: 'right' });
-                    pdf.text(`Phase Monthly: ${formatCurrency(phase.monthly)}`, pageWidth - pageMargin - 10, yPos + 15, { align: 'right' });
-                    yPos += 30;
-                }
-            }
-            // ROI Section
-            if(roiProjections && roiProjections.length > 0) {
-                addSectionTitle('Projected Value & ROI');
-                pdf.setFontSize(10);
-                pdf.setTextColor(21, 128, 61);
-                roiProjections.forEach(proj => {
-                    const projLines = pdf.splitTextToSize(`• ${proj.replace(/<b>/g, '').replace(/<\/b>/g, '')}`, contentWidth);
-                     checkPageBreak(projLines.length * 12 + 5);
-                     pdf.text(projLines, pageMargin, yPos);
-                     yPos += projLines.length * 12 + 5;
-                });
-                yPos += 20;
-            }
-            // Timeline Section
-            if (timelineChart && timelineData && timelineData.length > 0) {
-                 addSectionTitle('Estimated Project Timeline');
-                 const chartImage = timelineChart.toBase64Image();
-                 const imgProps = pdf.getImageProperties(chartImage);
-                 const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
-                 checkPageBreak(imgHeight);
-                 pdf.addImage(chartImage, 'PNG', pageMargin, yPos, contentWidth, imgHeight);
-                 yPos += imgHeight + 20;
-            }
-            // Totals Section
-            checkPageBreak(150);
-            let totalsX = pageWidth - pageMargin - 200;
-            if (discounts && discounts.length > 0) {
-                pdf.setFont(undefined, 'bold');
-                pdf.setTextColor(22, 163, 74); // Green-600
-                discounts.forEach(d => {
-                    pdf.text(d.name, totalsX, yPos, {align: 'right'});
-                    pdf.text(`-${formatCurrency(d.amount)}`, pageWidth - pageMargin - 10, yPos, { align: 'right' });
-                    yPos += 14;
-                });
-                yPos += 5;
-            }
-            pdf.setDrawColor(209, 213, 219);
-            pdf.line(totalsX - 10, yPos, pageWidth - pageMargin, yPos);
-            yPos += 15;
-            pdf.setFontSize(11);
-            pdf.setFont(undefined, 'bold');
-            pdf.setTextColor(17, 24, 39);
-            pdf.text('One-Time Fees:', totalsX, yPos, { align: 'right'});
-            pdf.text(formatCurrency(finalOneTime), pageWidth - pageMargin - 10, yPos, { align: 'right'});
-            yPos += 18;
-            pdf.text('Monthly Retainer (to us):', totalsX, yPos, { align: 'right'});
-            pdf.text(formatCurrency(finalMonthly), pageWidth - pageMargin - 10, yPos, { align: 'right'});
-            yPos += 18;
-            if (totals.adSpend > 0) {
-                pdf.text('Est. Ad Spend (to platforms):', totalsX, yPos, { align: 'right'});
-                pdf.text(formatCurrency(totals.adSpend), pageWidth - pageMargin - 10, yPos, { align: 'right'});
-                yPos += 18;
-                pdf.setDrawColor(209, 213, 219);
-                pdf.line(totalsX - 10, yPos, pageWidth - pageMargin, yPos);
-                yPos += 15;
-                pdf.setFontSize(12);
-                pdf.setTextColor(79, 70, 229);
-                pdf.text('Total Est. Monthly Investment:', totalsX, yPos, { align: 'right'});
-                pdf.text(formatCurrency(totalInvestment), pageWidth - pageMargin - 10, yPos, { align: 'right'});
-                yPos += 18;
-            }
-            // Footer
-            const pageCount = pdf.internal.getNumberOfPages();
-            for (let i = 1; i <= pageCount; i++) {
-                pdf.setPage(i);
-                pdf.setFontSize(9);
-                pdf.setTextColor(156, 163, 175);
-                pdf.line(pageMargin, 800, pageWidth - pageMargin, 800);
-                pdf.text(settings.footerText, pageMargin, 815);
-                pdf.text(`Page ${i} of ${pageCount}`, pageWidth - pageMargin, 815, { align: 'right' });
-            }
-            pdf.save(filename);
+        function exportQuoteToPDF(clientContext, summaryData, overrides, campaign, filename) {
+    // This check prevents errors if summaryData is incomplete.
+    if (!summaryData || !summaryData.totals || !summaryData.breakdown) {
+        showToast("Cannot generate PDF: Calculation data is missing.", "error");
+        console.error("PDF generation failed due to missing summaryData.", summaryData);
+        return;
+    }
+
+    const { totals, phaseTotals, breakdown, discounts, valueProps, roiProjections, timelineData } = summaryData;
+    const finalOneTime = overrides.oneTime !== null ? overrides.oneTime : totals.oneTime;
+    const finalMonthly = overrides.monthly !== null ? overrides.monthly : totals.monthly;
+    const totalInvestment = finalMonthly + totals.adSpend;
+    const pdf = new jsPDF({unit: 'pt', format: 'a4'});
+    const settings = config.settings.pdfSettings; // This correctly uses the customization options.
+    const today = new Date().toLocaleDateString('en-US');
+    const pageMargin = 40;
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const contentWidth = pageWidth - (pageMargin * 2);
+    let yPos = 60;
+
+    const checkPageBreak = (neededHeight) => {
+        if (yPos + neededHeight > 780) {
+            pdf.addPage();
+            yPos = 60;
         }
+    };
+    const addSectionTitle = (title) => {
+        checkPageBreak(40);
+        pdf.setFontSize(14);
+        pdf.setFont(undefined, 'bold');
+        pdf.setTextColor(17, 24, 39);
+        pdf.text(title, pageMargin, yPos);
+        yPos += 25;
+    };
+    const addDetailRow = (label, value) => {
+        if (!value || (Array.isArray(value) && value.length === 0)) return;
+        checkPageBreak(20);
+        pdf.setFontSize(10);
+        pdf.setFont(undefined, 'bold');
+        pdf.text(`${label}:`, pageMargin, yPos);
+        pdf.setFont(undefined, 'normal');
+        const valueX = pageMargin + 140;
+        const valueWidth = contentWidth - 140;
+        let processedValue = value;
+
+        // This section correctly processes complex data like competitors into a readable format.
+        if (label === 'Competitors' && Array.isArray(value)) {
+             processedValue = value.filter(c => c.url).map(c => `${c.url}${c.notes ? ` (${c.notes})` : ''}`).join('\n');
+        } else if (label === 'Satisfaction' && !isNaN(value) && value > 0) {
+            processedValue = `${'★'.repeat(value)}${'☆'.repeat(5-value)}`;
+        } else if (Array.isArray(value)) {
+            processedValue = value.filter(v => v).join(', ');
+        }
+        
+        const valueLines = pdf.splitTextToSize(String(processedValue), valueWidth);
+        checkPageBreak(valueLines.length * 12 + 8);
+        pdf.text(valueLines, valueX, yPos);
+        yPos += valueLines.length * 12 + 8;
+    };
+
+    // Header (Uses customization settings)
+    pdf.setFontSize(22);
+    pdf.setFont(undefined, 'bold');
+    pdf.setTextColor(49, 46, 129);
+    pdf.text(settings.headerText, pageMargin, yPos);
+    if (campaign) {
+        pdf.setFontSize(10);
+        pdf.setFont(undefined, 'normal');
+        pdf.setTextColor(217, 119, 6);
+        pdf.text(`Pricing for campaign: ${campaign}`, pageMargin, yPos + 15);
+    }
+    pdf.setFontSize(10);
+    pdf.setFont(undefined, 'normal');
+    pdf.setTextColor(107, 114, 128);
+    pdf.text(`Date: ${today}`, pageWidth - pageMargin, yPos, { align: 'right' });
+    yPos += 30;
+    pdf.setDrawColor(229, 231, 235);
+    pdf.line(pageMargin, yPos, pageWidth - pageMargin, yPos);
+    yPos += 25;
+
+    // Intro (Uses customization settings)
+    pdf.setFontSize(11);
+    pdf.setTextColor(55, 65, 81);
+    const introLines = pdf.splitTextToSize(settings.introParagraph, contentWidth);
+    checkPageBreak(introLines.length * 14 + 20);
+    pdf.text(introLines, pageMargin, yPos);
+    yPos += introLines.length * 14 + 20;
+
+    // Client Profile Section
+    if (clientContext && Object.values(clientContext).some(v => v)) {
+        addSectionTitle('Client Profile & Project Details');
+        addDetailRow('Business Stage', clientContext.businessStage);
+        addDetailRow('Primary Goal', clientContext.businessGoal);
+        addDetailRow('Future Goals', clientContext.futureGoals);
+        addDetailRow('Website', clientContext.website ? `<a href="${clientContext.website}" target="_blank" class="text-blue-600 hover:underline">${clientContext.website}</a>` : null);
+        addDetailRow('Competitors', clientContext.competitors);
+        addDetailRow('Referral Source', clientContext.referralSource);
+        yPos += 15;
+    }
+
+    // Itemized Estimate
+    addSectionTitle('Itemized Estimate');
+    if (phaseTotals && breakdown?.items) {
+         for (const phaseId in phaseTotals) {
+            const phase = phaseTotals[phaseId];
+            const itemsInPhase = breakdown.items.filter(item => item.phaseId === phaseId);
+            if (itemsInPhase.length === 0) continue;
+            checkPageBreak(25);
+            pdf.setFillColor(239, 246, 255);
+            pdf.rect(pageMargin, yPos, contentWidth, 25, 'F');
+            pdf.setFontSize(12);
+            pdf.setFont(undefined, 'bold');
+            pdf.setTextColor(30, 64, 175);
+            pdf.text(phase.name, pageMargin + 10, yPos + 16);
+            yPos += 25;
+            itemsInPhase.forEach(item => {
+                pdf.setFont(undefined, 'normal');
+                pdf.setFontSize(10);
+                pdf.setTextColor(55, 65, 81);
+                const itemLines = pdf.splitTextToSize(`${item.name} (${item.desc})`, contentWidth - 100);
+                const rowHeight = Math.max(25, itemLines.length * 12 + 10);
+                checkPageBreak(rowHeight);
+                pdf.setDrawColor(229, 231, 235);
+                pdf.line(pageMargin, yPos + rowHeight, pageWidth - pageMargin, yPos + rowHeight);
+                pdf.text(itemLines, pageMargin + 15, yPos + 16);
+                pdf.text(formatCurrency(item.cost), pageWidth - pageMargin - 10, yPos + 16, { align: 'right' });
+                yPos += rowHeight;
+            });
+            checkPageBreak(30);
+            pdf.setFontSize(10);
+            pdf.setFont(undefined, 'bold');
+            pdf.text(`Phase One-Time: ${formatCurrency(phase.oneTime)}`, pageWidth - pageMargin - 150, yPos + 15, { align: 'right' });
+            pdf.text(`Phase Monthly: ${formatCurrency(phase.monthly)}`, pageWidth - pageMargin - 10, yPos + 15, { align: 'right' });
+            yPos += 30;
+        }
+    }
+
+    // Timeline Section (gracefully handles if chart doesn't exist)
+    if (timelineChart && timelineData && timelineData.length > 0) {
+         addSectionTitle('Estimated Project Timeline');
+         try {
+             const chartImage = timelineChart.toBase64Image();
+             const imgProps = pdf.getImageProperties(chartImage);
+             const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
+             checkPageBreak(imgHeight);
+             pdf.addImage(chartImage, 'PNG', pageMargin, yPos, contentWidth, imgHeight);
+             yPos += imgHeight + 20;
+         } catch(e) {
+             console.error("Could not add timeline chart to PDF:", e);
+         }
+    }
+
+    // Totals Section
+    checkPageBreak(150);
+    let totalsX = pageWidth - pageMargin - 200;
+    if (discounts && discounts.length > 0) {
+        pdf.setFont(undefined, 'bold');
+        pdf.setTextColor(22, 163, 74);
+        discounts.forEach(d => {
+            pdf.text(d.name, totalsX, yPos, {align: 'right'});
+            pdf.text(`-${formatCurrency(d.amount)}`, pageWidth - pageMargin - 10, yPos, { align: 'right' });
+            yPos += 14;
+        });
+        yPos += 5;
+    }
+    pdf.setDrawColor(209, 213, 219);
+    pdf.line(totalsX - 10, yPos, pageWidth - pageMargin, yPos);
+    yPos += 15;
+    pdf.setFontSize(11);
+    pdf.setFont(undefined, 'bold');
+    pdf.setTextColor(17, 24, 39);
+    pdf.text('One-Time Fees:', totalsX, yPos, { align: 'right'});
+    pdf.text(formatCurrency(finalOneTime), pageWidth - pageMargin - 10, yPos, { align: 'right'});
+    yPos += 18;
+    pdf.text('Monthly Retainer (to us):', totalsX, yPos, { align: 'right'});
+    pdf.text(formatCurrency(finalMonthly), pageWidth - pageMargin - 10, yPos, { align: 'right'});
+    yPos += 18;
+    if (totals.adSpend > 0) {
+        pdf.text('Est. Ad Spend (to platforms):', totalsX, yPos, { align: 'right'});
+        pdf.text(formatCurrency(totals.adSpend), pageWidth - pageMargin - 10, yPos, { align: 'right'});
+        yPos += 18;
+        pdf.setDrawColor(209, 213, 219);
+        pdf.line(totalsX - 10, yPos, pageWidth - pageMargin, yPos);
+        yPos += 15;
+        pdf.setFontSize(12);
+        pdf.setTextColor(79, 70, 229);
+        pdf.text('Total Est. Monthly Investment:', totalsX, yPos, { align: 'right'});
+        pdf.text(formatCurrency(totalInvestment), pageWidth - pageMargin - 10, yPos, { align: 'right'});
+        yPos += 18;
+    }
+
+    // Footer (Uses customization settings)
+    const pageCount = pdf.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(9);
+        pdf.setTextColor(156, 163, 175);
+        pdf.line(pageMargin, 800, pageWidth - pageMargin, 800);
+        pdf.text(settings.footerText, pageMargin, 815);
+        pdf.text(`Page ${i} of ${pageCount}`, pageWidth - pageMargin, 815, { align: 'right' });
+    }
+    pdf.save(filename);
+}
         // MODIFIED: Saves all new client context fields
         function handleQuoteRequest(e) {
     e.preventDefault();
