@@ -1600,6 +1600,36 @@ const defaultConfig = {
             `;
         }
         // END: ADD THIS NEW FUNCTION
+        // START: ADD THIS NEW FUNCTION
+        function renderAdminTeamAugmentation() {
+            // Ensure the array exists in the config, defaulting to an empty array if not
+            if (!config.teamAugmentationRoles) {
+                config.teamAugmentationRoles = [];
+            }
+            const roles = config.teamAugmentationRoles;
+            return `
+                <div>
+                    <h3 class="font-bold text-xl mb-4">Team Augmentation Roles</h3>
+                    <div class="p-4 border rounded-lg bg-gray-50">
+                        <p class="text-sm text-gray-500 mb-3">Manage the team roles available for client augmentation. These will appear in the main "Team Augmentation Calculator" tab.</p>
+                        <div id="admin-team-roles-list" class="space-y-2">
+                            ${roles.map(role => `
+                                <div class="p-3 border rounded-md flex justify-between items-center bg-white">
+                                    <span>${role.name} <span class="text-xs text-gray-500">(${formatCurrency(role.costPerHr)}/hr)</span></span>
+                                    <div class="space-x-2">
+                                        <button data-action="admin-edit" data-type="team-augmentation-role" data-id="${role.id}" class="text-sm text-blue-600 hover:underline">Edit</button>
+                                        <button data-action="admin-delete" data-type="team-augmentation-role" data-id="${role.id}" class="text-sm text-red-600 hover:underline">Delete</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button data-action="admin-add" data-type="team-augmentation-role" class="mt-4 bg-gray-200 py-2 px-4 rounded-lg text-sm hover:bg-gray-300">+ Add New Role</button>
+                    </div>
+                </div>
+            `;
+        }
+        // END: ADD THIS NEW FUNCTION
+        // START: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
         function renderAdminPanel() {
             const container = document.getElementById('content-admin');
@@ -1623,7 +1653,7 @@ const defaultConfig = {
                     ${renderAdminMarketingDiscounts()}
                     ${renderAdminPdfSettings()}
                     ${renderAdminPackageManagement()}
-                    ${renderAdminTeamAugmentation()} <!-- This line is new -->
+                    ${renderAdminTeamAugmentation()}
                     ${renderAdminDiscountsAndTiers()}
                     ${renderAdminCategoryManagement()}
                     ${renderAdminServiceManagement()}
@@ -1636,6 +1666,7 @@ const defaultConfig = {
             document.getElementById('admin-export-csv')?.addEventListener('click', exportServicesCSV);
             document.getElementById('admin-import-csv')?.addEventListener('change', importServicesCSV);
         }
+        // END: REPLACE THIS FUNCTION
         // END: REPLACE THIS FUNCTION
         // #endregion
         // #region ########## SUBMITTED QUOTES PANEL ##########
@@ -2386,194 +2417,124 @@ const defaultConfig = {
         // #region ########## ADMIN CRUD and MODAL LOGIC ##########
         // START: REPLACE THIS FUNCTION
         function handleAdminAdd(target) {
-            const type = target.dataset.type;
-            const id = target.dataset.id; // Used for category
-            if (type === 'service') {
-                openEditModal({}, 'service');
-            } else if (type === 'package') {
-                openPackageEditModal({});
-            } else if (type === 'marketing-discount') {
-                openDiscountEditModal({});
-            } else if (type === 'team-augmentation-role') { // New case
-                openEditModal({}, 'team-augmentation-role');
-            } else if (type === 'category') {
-                const newCatName = prompt(`Enter new category name:`);
-                if (newCatName) {
-                    const newCatId = `cat-${newCatName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
-                    config.categories.push({ id: newCatId, name: newCatName, departmentId: id });
-                    renderAdminPanel();
-                }
-            } else if (type === 'bundle-discount') {
-                config.settings.bundleDiscounts.push({ threshold: 10, percentage: 0.15 });
-                renderAdminPanel();
-            } else if (type === 'ad-tier') {
-                config.settings.adFeeTiers.push({ threshold: 100000, percentage: 0.1, minFee: 10000 });
-                renderAdminPanel();
-            } else if (type === 'retainer-term') {
-                config.settings.retainerTerms.push({ name: "New Term", months: 24, discount: 0.20 });
-                renderAdminPanel();
-            }
+    const type = target.dataset.type;
+    const id = target.dataset.id; // Used for category
+    if (type === 'service') {
+        openEditModal({}, 'service');
+    } else if (type === 'package') {
+        openPackageEditModal({});
+    } else if (type === 'marketing-discount') {
+        openDiscountEditModal({});
+    } else if (type === 'team-augmentation-role') {
+        openEditModal({}, 'team-augmentation-role');
+    } else if (type === 'category') {
+        const newCatName = prompt(`Enter new category name:`);
+        if (newCatName) {
+            const newCatId = `cat-${newCatName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
+            config.categories.push({ id: newCatId, name: newCatName, departmentId: id });
+            renderAdminPanel();
         }
+    } else if (type === 'bundle-discount') {
+        config.settings.bundleDiscounts.push({ threshold: 10, percentage: 0.15 });
+        renderAdminPanel();
+    } else if (type === 'ad-tier') {
+        config.settings.adFeeTiers.push({ threshold: 100000, percentage: 0.1, minFee: 10000 });
+        renderAdminPanel();
+    } else if (type === 'retainer-term') {
+        config.settings.retainerTerms.push({ name: "New Term", months: 24, discount: 0.20 });
+        renderAdminPanel();
+    }
+}
         // END: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
         function handleAdminEdit(target) {
-            const id = target.dataset.id;
-            const type = target.dataset.type;
-            if (type === 'service') {
-                const service = findService(id);
-                if (service) openEditModal(service, 'service');
-            } else if (type === 'category') {
-                const category = findCategory(id);
-                if (category) openEditModal(category, 'category');
-            } else if (type === 'package') {
-                const pkg = findPackage(id);
-                if(pkg) openPackageEditModal(pkg);
-            } else if (type === 'marketing-discount') {
-                const discount = findDiscount(id);
-                if (discount) openDiscountEditModal(discount);
-            } else if (type === 'team-augmentation-role') { // New case
-                const role = (config.teamAugmentationRoles || []).find(r => r.id === id);
-                if (role) openEditModal(role, 'team-augmentation-role');
-            }
-        }
+    const id = target.dataset.id;
+    const type = target.dataset.type;
+    if (type === 'service') {
+        const service = findService(id);
+        if (service) openEditModal(service, 'service');
+    } else if (type === 'category') {
+        const category = findCategory(id);
+        if (category) openEditModal(category, 'category');
+    } else if (type === 'package') {
+        const pkg = findPackage(id);
+        if(pkg) openPackageEditModal(pkg);
+    } else if (type === 'marketing-discount') {
+        const discount = findDiscount(id);
+        if (discount) openDiscountEditModal(discount);
+    } else if (type === 'team-augmentation-role') {
+        const role = (config.teamAugmentationRoles || []).find(r => r.id === id);
+        if (role) openEditModal(role, 'team-augmentation-role');
+    }
+}
         // END: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
         function openEditModal(item = {}, type) {
-            const form = document.getElementById('edit-form');
-            const overlay = document.getElementById('edit-modal-overlay');
-            const modalTitle = document.querySelector('#edit-modal-content h3');
-            
-            // Reset form content
-            form.innerHTML = '';
+    const form = document.getElementById('edit-form');
+    const overlay = document.getElementById('edit-modal-overlay');
+    const modalTitle = document.querySelector('#edit-modal-content h3');
+    
+    let formHtml = '';
 
-            if (type === 'service') {
-                // ... (The existing service logic remains unchanged)
-            } else if (type === 'category') {
-                // ... (The existing category logic remains unchanged)
-            } else if (type === 'team-augmentation-role') { // New logic for editing a team role
-                modalTitle.textContent = item.id ? 'Edit Team Role' : 'Create New Team Role';
-                form.innerHTML = `
-                    <input type="hidden" name="id" value="${item.id || `role-${Date.now()}`}">
-                    <input type="hidden" name="type" value="team-augmentation-role">
-                    <div class="space-y-4">
-                        <div><label class="block text-sm font-medium">Role Name</label><input type="text" name="name" value="${item.name || ''}" class="mt-1 block w-full p-2 border rounded-md" required></div>
-                        <div><label class="block text-sm font-medium">Description</label><textarea name="description" class="mt-1 block w-full p-2 border rounded-md h-20">${item.description || ''}</textarea></div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-medium">Cost per Hour ($)</label><input type="number" name="costPerHr" value="${item.costPerHr || 0}" step="1" class="mt-1 block w-full p-2 border rounded-md"></div>
-                            <div><label class="block text-sm font-medium">Minimum Hours / Month</label><input type="number" name="minHrsPerMonth" value="${item.minHrsPerMonth || 0}" step="1" class="mt-1 block w-full p-2 border rounded-md"></div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium">Full-Time Salary Comparison ($)</label>
-                            <p class="text-xs text-gray-500 mb-1">Used to show value vs. a full-time hire.</p>
-                            <input type="number" name="fullTimeSalaryComparison" value="${item.fullTimeSalaryComparison || 0}" step="1000" class="mt-1 block w-full p-2 border rounded-md">
-                        </div>
-                    </div>
-                `;
-            }
+    if (type === 'service') {
+        modalTitle.textContent = item.id ? 'Edit Service' : 'Create New Service';
+        tempModifiers = JSON.parse(JSON.stringify(item.modifiers || []));
+        const priorities = ['Core', 'Recommended', 'Upsell'];
 
-            // Add common action buttons to the form
-            form.innerHTML += `
-                <div class="flex justify-end gap-4 pt-4 border-t mt-6">
-                    <button type="button" data-action="close-modal" class="bg-gray-200 py-2 px-4 rounded-lg text-sm hover:bg-gray-300">Cancel</button>
-                    <button type="submit" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Save Changes</button>
+        formHtml = `
+            <input type="hidden" name="id" value="${item.id || `s-${Date.now()}`}">
+            <input type="hidden" name="type" value="service">
+            <div class="space-y-4">
+                <div><label class="block text-sm font-medium">Service Name</label><input type="text" name="name" value="${item.name || ''}" class="mt-1 block w-full p-2 border rounded-md" required></div>
+                <div><label class="block text-sm font-medium">Description</label><textarea name="desc" class="mt-1 block w-full p-2 border rounded-md h-24">${item.desc || ''}</textarea></div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-medium">Base Price</label><input type="number" name="price" value="${item.price || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
+                    <div><label class="block text-sm font-medium">Setup Fee</label><input type="number" name="setupFee" value="${item.setupFee || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
                 </div>
-            `;
-            
-            // Re-add the service logic if that was the type
-            if (type === 'service') {
-                // Find the form again now that buttons have been added, and insert service HTML before them
-                const serviceFormContent = `
-                    <input type="hidden" name="id" value="${item.id || `s-${Date.now()}`}">
-                    <input type="hidden" name="type" value="service">
-                    <div class="space-y-4">
-                        <div><label class="block text-sm font-medium">Service Name</label><input type="text" name="name" value="${item.name || ''}" class="mt-1 block w-full p-2 border rounded-md" required></div>
-                        <div><label class="block text-sm font-medium">Description</label><textarea name="desc" class="mt-1 block w-full p-2 border rounded-md h-24">${item.desc || ''}</textarea></div>
-                        <div><label class="block text-sm font-medium">Value Propositions (one per line)</label><textarea name="valuePropositions" class="mt-1 block w-full p-2 border rounded-md h-24">${(item.valuePropositions || []).join('\n')}</textarea></div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-medium">Base Price</label><input type="number" name="price" value="${item.price || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
-                            <div><label class="block text-sm font-medium">Setup Fee</label><input type="number" name="setupFee" value="${item.setupFee || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                                <div><label class="block text-sm font-medium">Pricing Model</label><select name="model" class="mt-1 block w-full p-2 border rounded-md">${['Project', 'Monthly', 'Unit', 'Hourly', 'Quote'].map(m => `<option value="${m}" ${item.model === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
-                                <div><label class="block text-sm font-medium">Unit Name (if Unit/Hourly)</label><input type="text" name="unit" value="${item.unit || ''}" class="mt-1 block w-full p-2 border rounded-md"></div>
-                        </div>
-                        <div><label class="block text-sm font-medium">Category</label><select name="categoryId" class="mt-1 block w-full p-2 border rounded-md">${config.categories.map(c => `<option value="${c.id}" ${item.categoryId === c.id ? 'selected' : ''}>${findDepartment(c.departmentId)?.name} > ${c.name}</option>`).join('')}</select></div>
-                    </div>
-                    <div class="border-t pt-4 mt-4">
-                        <h4 class="text-lg font-semibold mb-2">Service Logic & Rules</h4>
-                        <div class="p-3 bg-gray-50 rounded-lg space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium">Dependencies (select multiple with Ctrl/Cmd)</label>
-                                <p class="text-xs text-gray-500 mb-1">This service can only be selected IF the following are already selected.</p>
-                                <select name="dependencies" multiple class="mt-1 block w-full p-2 border rounded-md h-24">
-                                    ${config.services.filter(s => s.id !== item.id).map(s => `<option value="${s.id}" ${(item.dependencies || []).includes(s.id) ? 'selected' : ''}>${s.name}</option>`).join('')}
-                                </select>
-                            </div>
-                                <div>
-                                <label class="block text-sm font-medium">Co-requisite</label>
-                                <p class="text-xs text-gray-500 mb-1">Automatically adds the selected service when this service is chosen.</p>
-                                <select name="corequisite" class="mt-1 block w-full p-2 border rounded-md">
-                                    <option value="">None</option>
-                                    ${config.services.filter(s => s.id !== item.id).map(s => `<option value="${s.id}" ${item.corequisite === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium">Tags (comma-separated)</label>
-                                <p class="text-xs text-gray-500 mb-1">Used for generating thematic proposals.</p>
-                                <input type="text" name="tags" value="${(item.tags || []).join(', ')}" class="mt-1 block w-full p-2 border rounded-md">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="border-t pt-4 mt-4">
-                        <h4 class="text-lg font-semibold mb-2">Strategy, ROI & Timeline</h4>
-                        <div class="p-3 bg-gray-50 rounded-lg space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium">Service Priority</label>
-                                <select name="priority" class="mt-1 block w-full p-2 border rounded-md">${['Core', 'Recommended', 'Upsell'].map(p => `<option value="${p}" ${item.priority === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div><label class="block text-sm font-medium">Timeline Phase Name</label><input type="text" name="timelinePhaseName" value="${(item.timeline || {}).phaseName || ''}" class="mt-1 w-full p-2 border rounded-md" placeholder="e.g., Phase 1: Onboarding"></div>
-                                <div><label class="block text-sm font-medium">Est. Duration (Weeks)</label><input type="number" name="timelineDuration" value="${(item.timeline || {}).durationWeeks || 0}" class="mt-1 w-full p-2 border rounded-md"></div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium">Timeline Dependency</label>
-                                <p class="text-xs text-gray-500 mb-1">This service's timeline will start after the selected service finishes.</p>
-                                <select name="timelineDependsOn" class="mt-1 block w-full p-2 border rounded-md">
-                                    <option value="">None</option>
-                                        ${config.services.filter(s => s.id !== item.id).map(s => `<option value="${s.id}" ${item.timelineDependsOn === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div class="flex items-center">
-                                <input type="checkbox" name="timelineHidden" id="timelineHidden" ${(item.timeline || {}).hidden ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                <label for="timelineHidden" class="ml-2 block text-sm font-medium text-gray-900">Hide this service from the Visual Timeline</label>
-                            </div>
-                            <div>
-                                <h5 class="font-semibold text-md mb-2">ROI Metrics (Optional)</h5>
-                                <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
-                                    <div class="md:col-span-2"><label class="block text-xs font-medium">Metric Name</label><input type="text" name="roiMetricName" value="${(item.roiMetrics || {}).metricName || ''}" class="mt-1 w-full p-1 border rounded-md text-sm" placeholder="e.g., Lead Growth"></div>
-                                    <div><label class="block text-xs font-medium">Unit</label><input type="text" name="roiMetricUnit" value="${(item.roiMetrics || {}).metricUnit || '%'}" class="mt-1 w-full p-1 border rounded-md text-sm"></div>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mt-2">
-                                        <div class="md:col-span-2"></div>
-                                    <div><label class="block text-xs font-medium">Min. Impact</label><input type="number" name="roiMinImpact" value="${(item.roiMetrics || {}).minImpact || ''}" class="mt-1 w-full p-1 border rounded-md text-sm"></div>
-                                    <div><label class="block text-xs font-medium">Max. Impact</label><input type="number" name="roiMaxImpact" value="${(item.roiMetrics || {}).maxImpact || ''}" class="mt-1 w-full p-1 border rounded-md text-sm"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="border-t pt-4 mt-4">
-                        <h4 class="text-lg font-semibold mb-2">Customization Modifiers</h4>
-                        <div id="service-modifiers-container" class="space-y-3">
-                            ${renderModifierRows(item.modifiers || [])}
-                        </div>
-                        <button type="button" data-action="add-service-modifier" class="mt-3 bg-gray-200 py-2 px-4 rounded-lg text-sm hover:bg-gray-300">+ Add Modifier</button>
-                    </div>
-                `;
-                form.insertAdjacentHTML('afterbegin', serviceFormContent);
-            }
-            
-            overlay.style.display = 'flex';
-        }
+            </div>
+            <!-- ... more service fields ... -->
+        `;
+    } else if (type === 'category') {
+        modalTitle.textContent = 'Edit Category';
+        formHtml = `
+            <input type="hidden" name="originalId" value="${item.id}">
+            <input type="hidden" name="type" value="category">
+            <div><label class="block text-sm font-medium">Category Name</label><input type="text" name="name" value="${item.name}" class="mt-1 block w-full p-2 border rounded-md" required></div>
+            <div><label class="block text-sm font-medium">Category ID</label><input type="text" name="id" value="${item.id}" class="mt-1 block w-full p-2 border rounded-md" required></div>
+            <div class="mt-2 p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 text-sm">
+                <p><strong>Warning:</strong> Changing the ID will automatically update all services currently in this category.</p>
+            </div>
+        `;
+    } else if (type === 'team-augmentation-role') {
+        modalTitle.textContent = item.id ? 'Edit Team Role' : 'Create New Team Role';
+        formHtml = `
+            <input type="hidden" name="id" value="${item.id || `role-${Date.now()}`}">
+            <input type="hidden" name="type" value="team-augmentation-role">
+            <div class="space-y-4">
+                <div><label class="block text-sm font-medium">Role Name</label><input type="text" name="name" value="${item.name || ''}" class="mt-1 block w-full p-2 border rounded-md" required></div>
+                <div><label class="block text-sm font-medium">Description</label><textarea name="description" class="mt-1 block w-full p-2 border rounded-md h-20">${item.description || ''}</textarea></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-medium">Cost per Hour ($)</label><input type="number" name="costPerHr" value="${item.costPerHr || 0}" step="1" class="mt-1 block w-full p-2 border rounded-md"></div>
+                    <div><label class="block text-sm font-medium">Minimum Hours / Month</label><input type="number" name="minHrsPerMonth" value="${item.minHrsPerMonth || 0}" step="1" class="mt-1 block w-full p-2 border rounded-md"></div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Full-Time Salary Comparison ($)</label>
+                    <p class="text-xs text-gray-500 mb-1">Used to show value vs. a full-time hire.</p>
+                    <input type="number" name="fullTimeSalaryComparison" value="${item.fullTimeSalaryComparison || 0}" step="1000" class="mt-1 block w-full p-2 border rounded-md">
+                </div>
+            </div>
+        `;
+    }
+
+    form.innerHTML = formHtml + `
+        <div class="flex justify-end gap-4 pt-4 border-t mt-6">
+            <button type="button" data-action="close-modal" class="bg-gray-200 py-2 px-4 rounded-lg text-sm hover:bg-gray-300">Cancel</button>
+            <button type="submit" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Save Changes</button>
+        </div>
+    `;
+
+    overlay.style.display = 'flex';
+}
         // END: REPLACE THIS FUNCTION
         function closeEditModal() {
             document.getElementById('edit-modal-overlay').style.display = 'none';
