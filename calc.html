@@ -2375,9 +2375,15 @@ const defaultConfig = {
         // #endregion
         // #region ########## CORE LOGIC / ACTIONS ##########
         // START: ADD THESE NEW FUNCTIONS
+        // START: REPLACE THIS FUNCTION
         function saveSession() {
             try {
-                const sessionData = JSON.stringify(selections);
+                // Create a serializable copy of the selections object
+                const sessionToSave = {
+                    ...selections,
+                    packagesToCompare: Array.from(selections.packagesToCompare || []) // Convert Set to Array
+                };
+                const sessionData = JSON.stringify(sessionToSave);
                 localStorage.setItem('galifreyCalcSession', sessionData);
                 showToast("Your progress has been saved to this browser.", "success");
                 trackAnalytics('session_saved');
@@ -2386,6 +2392,7 @@ const defaultConfig = {
                 showToast("Could not save session. Browser storage may be full.", "error");
             }
         }
+        // END: REPLACE THIS FUNCTION
 
         function loadSession(sessionData) {
             try {
@@ -2414,16 +2421,21 @@ const defaultConfig = {
             }
         }
 
+        // START: REPLACE THIS FUNCTION
         function shareBuild() {
             try {
-                const jsonString = JSON.stringify(selections);
+                // Create a serializable copy of the selections object
+                const sessionToShare = {
+                    ...selections,
+                    packagesToCompare: Array.from(selections.packagesToCompare || []) // Convert Set to Array
+                };
+                const jsonString = JSON.stringify(sessionToShare);
                 const compressed = pako.deflate(jsonString, { to: 'string' });
                 const encoded = btoa(compressed); // Base64 encode
 
                 const url = new URL(window.location);
                 url.searchParams.set('s', encoded);
 
-                // Use a temporary textarea to reliably copy to clipboard
                 const textArea = document.createElement("textarea");
                 textArea.value = url.href;
                 textArea.style.position = "fixed";
@@ -2440,6 +2452,7 @@ const defaultConfig = {
                 showToast("Could not create shareable link.", "error");
             }
         }
+        // END: REPLACE THIS FUNCTION
         // END: ADD THESE NEW FUNCTIONS
         function switchTab(tabId) {
             document.querySelectorAll('#main-tabs .tab').forEach(t => t.classList.remove('active'));
