@@ -2705,6 +2705,136 @@ const defaultConfig = {
             document.getElementById('edit-modal-overlay').style.display = 'none';
             tempModifiers = [];
         }
+        // START: ADD THIS MISSING FUNCTION
+        function handleAdminSaveEdit(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const type = formData.get('type');
+            
+            if (type === 'service') {
+                const id = formData.get('id');
+                const serviceIndex = config.services.findIndex(s => s.id === id);
+                updateTempModifiersFromDOM();
+                
+                const serviceData = {
+                    id: id,
+                    name: formData.get('name'),
+                    desc: formData.get('desc'),
+                    price: parseFloat(formData.get('price')) || 0,
+                    setupFee: parseFloat(formData.get('setupFee')) || 0,
+                    model: formData.get('model'),
+                    categoryId: formData.get('categoryId'),
+                    unit: formData.get('unit'),
+                    modifiers: tempModifiers,
+                    valuePropositions: formData.get('valuePropositions').split('\n').filter(vp => vp.trim() !== ''),
+                    priority: formData.get('priority'),
+                    timeline: {
+                        phaseName: formData.get('timelinePhaseName'),
+                        durationWeeks: parseInt(formData.get('timelineDuration'), 10) || 0,
+                        hidden: formData.get('timelineHidden') === 'on'
+                    },
+                    roiMetrics: {
+                        metricName: formData.get('roiMetricName'),
+                        metricUnit: formData.get('roiMetricUnit'),
+                        minImpact: parseFloat(formData.get('roiMinImpact')) || 0,
+                        maxImpact: parseFloat(formData.get('roiMaxImpact')) || 0,
+                    },
+                    dependencies: formData.getAll('dependencies'),
+                    corequisite: formData.get('corequisite'),
+                    tags: formData.get('tags').split(',').map(tag => tag.trim()).filter(Boolean),
+                    timelineDependsOn: formData.get('timelineDependsOn')
+                };
+                if (serviceIndex > -1) {
+                    config.services[serviceIndex] = serviceData;
+                } else {
+                    config.services.push(serviceData);
+                }
+            } else if (type === 'package') {
+                const id = formData.get('id');
+                const packageIndex = config.packages.findIndex(p => p.id === id);
+                const packageData = {
+                    id: id,
+                    name: formData.get('name'),
+                    desc: formData.get('desc'),
+                    displayPrice: parseFloat(formData.get('displayPrice')) || 0,
+                    features: formData.get('features'),
+                    services: []
+                };
+                document.querySelectorAll('#package-services-container .package-service-row').forEach(row => {
+                    const serviceId = row.querySelector('.package-service-id').value;
+                    const quantity = parseInt(row.querySelector('.package-service-quantity').value, 10) || 1;
+                    const isLocked = row.querySelector('.package-service-locked').checked;
+                    if (serviceId) {
+                        packageData.services.push({ id: serviceId, quantity: quantity, mods: {}, locked: isLocked });
+                    }
+                });
+                if (packageIndex > -1) {
+                    config.packages[packageIndex] = packageData;
+                } else {
+                    config.packages.push(packageData);
+                }
+            } else if (type === 'team-augmentation-role') {
+                const id = formData.get('id');
+                const roleIndex = (config.teamAugmentationRoles || []).findIndex(r => r.id === id);
+                const roleData = {
+                    id: id,
+                    name: formData.get('name'),
+                    description: formData.get('description'),
+                    costPerHr: parseFloat(formData.get('costPerHr')) || 0,
+                    minHrsPerMonth: parseInt(formData.get('minHrsPerMonth'), 10) || 0,
+                    fullTimeSalaryComparison: parseFloat(formData.get('fullTimeSalaryComparison')) || 0
+                };
+                if (roleIndex > -1) {
+                    config.teamAugmentationRoles[roleIndex] = roleData;
+                } else {
+                    if (!config.teamAugmentationRoles) {
+                        config.teamAugmentationRoles = [];
+                    }
+                    config.teamAugmentationRoles.push(roleData);
+                }
+            } else if (type === 'category') {
+                const originalId = formData.get('originalId');
+                const newId = formData.get('id');
+                const newName = formData.get('name');
+                const categoryIndex = config.categories.findIndex(c => c.id === originalId);
+                if (categoryIndex > -1) {
+                    config.categories[categoryIndex].name = newName;
+                    config.categories[categoryIndex].id = newId;
+                    if (originalId !== newId) {
+                        config.services.forEach(service => {
+                            if (service.categoryId === originalId) {
+                                service.categoryId = newId;
+                            }
+                        });
+                        showToast(`Category ID updated. All associated services have been migrated.`, 'info');
+                    }
+                }
+            } else if (type === 'marketing-discount') {
+                const id = formData.get('id');
+                const index = config.settings.marketingDiscounts.findIndex(d => d.id === id);
+                const discountType = formData.get('discountType');
+                const rawValue = parseFloat(formData.get('value')) || 0;
+                const discountData = {
+                    id: id, code: formData.get('code').toUpperCase(), type: discountType,
+                    value: discountType === 'percent' ? rawValue / 100 : rawValue,
+                    applyTo: formData.get('applyTo'),
+                    targetId: formData.get('targetId') || null,
+                    startDate: formData.get('startDate'),
+                    endDate: formData.get('endDate')
+                };
+                if (index > -1) {
+                    config.settings.marketingDiscounts[index] = discountData;
+                } else {
+                    config.settings.marketingDiscounts.push(discountData);
+                }
+                trackAnalytics('admin_action', { action: index > -1 ? 'edit_discount' : 'create_discount', code: discountData.code });
+            }
+
+            showToast(`Item updated. Remember to click "Save All Changes" to persist your edits.`, 'info');
+            renderAdminPanel();
+            closeEditModal();
+        }
+        // END: ADD THIS MISSING FUNCTION
         // START: REPLACE THIS FUNCTION        
         // #endregion
         // #region ########## MODIFIER & PACKAGE EDITING LOGIC ##########
