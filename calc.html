@@ -1548,15 +1548,18 @@ function renderServiceCard(service) {
     const campaignPrice = getCampaignPrice(service.id);
     const globalAdjust = activeCampaign ? config.settings.campaignModifiers[activeCampaign]?.globalAdjust : null;
     let displayPrice = campaignPrice ?? service.price;
-    let isCampaignPrice = campaignPrice !== null;
+    
+    // The "Campaign" label will now ONLY show if a specific price override exists for this service.
+    let isCampaignPrice = campaignPrice !== null; 
 
-    if (!isCampaignPrice && globalAdjust?.value) {
+    // The global adjustment still affects the price, but it no longer triggers the label.
+    if (campaignPrice === null && globalAdjust?.value) {
         if (globalAdjust.type === 'percent') {
             displayPrice *= (1 + globalAdjust.value);
         } else if (displayPrice > 0) {
             displayPrice += globalAdjust.value;
         }
-        isCampaignPrice = true;
+        // The line `isCampaignPrice = true;` has been removed.
     }
 
     let cardClasses = 'service-card p-4 border-2 rounded-lg transition-all relative';
