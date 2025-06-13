@@ -952,17 +952,21 @@
         let tempModifiers = [];
         let timelineChart = null; // For the new timeline chart instance
         const { jsPDF } = window.jspdf;
+        // This is the INCORRECT version in your file
         function init() {
-            // Set the initial active phase ID right away
-            if (selections.phases.length > 0 && !selections.activePhaseId) {
-                selections.activePhaseId = selections.phases[0].id;
-            }
-            // Check for campaign parameter in URL
-            const urlParams = new URLSearchParams(window.location.search);
-            activeCampaign = urlParams.get('campaign');
+            // ... (other code)
             loadConfig();
             setupEventListeners();
-            listenForQuotes(); // <-- ADD THIS LINE
+            listenForQuotes(); // <-- DELETE THIS LINE
+            renderAll();
+        }
+
+        // This is the CORRECTED version
+        function init() {
+            // ... (other code)
+            loadConfig();
+            setupEventListeners();
+            // The listenForQuotes() call is now gone from here.
             renderAll();
         }
         function loadConfig() {
@@ -2226,6 +2230,14 @@
                 document.getElementById('tab-admin').classList.add('hidden');
                 document.getElementById('tab-quotes').classList.add('hidden');
                 document.querySelectorAll('.admin-override-input').forEach(i => i.classList.add('hidden'));
+
+                // --- NEW: Stop listening when logging out ---
+                if (quotesListener) {
+                    quotesListener(); // This detaches the real-time listener
+                    quotesListener = null;
+                }
+                // ------------------------------------------
+
                 if(document.getElementById('tab-admin').classList.contains('active') || document.getElementById('tab-quotes').classList.contains('active')) {
                     switchTab('packages');
                 }
@@ -2237,9 +2249,13 @@
                     document.getElementById('tab-admin').classList.remove('hidden');
                     document.getElementById('tab-quotes').classList.remove('hidden');
                     document.querySelectorAll('.admin-override-input').forEach(i => i.classList.remove('hidden'));
+                    
+                    // --- NEW: Start listening for quotes AFTER login ---
+                    listenForQuotes(); 
+                    // ---------------------------------------------------
+
                     renderAdminPanel();
-                    renderSubmittedQuotes();
-                    updateQuoteCountBadge();
+                    // renderSubmittedQuotes() will be called automatically by the listener now
                     switchTab('admin');
                     showToast('Admin mode unlocked.', 'success');
                 } else if (password) {
