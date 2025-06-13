@@ -1053,43 +1053,55 @@ function init() {
             document.getElementById('save-modifier-options-btn').addEventListener('click', saveModifierOptions);
         }
         // START: ADD THIS MISSING FUNCTION
-        function handleDynamicClicks(e) {
+function handleDynamicClicks(e) {
     const target = e.target.closest('[data-action]');
     if (!target) return;
     const action = target.dataset.action;
     const id = target.dataset.id;
     switch (action) {
-        // --- NEW/UPDATED ACTIONS ---
+        // --- Session & Sharing ---
         case 'admin-clear-session': clearSessionData(); break;
         case 'save-session': saveSession(); break;
         case 'load-session': loadSession(); target.closest('#load-session-banner').classList.add('hidden'); break;
         case 'dismiss-load-banner': target.closest('#load-session-banner').classList.add('hidden'); break;
         case 'share-build': shareBuild(); break;
+
+        // --- UI & Modals ---
         case 'compare-packages': renderCompareModal(); break;
         case 'close-compare-modal': document.getElementById('compare-modal-overlay').style.display = 'none'; break;
         case 'open-ab-planner': openABTestPlannerModal(); break;
         case 'close-ab-planner': document.getElementById('ab-test-modal-overlay').style.display = 'none'; break;
         case 'calculate-ab-sample-size': calculateABSampleSize(); break;
-        // --- EXISTING ACTIONS ---
-        case 'select-package': selectPackage(id); break;
-        case 'toggle-service': if (e.target.closest('.service-config')) return; toggleService(id); break;
         case 'toggle-accordion': toggleAccordion(target); break;
+        case 'close-modal': closeEditModal(); break;
+        case 'close-quote-modal': document.getElementById('quote-modal-overlay').style.display = 'none'; break;
+        case 'generate-alternatives': generateAlternativeProposals(); break;
+        case 'close-alternatives-modal': document.getElementById('alternatives-modal-overlay').style.display = 'none'; break;
+
+        // --- Core Calculator Actions ---
+        case 'select-package': selectPackage(id); break;
+        case 'select-proposal': selectProposal(target.dataset.proposalType); break;
+        case 'toggle-service': if (e.target.closest('.service-config')) return; toggleService(id); break;
         case 'add-ad-channel-confirm': addAdChannel(); break;
         case 'remove-ad-channel': removeAdChannel(id); break;
+        case 'clear-builder': clearBuilder(); break;
+        case 'add-phase': const newPhaseName = prompt("Enter name for the new phase:", `Phase ${selections.phases.length + 1}`); if (newPhaseName) { const newId = `phase-${Date.now()}`; selections.phases.push({ id: newId, name: newPhaseName, services: {}, adChannels: {} }); selections.activePhaseId = newId; renderBuilder(); } break;
+        case 'delete-phase': if (confirm(`Are you sure you want to delete this phase? All services within it will be removed.`)) { selections.phases = selections.phases.filter(p => p.id !== id); if (selections.activePhaseId === id) { selections.activePhaseId = selections.phases[0]?.id || null; } renderBuilder(); renderSummary(); } break;
+        case 'set-active-phase': selections.activePhaseId = id; renderBuilder(); break;
+        case 'set-summary-tab': setSummaryTab(target.dataset.tab); break;
+
+        // --- Admin & Quote Actions ---
         case 'admin-delete': handleAdminDelete(target); break;
         case 'admin-add': handleAdminAdd(target); break;
         case 'admin-edit': handleAdminEdit(target); break;
-        case 'close-modal': closeEditModal(); break;
-        case 'close-quote-modal': document.getElementById('quote-modal-overlay').style.display = 'none'; break;
         case 'delete-quote': deleteQuote(id); break;
         case 'export-quote-pdf': exportQuotePDF(id); break;
-        case 'clear-builder': clearBuilder(); break;
+        case 'toggle-quote-details': document.getElementById(`quote-content-${id}`).classList.toggle('open'); break;
         case 'move-category': moveCategory(id, target.dataset.direction); break;
         case 'add-campaign-modifier': addCampaignModifier(); break;
         case 'edit-campaign-modifier': openCampaignModifierModal(id); break;
         case 'delete-campaign-modifier': deleteCampaignModifier(id); break;
         case 'close-campaign-modal': document.getElementById('campaign-modifier-modal').style.display = 'none'; break;
-        case 'toggle-quote-details': document.getElementById(`quote-content-${id}`).classList.toggle('open'); break;
         case 'edit-modifier-options': openModifierOptionsModal(target.dataset.modifierIndex); break;
         case 'add-service-modifier': addModifierRow(); break;
         case 'remove-service-modifier': removeModifierRow(target); break;
@@ -1102,13 +1114,6 @@ function init() {
         case 'load-version': loadVersion(target.dataset.key); break;
         case 'delete-version': deleteVersion(target.dataset.key); break;
         case 'update-satisfaction-rating': selections.clientContext.satisfaction = parseInt(target.value, 10); break;
-        case 'add-phase': const newPhaseName = prompt("Enter name for the new phase:", `Phase ${selections.phases.length + 1}`); if (newPhaseName) { const newId = `phase-${Date.now()}`; selections.phases.push({ id: newId, name: newPhaseName, services: {}, adChannels: {} }); selections.activePhaseId = newId; renderBuilder(); } break;
-        case 'delete-phase': if (confirm(`Are you sure you want to delete this phase? All services within it will be removed.`)) { selections.phases = selections.phases.filter(p => p.id !== id); if (selections.activePhaseId === id) { selections.activePhaseId = selections.phases[0]?.id || null; } renderBuilder(); renderSummary(); } break;
-        case 'set-active-phase': selections.activePhaseId = id; renderBuilder(); break;
-        case 'set-summary-tab': setSummaryTab(target.dataset.tab); break;
-        case 'generate-alternatives': generateAlternativeProposals(); break;
-        case 'close-alternatives-modal': document.getElementById('alternatives-modal-overlay').style.display = 'none'; break;
-        case 'select-proposal': selectProposal(target.dataset.proposalType); break;
     }
 }
     
@@ -1205,7 +1210,7 @@ function init() {
             renderSummary();
             if (isAdmin) {
                 renderAdminPanel();
-                // renderSubmittedQuotes() is now called by the real-time listener
+                // renderSubmittedQuotes() is called by the real-time Firebase listener
             }
         }
         // END: ADD THIS MISSING FUNCTION
@@ -1625,27 +1630,102 @@ function renderBuilder() {
         // START: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
 function renderSummary() {
-    // Note the addition of 'forecast' to the destructured object
-    const { totals, breakdown, discounts, valueProps, roiProjections, forecast } = calculateTotals(selections);
+    const { totals, breakdown, discounts, valueProps, roiProjections, forecast, timelineData } = calculateTotals(selections);
     const summaryContent = document.getElementById('summary-content');
     const emptyMessage = document.getElementById('empty-summary-message');
     const overrideOneTimeInput = document.getElementById('override-one-time');
-    // ... (the rest of the variable declarations are unchanged)
-    
-    // ... (the logic for checking totalSelections, updating totals, etc., is all unchanged)
+    const overrideMonthlyInput = document.getElementById('override-monthly');
 
+    // THIS IS THE CRITICAL FIX: Check if there are any selections to display.
+    const totalSelectedItems = breakdown.items.length + Object.values(selections.teamAugmentation).filter(role => role.hours > 0).length;
+
+    if (totalSelectedItems > 0) {
+        summaryContent.classList.remove('hidden');
+        emptyMessage.classList.add('hidden');
+    } else {
+        summaryContent.classList.add('hidden');
+        emptyMessage.classList.remove('hidden');
+        // If there's nothing to show, stop further rendering of the summary.
+        return;
+    }
+
+    // Update totals display
+    document.getElementById('total-one-time').textContent = formatCurrency(selections.overrides.oneTime ?? totals.oneTime);
+    document.getElementById('total-monthly').textContent = formatCurrency(selections.overrides.monthly ?? totals.monthly);
+    document.getElementById('total-ad-spend').textContent = formatCurrency(totals.adSpend);
+
+    overrideOneTimeInput.value = selections.overrides.oneTime ?? '';
+    overrideMonthlyInput.value = selections.overrides.monthly ?? '';
+
+    const adSpendContainer = document.getElementById('ad-spend-total-container');
+    const grandTotalContainer = document.getElementById('grand-total-container');
+
+    if (totals.adSpend > 0) {
+        adSpendContainer.classList.remove('hidden');
+        grandTotalContainer.classList.remove('hidden');
+    } else {
+        adSpendContainer.classList.add('hidden');
+        grandTotalContainer.classList.add('hidden');
+    }
+
+    document.getElementById('total-upfront').textContent = formatCurrency((selections.overrides.oneTime ?? totals.oneTime));
+    const finalMonthlyInvestment = (selections.overrides.monthly ?? totals.monthly) + totals.adSpend;
+    document.getElementById('total-investment').textContent = formatCurrency(finalMonthlyInvestment);
+
+    // Render detailed breakdown
     const detailedSummary = document.getElementById('detailed-summary');
     let summaryHtml = '';
+    
+    // Group items by phase for rendering
+    selections.phases.forEach(phase => {
+        const itemsInPhase = breakdown.items.filter(item => item.phaseId === phase.id);
+        if (itemsInPhase.length > 0) {
+            summaryHtml += `<div class="mb-3"><div class="font-bold text-indigo-700 text-sm border-b pb-1 mb-1">${phase.name}</div>`;
+            itemsInPhase.forEach(item => {
+                summaryHtml += `
+                    <div class="flex justify-between items-center text-sm py-1">
+                        <span class="text-gray-800">${item.name} <em class="text-gray-500 text-xs">(${item.desc})</em></span>
+                        <span class="font-semibold">${formatCurrency(item.cost)}</span>
+                    </div>`;
+            });
+            summaryHtml += `</div>`;
+        }
+    });
 
-    // ... (the logic for rendering phases and augmentations is unchanged)
+    // Handle Team Augmentation separately
+    const augmentationItems = breakdown.items.filter(item => item.phaseId === 'augmentation');
+    if (augmentationItems.length > 0) {
+         summaryHtml += `<div class="mb-3"><div class="font-bold text-indigo-700 text-sm border-b pb-1 mb-1">Team Augmentation</div>`;
+         augmentationItems.forEach(item => {
+             summaryHtml += `
+                <div class="flex justify-between items-center text-sm py-1">
+                    <span class="text-gray-800">${item.name} <em class="text-gray-500 text-xs">(${item.desc})</em></span>
+                    <span class="font-semibold">${formatCurrency(item.cost)}</span>
+                </div>`;
+         });
+         summaryHtml += `</div>`;
+    }
 
     detailedSummary.innerHTML = summaryHtml;
     
-    // ... (the logic for rendering discounts and value propositions is unchanged)
+    // Render discounts
+    const discountsList = document.getElementById('discounts-list');
+    if (discounts && discounts.length > 0) {
+        discountsList.innerHTML = discounts.map(d => `
+            <div class="flex justify-between items-center text-sm text-green-600">
+                <span>${d.name}</span>
+                <span>-${formatCurrency(d.amount)}</span>
+            </div>
+        `).join('');
+        discountsList.classList.remove('hidden');
+    } else {
+        discountsList.innerHTML = '';
+        discountsList.classList.add('hidden');
+    }
+    
+    // Render other summary sections
     renderValuePropositions(valueProps);
     renderRoiProjections(roiProjections);
-
-    // --- NEW: Call the function to render our new forecast panel ---
     renderRoiForecast(forecast);
 }
 // END: REPLACE THIS FUNCTION
