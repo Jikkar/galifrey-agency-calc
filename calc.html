@@ -1091,6 +1091,18 @@ const defaultConfig = {
         }
         // #endregion
         // #region ########## RENDER FUNCTIONS ##########
+        // START: ADD THIS MISSING FUNCTION
+        function renderAll() {
+            renderPackages();
+            renderBuilder();
+            renderAugmentationCalculator();
+            renderSummary();
+            if (isAdmin) {
+                renderAdminPanel();
+                // renderSubmittedQuotes() is now called by the real-time listener
+            }
+        }
+        // END: ADD THIS MISSING FUNCTION
         function renderPackages() {
             const container = document.getElementById('content-packages');
             if (!container) return;
