@@ -1266,8 +1266,29 @@ function handleDynamicClicks(e) {
 function renderPackages() {
     const container = document.getElementById('content-packages');
     if (!container) return;
+    
     const campaignModifier = activeCampaign ? config.settings.campaignModifiers[activeCampaign] : null;
     const globalAdjust = campaignModifier?.globalAdjust;
+
+    // 1. Create a processable list of packages with their final, calculated prices
+    const processedPackages = config.packages.map(pkg => {
+        let finalDisplayPrice = getCampaignPackagePrice(pkg.id) ?? pkg.displayPrice;
+
+        // Apply global campaign adjustment if no specific package price override exists
+        if (getCampaignPackagePrice(pkg.id) === null && globalAdjust?.value) {
+            if (globalAdjust.type === 'percent') {
+                finalDisplayPrice *= (1 + globalAdjust.value);
+            } else {
+                finalDisplayPrice += globalAdjust.value;
+            }
+        }
+        
+        // Return the original package data along with the calculated final price
+        return { ...pkg, finalDisplayPrice };
+    });
+
+    // 2. Sort the processed packages by their final display price from lowest to highest
+    processedPackages.sort((a, b) => a.finalDisplayPrice - b.finalDisplayPrice);
 
     const compareButtonHtml = selections.packagesToCompare.size >= 2 ? `
         <div class="flex justify-end mb-6">
@@ -1277,10 +1298,15 @@ function renderPackages() {
         </div>
     ` : '';
 
+    // 3. Map over the *sorted* list to render the HTML
     container.innerHTML = `
         ${compareButtonHtml}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            ${config.packages.map(pkg => {
+            ${processedPackages.map(pkg => {
+                // The final display price is already calculated, so we just use it
+                const displayPrice = pkg.finalDisplayPrice;
+
+                // Create a temporary selection to calculate the total value of individual services
                 const tempSelections = {
                     phases: [{ id: 'temp-phase', name: 'Temp Phase', services: {}, adChannels: {} }],
                     clientContext: {}, overrides: {}, appliedCoupon: null, teamAugmentation: {}
@@ -1294,23 +1320,20 @@ function renderPackages() {
                         termMonths: 1
                     };
                 });
-                const { oneTime, monthly } = calculateTotals(tempSelections).totals;
-                const totalValue = oneTime + monthly;
-                const isRecommended = checkPackageRecommendation(pkg.id);
-                let displayPrice = getCampaignPackagePrice(pkg.id) ?? pkg.displayPrice;
-                if (getCampaignPackagePrice(pkg.id) === null && globalAdjust?.value) {
-                    if (globalAdjust.type === 'percent') {
-                        displayPrice *= (1 + globalAdjust.value);
-                    } else {
-                        displayPrice += globalAdjust.value;
-                    }
-                }
+                
+                // *** FIX: Calculate totalValue from the pre-discount breakdown ***
+                // To show accurate savings, we sum the pre-discount cost of each individual item.
+                // This avoids applying bundle/term discounts to the "value" calculation.
+                const calculationResult = calculateTotals(tempSelections);
+                const totalValue = calculationResult.breakdown.items.reduce((sum, item) => sum + item.cost, 0);
+                
                 const savings = totalValue > 0 && displayPrice > 0 ? totalValue - displayPrice : 0;
+                const isRecommended = checkPackageRecommendation(pkg.id);
                 const isCheckedForCompare = selections.packagesToCompare.has(pkg.id);
 
                 return `
-                <div class="package-card bg-white rounded-2xl shadow-md p-6 flex flex-col hover:shadow-xl transition-shadow duration-300">
-                    ${isRecommended ? `<div class="recommendation-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" ></path></svg>Recommended</div>` : ''}
+                <div class="package-card bg-white rounded-2xl shadow-md p-6 flex flex-col hover:shadow-xl transition-shadow duration-300 relative">
+                    ${isRecommended ? `<div class="recommendation-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 mr-1"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" ></path></svg>Recommended</div>` : ''}
                     ${savings > 0 ? `<div class="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-xl">SAVE ${formatCurrency(savings)}</div>` : ''}
                     <h3 class="text-2xl font-bold text-indigo-600">${pkg.name}</h3>
                     <p class="text-gray-500 mt-2 flex-grow">${pkg.desc}</p>
