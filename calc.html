@@ -13,6 +13,9 @@
  </script>
  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js">
  </script>
+<!-- START: Add these for Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
  <link rel="preconnect" href="https://fonts.googleapis.com">
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
@@ -3034,15 +3037,18 @@
             };
             const campaignModifier = activeCampaign ? config.settings.campaignModifiers[activeCampaign] : null;
             const globalAdjust = campaignModifier?.globalAdjust;
+
             source.phases.forEach(phase => {
                 let phaseOneTime = 0;
                 let phaseMonthly = 0;
+
                 for (const serviceId in phase.services) {
                     const service = findService(serviceId);
                     const selection = phase.services[serviceId];
                     if (!service) continue;
+
                     if (service.valuePropositions) allValueProps.push(...service.valuePropositions);
-                    // --- NEW Timeline data logic from MASTER config ---
+
                     if (service.timeline && service.timeline.durationWeeks > 0) {
                         timelineData.push({
                             name: service.name,
@@ -3050,7 +3056,7 @@
                             duration: service.timeline.durationWeeks || 0
                         });
                     }
-                    // ROI data
+
                     if (service.roiMetrics && service.roiMetrics.metricName && (source.clientContext.avgLeadValue > 0 || source.clientContext.avgClv > 0)) {
                         const { metricName, metricUnit, minImpact, maxImpact } = service.roiMetrics;
                         const leadValue = parseFloat(source.clientContext.avgLeadValue) || 0;
@@ -3067,9 +3073,11 @@
                              roiProjections.push(`<b>${service.name}</b> is projected to cause a <b>${minImpact}-${maxImpact}${metricUnit}</b> increase in <b>${metricName}</b>.`);
                         }
                     }
+
                     let serviceOneTime = service.setupFee || 0;
                     let serviceMonthly = 0;
                     let basePrice = getCampaignPrice(serviceId) ?? service.price;
+
                     if (globalAdjust?.value) {
                         if (globalAdjust.type === 'percent') {
                             serviceOneTime *= (1 + globalAdjust.value);
@@ -3079,12 +3087,15 @@
                             else serviceOneTime += globalAdjust.value;
                         }
                     }
+
                     let multiplier = 1;
                     let summaryDesc = [];
+
                     if(service.model === 'Quote') {
                          breakdown.items.push({ name: service.name, desc: "Requires consultation", cost: 0, type: "Quote", phaseId: phase.id });
                         continue; 
                     }
+
                     if(service.modifiers && selection.mods) {
                         for (const modId in selection.mods) {
                             const mod = service.modifiers.find(m => m.id === modId);
@@ -3116,29 +3127,38 @@
                             }
                         }
                     }
+
                     basePrice *= multiplier;
+
                     if (service.model === 'Project' || service.model === 'Unit' || service.model === 'Hourly') {
                         serviceOneTime += basePrice * selection.quantity;
                     } else if (service.model === 'Monthly') {
                         serviceMonthly += basePrice * selection.quantity;
                     }
+
                     let itemDesc = summaryDesc.join(', ') || 'Standard';
                     if (['Unit', 'Hourly'].includes(service.model) || (service.model === 'Project' && selection.quantity > 1)) {
                         itemDesc = `${selection.quantity} ${service.unit || (selection.quantity > 1 ? 'units' : 'unit')} (${itemDesc})`;
                     }
+
                     breakdown.items.push({ name: service.name, desc: itemDesc, cost: serviceOneTime + serviceMonthly, type: service.model, phaseId: phase.id, categoryId: service.categoryId });
+
                     if (serviceMonthly > 0) {
                         breakdown.serviceMonthlyCosts[serviceId] = (breakdown.serviceMonthlyCosts[serviceId] || 0) + serviceMonthly;
                     }
+
                     phaseOneTime += serviceOneTime;
                     phaseMonthly += serviceMonthly;
                 }
+
                 for (const selectionId in phase.adChannels) {
                     const selection = phase.adChannels[selectionId];
                     const channel = findAdChannel(selection.id);
                     if (!channel) continue;
+
                     let setupFee = selection.setupFee;
                     let managementFee = calculateAdFee(channel, selection.spend);
+
                     if (globalAdjust?.value) {
                         if (globalAdjust.type === 'percent') {
                             setupFee *= (1 + globalAdjust.value);
@@ -3148,37 +3168,47 @@
                             else setupFee += globalAdjust.value;
                         }
                     }
+
                     phaseOneTime += setupFee;
                     phaseMonthly += managementFee;
                     grandTotals.adSpend += selection.spend;
                     breakdown.items.push({ name: `${channel.name} Management`, desc: `For ${formatCurrency(selection.spend)} ad spend`, cost: setupFee + managementFee, type: 'Setup + Monthly', phaseId: phase.id });
                 }
+
                 breakdown.phaseData[phase.id] = { name: phase.name, oneTime: phaseOneTime, monthly: phaseMonthly };
                 grandTotals.oneTime += phaseOneTime;
                 grandTotals.preDiscountMonthly += phaseMonthly;
             });
+
             let oneTimeAfterDiscounts = grandTotals.oneTime;
             let monthlyAfterDiscounts = grandTotals.preDiscountMonthly;
+
             if (source.appliedCoupon) {
                 const coupon = source.appliedCoupon;
                 let discountAmount = 0;
                 let discountableAmount = 0;
+
                 if (coupon.applyTo === 'oneTime') {
                     discountableAmount = oneTimeAfterDiscounts;
                 } else if (coupon.applyTo === 'monthly') {
                     discountableAmount = monthlyAfterDiscounts;
                 } else if (coupon.applyTo === 'service' && coupon.targetId) {
-                    const targetItem = breakdown.items.find(item => item.name === findService(coupon.targetId)?.name);
-                    if(targetItem) discountableAmount = targetItem.cost;
+                    const targetService = findService(coupon.targetId);
+                    if (targetService) {
+                        const targetItems = breakdown.items.filter(item => item.name === targetService.name);
+                        discountableAmount = targetItems.reduce((sum, item) => sum + item.cost, 0);
+                    }
                 } else if (coupon.applyTo === 'category' && coupon.targetId) {
                     const itemsInCategory = breakdown.items.filter(item => item.categoryId === coupon.targetId);
                     discountableAmount = itemsInCategory.reduce((sum, item) => sum + item.cost, 0);
                 }
+
                 if (coupon.type === 'percent') {
                     discountAmount = discountableAmount * coupon.value;
                 } else { // fixed
                     discountAmount = Math.min(discountableAmount, coupon.value);
                 }
+
                 if (discountAmount > 0) {
                     allDiscounts.push({ name: `Coupon: ${coupon.code}`, amount: discountAmount });
                     if (coupon.applyTo === 'oneTime' || coupon.applyTo === 'service' || coupon.applyTo === 'category') {
@@ -3188,11 +3218,13 @@
                     }
                 }
             }
+
             source.phases.forEach(phase => {
                 for(const serviceId in phase.services) {
                     const service = findService(serviceId);
                     const selection = phase.services[serviceId];
                     if (!service || service.model !== 'Monthly') continue;
+                    
                     const term = findRetainerTerm(selection.termMonths);
                     if (term?.discount > 0) {
                         const serviceCost = breakdown.serviceMonthlyCosts[serviceId] || 0;
@@ -3204,8 +3236,10 @@
                     }
                 }
             });
+
             const totalServiceCount = source.phases.reduce((acc, p) => acc + Object.keys(p.services).length, 0);
             const applicableBundle = [...(config.settings.bundleDiscounts || [])].sort((a, b) => b.threshold - a.threshold).find(d => totalServiceCount >= d.threshold);
+
             if (applicableBundle?.percentage > 0) {
                 const discountAmount = monthlyAfterDiscounts * applicableBundle.percentage;
                 if (discountAmount > 0) {
@@ -3213,8 +3247,10 @@
                     monthlyAfterDiscounts -= discountAmount;
                 }
             }
+
             grandTotals.oneTime = Math.max(0, oneTimeAfterDiscounts);
             grandTotals.monthly = Math.max(0, monthlyAfterDiscounts);
+            
             return { totals: grandTotals, phaseTotals: breakdown.phaseData, breakdown: breakdown, discounts: allDiscounts, valueProps: allValueProps, roiProjections, timelineData };
         }
         function renderTimelineChart(timelineData) {
@@ -4187,7 +4223,3 @@
         init();
     });
  </script>
-  <!-- START: Add these for Firebase -->
-<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
-<!-- END: Add these for Firebase -->
