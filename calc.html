@@ -614,6 +614,19 @@
    </div>
   </div>
  </div>
+ <!-- START: Add this new modal -->
+<div id="compare-modal-overlay" class="modal-overlay">
+    <div id="compare-modal-content" class="modal-content" style="max-width: 1200px;">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="text-2xl font-bold">Compare Packages</h3>
+            <button data-action="close-compare-modal" class="text-gray-500 hover:text-gray-800 text-3xl font-bold">&times;</button>
+        </div>
+        <div id="compare-content" class="overflow-x-auto">
+            <!-- Comparison table will be injected here by JavaScript -->
+        </div>
+    </div>
+</div>
+<!-- END: Add this new modal -->
  <!-- Toast Notification Container -->
  <div id="toast-container" class="fixed bottom-5 right-5 z-[200] space-y-2">
  </div>
@@ -941,7 +954,8 @@ const defaultConfig = {
         }
         // #endregion
         // #region ########## DYNAMIC EVENT HANDLERS ##########
-                function handleDynamicClicks(e) {
+        // START: REPLACE THIS FUNCTION
+        function handleDynamicClicks(e) {
             const target = e.target.closest('[data-action]');
             if (!target) return;
             const action = target.dataset.action;
@@ -962,8 +976,6 @@ const defaultConfig = {
                 case 'close-quote-modal': document.getElementById('quote-modal-overlay').style.display = 'none'; break;
                 case 'delete-quote': deleteQuote(id); break;
                 case 'export-quote-pdf': exportQuotePDF(id); break;
-                case 'refresh-quotes': renderSubmittedQuotes(); showToast('Quotes refreshed.', 'info'); break;
-                case 'reset-analytics': resetAnalytics(); break;
                 case 'clear-builder': clearBuilder(); break;
                 case 'move-category': moveCategory(id, target.dataset.direction); break;
                 case 'add-campaign-modifier': addCampaignModifier(); break; 
@@ -1006,7 +1018,6 @@ const defaultConfig = {
                     selections.activePhaseId = id;
                     renderBuilder();
                     break;
-                // --- NEW ACTIONS ---
                 case 'set-summary-tab': 
                     setSummaryTab(target.dataset.tab); 
                     break;
@@ -1019,8 +1030,16 @@ const defaultConfig = {
                 case 'select-proposal':
                     selectProposal(target.dataset.proposalType);
                     break;
+                // --- NEW CASES FOR COMPARE MODAL ---
+                case 'compare-packages':
+                    renderCompareModal();
+                    break;
+                case 'close-compare-modal':
+                    document.getElementById('compare-modal-overlay').style.display = 'none';
+                    break;
             }
         }
+        // END: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
         function handleDynamicChanges(e) {
             const target = e.target.closest('[data-change-action]');
@@ -3547,6 +3566,91 @@ const defaultConfig = {
                 showToast("Could not switch proposal. Please try again.", "error");
             }
         }
+        // START: ADD THIS NEW FUNCTION
+        function renderCompareModal() {
+            const overlay = document.getElementById('compare-modal-overlay');
+            const container = document.getElementById('compare-content');
+            if (!container || !overlay) return;
+
+            const packageIds = Array.from(selections.packagesToCompare);
+            const packages = packageIds.map(id => findPackage(id)).filter(Boolean);
+
+            if (packages.length < 2) {
+                showToast("Please select at least two packages to compare.", "error");
+                return;
+            }
+
+            // --- GATHER ALL FEATURES AND SERVICES ACROSS SELECTED PACKAGES ---
+            const allFeatures = new Set();
+            const allServices = new Map(); // Use a map to store service objects by ID
+
+            packages.forEach(pkg => {
+                (pkg.features || '').split(',').forEach(f => {
+                    const feature = f.trim();
+                    if (feature) allFeatures.add(feature);
+                });
+                (pkg.services || []).forEach(s => {
+                    const service = findService(s.id);
+                    if (service && !allServices.has(s.id)) {
+                        allServices.set(s.id, service);
+                    }
+                });
+            });
+
+            // --- BUILD THE HTML TABLE ---
+            let tableHtml = `<table class="w-full text-left border-collapse">`;
+
+            // Table Header
+            tableHtml += `
+                <thead>
+                    <tr>
+                        <th class="p-4 border-b-2 border-gray-200 font-bold text-lg w-1/4">Feature</th>
+                        ${packages.map(pkg => `<th class="p-4 border-b-2 border-gray-200 font-bold text-lg text-center">${pkg.name}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+            `;
+
+            // Price Row
+            tableHtml += `
+                <tr class="bg-gray-50">
+                    <td class="p-4 border-b border-gray-200 font-semibold">Price</td>
+                    ${packages.map(pkg => `<td class="p-4 border-b border-gray-200 text-center text-xl font-bold text-indigo-600">${formatCurrency(pkg.displayPrice)}</td>`).join('')}
+                </tr>
+            `;
+
+            // Features Rows
+            allFeatures.forEach(feature => {
+                tableHtml += `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-4 border-b border-gray-200">${feature}</td>
+                        ${packages.map(pkg => {
+                            const hasFeature = (pkg.features || '').toLowerCase().includes(feature.toLowerCase());
+                            return `<td class="p-4 border-b border-gray-200 text-center">${hasFeature ? '<span class="text-green-500 font-bold text-2xl">&#10003;</span>' : '<span class="text-red-400 font-bold text-xl">&times;</span>'}</td>`;
+                        }).join('')}
+                    </tr>
+                `;
+            });
+
+            // Services Rows
+            allServices.forEach((service, serviceId) => {
+                tableHtml += `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-4 border-b border-gray-200">${service.name}</td>
+                        ${packages.map(pkg => {
+                            const hasService = (pkg.services || []).some(s => s.id === serviceId);
+                            return `<td class="p-4 border-b border-gray-200 text-center">${hasService ? '<span class="text-green-500 font-bold text-2xl">&#10003;</span>' : '<span class="text-red-400 font-bold text-xl">&times;</span>'}</td>`;
+                        }).join('')}
+                    </tr>
+                `;
+            });
+
+
+            tableHtml += `</tbody></table>`;
+            container.innerHTML = tableHtml;
+            overlay.style.display = 'flex';
+        }
+        // END: ADD THIS NEW FUNCTION
         function calculateAdFee(channel, spend) {
             if (spend <= 0) return 0;
             switch(channel.feeModel) {
