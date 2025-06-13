@@ -4143,13 +4143,16 @@ function calculateTotals(currentSelections) {
             }
             return growthSelections;
         }
-        function generateAlternativeProposals() {
+function generateAlternativeProposals() {
     const container = document.getElementById('alternatives-content');
     container.innerHTML = '<p class="text-center col-span-3">Generating proposals...</p>';
     document.getElementById('alternatives-modal-overlay').style.display = 'flex';
 
     // Create a pristine, deep copy of the current selections to work from.
     const originalSelections = JSON.parse(JSON.stringify(selections));
+    // *** FIX: Manually restore the Set object that is lost during the stringify/parse deep copy.
+    originalSelections.packagesToCompare = new Set(selections.packagesToCompare);
+    
     const { totals: originalTotals } = calculateTotals(originalSelections);
     const originalInvestment = originalTotals.oneTime + originalTotals.monthly + originalTotals.adSpend;
 
@@ -4211,24 +4214,30 @@ function calculateTotals(currentSelections) {
     container.innerHTML = html;
     
     // Store the fully generated proposal objects in a temporary global variable for easy access.
+    // Because `originalSelections` was fixed, all derived proposal objects are now also correct.
     window.tempProposals = {
         budget: proposals[0].selections,
         current: proposals[1].selections,
         growth: proposals[2].selections
     };
 }
-        function selectProposal(proposalType) {
+function selectProposal(proposalType) {
     if (window.tempProposals && window.tempProposals[proposalType]) {
-        // This is the key fix: Perform a deep copy to ensure the global 'selections' object
-        // is completely replaced with the data from the chosen proposal, breaking any old references.
-        selections = JSON.parse(JSON.stringify(window.tempProposals[proposalType]));
+        // Since the objects in `tempProposals` are now correct, we can perform a safe deep copy.
+        const newSelections = JSON.parse(JSON.stringify(window.tempProposals[proposalType]));
+        
+        // *** FIX: Restore the Set object, which is still lost in this final deep copy.
+        newSelections.packagesToCompare = new Set(window.tempProposals[proposalType].packagesToCompare);
+        
+        // Assign the fully corrected object to the global state.
+        selections = newSelections;
         
         // Clean up and update UI
         document.getElementById('alternatives-modal-overlay').style.display = 'none';
         window.tempProposals = null;
         showToast("Proposal updated!", "success");
         
-        // This function now correctly renders the newly selected state.
+        // This function will now correctly render the newly selected state without errors.
         renderAll(); 
     } else {
         showToast("Could not switch proposal. Please try again.", "error");
