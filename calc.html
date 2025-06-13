@@ -482,6 +482,9 @@
 </div>
       <div id="roi-projection-section" class="mt-4 p-4 bg-green-50 rounded-lg hidden">
       </div>
+      <div id="roi-forecast-section" class="mt-4 p-4 bg-blue-50 rounded-lg hidden">
+    <!-- ROI Forecast will be injected here -->
+</div>
       <!-- Action Buttons -->
       <div class="mt-6 space-y-3">
         <div class="grid grid-cols-2 gap-3">
@@ -833,26 +836,31 @@ const defaultConfig = {
         let config = {};
         // START: REPLACE THIS OBJECT
         // START: REPLACE THIS OBJECT
-        let selections = {
-            phases: [
-                { id: `phase-${Date.now()}`, name: 'Phase 1: Campaign Selections', services: {}, adChannels: {} }
-            ],
-            activePhaseId: null, // Will be set on init
-            teamAugmentation: {},
-            packagesToCompare: new Set(), // This line is new
-            clientContext: {
-                businessStage: '', businessGoal: '', industry: '', targetAudience: '',
-                geographicTarget: '', website: '', competitors: ['', '', ''], marketingHistory: [],
-                previousProvider: '', previousServices: '', previousBudget: '', reasonForSwitching: '',
-                durationWithProvider: '', satisfaction: 0, futureGoals: '', referralSource: '',
-                avgLeadValue: '',
-                avgClv: ''
-            },
-            overrides: { oneTime: null, monthly: null },
-            appliedCoupon: null
-        };
-        // END: REPLACE THIS OBJECT
-        // END: REPLACE THIS OBJECT
+        // START: REPLACE THIS OBJECT
+let selections = {
+    phases: [
+        { id: `phase-${Date.now()}`, name: 'Phase 1: Campaign Selections', services: {}, adChannels: {} }
+    ],
+    activePhaseId: null,
+    teamAugmentation: {},
+    packagesToCompare: new Set(),
+    clientContext: {
+        businessStage: '', businessGoal: '', industry: '', targetAudience: '',
+        geographicTarget: '', website: '',
+        marketingHistory: [],
+        previousProvider: '', previousServices: '', previousBudget: '', reasonForSwitching: '',
+        durationWithProvider: '', satisfaction: 0, futureGoals: '', referralSource: '',
+        avgLeadValue: '',
+        avgClv: '',
+        // --- NEW PROPERTIES FOR PHASE 4 ---
+        monthlyTraffic: '',
+        conversionRate: '',
+        avgSaleValue: '',
+        competitors: ['', '', ''] // Will hold the 3 competitor URLs
+    },
+    overrides: { oneTime: null, monthly: null },
+    appliedCoupon: null
+};
         let isAdmin = false;
         let activeCampaign = null; 
         let openAccordions = new Set();
@@ -1276,66 +1284,71 @@ function renderPackages() {
 }
 // END: REPLACE THIS FUNCTION
         // END: REPLACE THIS FUNCTION
-        function renderBuilder() {
-            const container = document.getElementById('content-builder');
-            if (selections.activePhaseId === null && selections.phases.length > 0) {
-                selections.activePhaseId = selections.phases[0].id;
-            }
-            let phaseTabsHtml = selections.phases.map(phase => `
-                <div class="flex items-center group">
-                    <button 
-                        data-action="set-active-phase" 
-                        data-id="${phase.id}" 
-                        class="phase-tab text-sm font-medium border-b-2 py-2 px-4 ${selections.activePhaseId === phase.id ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}">
-                        ${phase.name}
+        // START: REPLACE THIS FUNCTION
+function renderBuilder() {
+    const container = document.getElementById('content-builder');
+    if (selections.activePhaseId === null && selections.phases.length > 0) {
+        selections.activePhaseId = selections.phases[0].id;
+    }
+    let phaseTabsHtml = selections.phases.map(phase => `...`).join(''); // This logic is unchanged
+    container.innerHTML = `
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold">Build Your Campaign</h2>
+            <button data-action="clear-builder" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors text-sm">Clear All Selections</button>
+        </div>
+        <div class="mb-6 border-b border-gray-200">
+            <div class="flex items-center space-x-4">
+                <nav class="flex -mb-px" aria-label="Phases">
+                    ${selections.phases.map(phase => `
+                        <div class="flex items-center group">
+                            <button data-action="set-active-phase" data-id="${phase.id}" class="phase-tab text-sm font-medium border-b-2 py-2 px-4 ${selections.activePhaseId === phase.id ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}">
+                                ${phase.name}
+                            </button>
+                            ${selections.phases.length > 1 ? `<button data-action="delete-phase" data-id="${phase.id}" class="hidden group-hover:block text-red-400 hover:text-red-600 p-1 ml-1">&times;</button>` : ''}
+                        </div>
+                    `).join('')}
+                </nav>
+                <button data-action="add-phase" class="bg-gray-200 text-gray-600 hover:bg-gray-300 text-sm font-bold py-1 px-3 rounded-md">+ Add Phase</button>
+            </div>
+        </div>
+        
+        ${renderClientContextSection()}
+        
+        <!-- NEW PANELS ARE RENDERED HERE -->
+        <div class="mt-6 space-y-4">
+            ${renderRoiForecasterPanel()}
+            ${renderCompetitorSnapshotPanel()}
+        </div>
+
+        <div class="space-y-4 mt-6">
+            ${config.departments.map(dep => {
+                const isOpen = openAccordions.has(dep.id);
+                return `
+                <div class="bg-white rounded-lg shadow-sm">
+                    <button data-action="toggle-accordion" data-id="${dep.id}" class="w-full flex justify-between items-center p-4 text-left font-bold text-lg">
+                        <span>${dep.name}</span>
+                        <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
-                    ${selections.phases.length > 1 ? `
-                        <button data-action="delete-phase" data-id="${phase.id}" class="hidden group-hover:block text-red-400 hover:text-red-600 p-1 ml-1">&times;</button>
-                    ` : ''}
-                </div>
-            `).join('');
-            container.innerHTML = `
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-bold">Build Your Campaign</h2>
-                    <button data-action="clear-builder" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors text-sm">Clear All Selections</button>
-                </div>
-                <div class="mb-6 border-b border-gray-200">
-                    <div class="flex items-center space-x-4">
-                        <nav class="flex -mb-px" aria-label="Phases">
-                            ${phaseTabsHtml}
-                        </nav>
-                        <button data-action="add-phase" class="bg-gray-200 text-gray-600 hover:bg-gray-300 text-sm font-bold py-1 px-3 rounded-md">+ Add Phase</button>
+                    <div class="accordion-content ${isOpen ? 'open' : ''}">
+                        <div class="p-4 border-t space-y-4">
+                            ${config.categories.filter(cat => cat.departmentId === dep.id).map(cat => `
+                                <div class="pl-4">
+                                    <h4 class="font-semibold text-md mb-2 text-gray-700">${cat.name}</h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        ${config.services.filter(s => s.categoryId === cat.id).map(s => renderServiceCard(s)).join('')}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
                 </div>
-                ${renderClientContextSection()}
-                <div class="space-y-4 mt-6">
-                    ${config.departments.map(dep => {
-                        const isOpen = openAccordions.has(dep.id);
-                        return `
-                        <div class="bg-white rounded-lg shadow-sm">
-                            <button data-action="toggle-accordion" data-id="${dep.id}" class="w-full flex justify-between items-center p-4 text-left font-bold text-lg">
-                                <span>${dep.name}</span>
-                                <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                            </button>
-                            <div class="accordion-content ${isOpen ? 'open' : ''}">
-                                <div class="p-4 border-t space-y-4">
-                                    ${config.categories.filter(cat => cat.departmentId === dep.id).map(cat => `
-                                        <div class="pl-4">
-                                            <h4 class="font-semibold text-md mb-2 text-gray-700">${cat.name}</h4>
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                ${config.services.filter(s => s.categoryId === cat.id).map(s => renderServiceCard(s)).join('')}
-                                            </div>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        </div>
-                    `}).join('')}
-                     ${renderAdSpendSection()}
-                </div>
-            `;
-            attachStarRatingListeners();
-        }
+            `}).join('')}
+             ${renderAdSpendSection()}
+        </div>
+    `;
+    attachStarRatingListeners();
+}
+// END: REPLACE THIS FUNCTION
         // MODIFIED: Greatly expanded client context section
                 function renderClientContextSection() {
             const { businessStages, businessGoals, geographicTargets, pastMarketingOptions, reasonsForSwitching, referralSources } = config.settings.clientContext;
@@ -1879,6 +1892,62 @@ function renderPackages() {
             `;
         }
         // END: ADD THIS NEW FUNCTION
+        // START: ADD THESE NEW FUNCTIONS
+function renderRoiForecasterPanel() {
+    const ctx = selections.clientContext;
+    const isOpen = openAccordions.has('roi-forecaster');
+    return `
+        <div class="bg-white rounded-lg shadow-sm">
+            <button data-action="toggle-accordion" data-id="roi-forecaster" class="w-full flex justify-between items-center p-4 text-left font-bold text-lg">
+                <span>ROI & Goal Forecaster</span>
+                <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div class="accordion-content ${isOpen ? 'open' : ''}">
+                <div class="p-6 border-t space-y-4">
+                    <p class="text-sm text-gray-600">Enter your current metrics to project the potential impact of our services.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium">Current Monthly Website Traffic</label>
+                            <input type="number" data-input-action="update-client-context" data-id="monthlyTraffic" value="${ctx.monthlyTraffic || ''}" class="mt-1 w-full p-2 border rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Current Conversion Rate (%)</label>
+                            <input type="number" data-input-action="update-client-context" data-id="conversionRate" value="${ctx.conversionRate || ''}" class="mt-1 w-full p-2 border rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium">Average Sale Value ($)</label>
+                            <input type="number" data-input-action="update-client-context" data-id="avgSaleValue" value="${ctx.avgSaleValue || ''}" class="mt-1 w-full p-2 border rounded-md">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderCompetitorSnapshotPanel() {
+    const ctx = selections.clientContext;
+    const isOpen = openAccordions.has('competitor-snapshot');
+    return `
+        <div class="bg-white rounded-lg shadow-sm">
+            <button data-action="toggle-accordion" data-id="competitor-snapshot" class="w-full flex justify-between items-center p-4 text-left font-bold text-lg">
+                <span>Competitor Snapshot</span>
+                <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div class="accordion-content ${isOpen ? 'open' : ''}">
+                <div class="p-6 border-t space-y-4">
+                    <p class="text-sm text-gray-600">Provide up to three competitor URLs for our analysis. This helps us tailor your strategy.</p>
+                    <div class="space-y-3">
+                        <input type="url" data-input-action="update-client-context" data-id="competitors" data-index="0" value="${ctx.competitors[0] || ''}" placeholder="https://competitor1.com" class="w-full p-2 border rounded-md">
+                        <input type="url" data-input-action="update-client-context" data-id="competitors" data-index="1" value="${ctx.competitors[1] || ''}" placeholder="https://competitor2.com" class="w-full p-2 border rounded-md">
+                        <input type="url" data-input-action="update-client-context" data-id="competitors" data-index="2" value="${ctx.competitors[2] || ''}" placeholder="https://competitor3.com" class="w-full p-2 border rounded-md">
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+// END: ADD THESE NEW FUNCTIONS
         function renderAdminPanel() {
             const container = document.getElementById('content-admin');
             if (!isAdmin) {
@@ -2640,30 +2709,36 @@ function renderPackages() {
                 renderSummary();
             }
         }
-        function updateClientContext(field, value, target) {
-            if (field === 'competitors') {
-                const index = parseInt(target.dataset.index, 10);
-                selections.clientContext.competitors[index] = value;
-            } else if (field === 'marketingHistory') {
-                const historySet = new Set(selections.clientContext.marketingHistory);
-                if (target.checked) {
-                    historySet.add(value);
-                } else {
-                    historySet.delete(value);
-                }
-                selections.clientContext.marketingHistory = Array.from(historySet);
-            } else {
-                selections.clientContext[field] = value;
-            }
-            // --- NEW: Re-render recommendations ---
-            if (field === 'businessStage') {
-                renderPackages();
-            }
-            if (field === 'businessGoal') {
-                renderBuilder();
-            }
-            // ------------------------------------
+        // START: REPLACE THIS FUNCTION
+function updateClientContext(field, value, target) {
+    if (field === 'competitors') {
+        const index = parseInt(target.dataset.index, 10);
+        selections.clientContext.competitors[index] = value;
+    } else if (field === 'marketingHistory') {
+        const historySet = new Set(selections.clientContext.marketingHistory);
+        if (target.checked) {
+            historySet.add(value);
+        } else {
+            historySet.delete(value);
         }
+        selections.clientContext.marketingHistory = Array.from(historySet);
+    } else {
+        selections.clientContext[field] = value;
+    }
+
+    // Re-render recommendations on key changes
+    if (field === 'businessStage') {
+        renderPackages();
+    }
+    if (field === 'businessGoal') {
+        renderBuilder();
+    }
+    // Re-calculate totals if an ROI-related field changes
+    if (['monthlyTraffic', 'conversionRate', 'avgSaleValue'].includes(field)) {
+        renderSummary();
+    }
+}
+// END: REPLACE THIS FUNCTION
         // START: ADD THIS NEW FUNCTION
         function updateTeamAugmentationHours(roleId, hours) {
             if (isNaN(hours) || hours <= 0) {
