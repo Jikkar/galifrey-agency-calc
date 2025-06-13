@@ -431,7 +431,7 @@
        </div>
        <div class="flex justify-between items-center">
         <span class="text-gray-600 font-medium">
-         Monthly Retainer (to us)
+            Monthly Retainer<br><span class="text-xs text-gray-500">(to us)</span>
         </span>
         <div class="text-right flex items-center">
          <span id="total-monthly" class="text-lg font-bold text-gray-900">
@@ -3102,7 +3102,7 @@ function updateClientContext(field, value, target) {
 }
         // END: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
-        function openEditModal(item = {}, type) {
+function openEditModal(item = {}, type) {
     const form = document.getElementById('edit-form');
     const overlay = document.getElementById('edit-modal-overlay');
     const modalTitle = document.querySelector('#edit-modal-content h3');
@@ -3112,20 +3112,103 @@ function updateClientContext(field, value, target) {
     if (type === 'service') {
         modalTitle.textContent = item.id ? 'Edit Service' : 'Create New Service';
         tempModifiers = JSON.parse(JSON.stringify(item.modifiers || []));
+        const allServiceOptions = config.services.map(s => `<option value="${s.id}" ${item.id === s.id ? 'disabled' : ''}>${s.name}</option>`).join('');
         const priorities = ['Core', 'Recommended', 'Upsell'];
+        const pricingModels = ['Project', 'Monthly', 'Unit', 'Hourly', 'Quote'];
+        const categoryOptions = config.categories.map(c => `<option value="${c.id}" ${item.categoryId === c.id ? 'selected' : ''}>${findDepartment(c.departmentId)?.name} > ${c.name}</option>`).join('');
 
         formHtml = `
             <input type="hidden" name="id" value="${item.id || `s-${Date.now()}`}">
             <input type="hidden" name="type" value="service">
+            
+            <!-- Basic Info -->
             <div class="space-y-4">
                 <div><label class="block text-sm font-medium">Service Name</label><input type="text" name="name" value="${item.name || ''}" class="mt-1 block w-full p-2 border rounded-md" required></div>
                 <div><label class="block text-sm font-medium">Description</label><textarea name="desc" class="mt-1 block w-full p-2 border rounded-md h-24">${item.desc || ''}</textarea></div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-sm font-medium">Base Price</label><input type="number" name="price" value="${item.price || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
-                    <div><label class="block text-sm font-medium">Setup Fee</label><input type="number" name="setupFee" value="${item.setupFee || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
+            </div>
+
+            <!-- Pricing & Model -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 border-t pt-4">
+                 <div class="space-y-4">
+                    <h4 class="font-semibold text-lg">Pricing</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="block text-sm font-medium">Base Price</label><input type="number" name="price" value="${item.price || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
+                        <div><label class="block text-sm font-medium">Setup Fee</label><input type="number" name="setupFee" value="${item.setupFee || 0}" step="0.01" class="mt-1 block w-full p-2 border rounded-md"></div>
+                     </div>
+                 </div>
+                 <div class="space-y-4">
+                     <h4 class="font-semibold text-lg">Model</h4>
+                     <div class="grid grid-cols-2 gap-4">
+                        <div><label class="block text-sm font-medium">Pricing Model</label><select name="model" class="mt-1 block w-full p-2 border rounded-md">${pricingModels.map(m => `<option value="${m}" ${item.model === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+                        <div><label class="block text-sm font-medium">Unit Name (if Unit/Hourly)</label><input type="text" name="unit" value="${item.unit || ''}" class="mt-1 block w-full p-2 border rounded-md"></div>
+                    </div>
+                 </div>
+            </div>
+
+            <!-- Category & Modifiers -->
+             <div class="mt-6 border-t pt-4">
+                <h4 class="font-semibold text-lg mb-2">Category & Modifiers</h4>
+                 <div><label class="block text-sm font-medium">Category</label><select name="categoryId" class="mt-1 block w-full p-2 border rounded-md">${categoryOptions}</select></div>
+                <div class="mt-4">
+                    <label class="block text-sm font-medium mb-2">Service Modifiers</label>
+                    <div id="service-modifiers-container" class="space-y-3">${renderModifierRows(tempModifiers)}</div>
+                    <button type="button" data-action="add-service-modifier" class="mt-3 bg-gray-200 py-2 px-4 rounded-lg text-sm hover:bg-gray-300">+ Add Modifier</button>
+                </div>
+             </div>
+
+            <!-- Value & Metadata -->
+             <div class="mt-6 border-t pt-4">
+                <h4 class="font-semibold text-lg mb-2">Value & Metadata</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium">Value Propositions (one per line)</label>
+                        <textarea name="valuePropositions" class="mt-1 block w-full p-2 border rounded-md h-24">${(item.valuePropositions || []).join('\n')}</textarea>
+                    </div>
+                     <div>
+                        <label class="block text-sm font-medium">Priority / Recommendation Type</label>
+                        <select name="priority" class="mt-1 block w-full p-2 border rounded-md">${priorities.map(p => `<option value="${p}" ${item.priority === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
+                        <label class="block text-sm font-medium mt-4">Tags (comma-separated)</label>
+                        <input type="text" name="tags" value="${(item.tags || []).join(', ')}" class="mt-1 block w-full p-2 border rounded-md">
+                    </div>
+                </div>
+             </div>
+
+             <!-- Dependencies -->
+            <div class="mt-6 border-t pt-4">
+                <h4 class="font-semibold text-lg mb-2">Dependencies</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium">Requires (select all that apply)</label>
+                        <select name="dependencies" multiple class="mt-1 block w-full p-2 border rounded-md h-32">${allServiceOptions.replace(new RegExp((item.dependencies || []).map(d => `value="${d}"`).join('|'), 'g'), match => `${match} selected`)}</select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">Automatically Adds (Co-requisite)</label>
+                        <select name="corequisite" class="mt-1 block w-full p-2 border rounded-md"><option value="">None</option>${allServiceOptions.replace(`value="${item.corequisite}"`, `value="${item.corequisite}" selected`)}</select>
+                        <label class="block text-sm font-medium mt-4">Timeline Depends On</label>
+                        <select name="timelineDependsOn" class="mt-1 block w-full p-2 border rounded-md"><option value="">None</option>${allServiceOptions.replace(`value="${item.timelineDependsOn}"`, `value="${item.timelineDependsOn}" selected`)}</select>
+                    </div>
                 </div>
             </div>
-            <!-- ... more service fields ... -->
+
+            <!-- ROI & Timeline -->
+            <div class="mt-6 border-t pt-4">
+                <h4 class="font-semibold text-lg mb-2">ROI & Timeline</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium">ROI Metric Name</label><input type="text" name="roiMetricName" value="${item.roiMetrics?.metricName || ''}" class="mt-1 block w-full p-2 border rounded-md">
+                        <label class="block text-sm font-medium mt-2">ROI Metric Unit</label><input type="text" name="roiMetricUnit" value="${item.roiMetrics?.metricUnit || ''}" class="mt-1 block w-full p-2 border rounded-md">
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                             <div><label class="text-sm">Min Impact</label><input type="number" name="roiMinImpact" value="${item.roiMetrics?.minImpact || 0}" class="w-full p-2 border rounded-md"></div>
+                             <div><label class="text-sm">Max Impact</label><input type="number" name="roiMaxImpact" value="${item.roiMetrics?.maxImpact || 0}" class="w-full p-2 border rounded-md"></div>
+                        </div>
+                    </div>
+                     <div>
+                        <label class="block text-sm font-medium">Timeline Phase Name</label><input type="text" name="timelinePhaseName" value="${item.timeline?.phaseName || ''}" class="mt-1 block w-full p-2 border rounded-md">
+                         <label class="block text-sm font-medium mt-2">Duration (Weeks)</label><input type="number" name="timelineDuration" value="${item.timeline?.durationWeeks || 0}" class="mt-1 block w-full p-2 border rounded-md">
+                         <div class="mt-4"><input type="checkbox" name="timelineHidden" ${item.timeline?.hidden ? 'checked' : ''} class="h-4 w-4 rounded"><label class="ml-2">Hide from timeline chart by default</label></div>
+                    </div>
+                </div>
+            </div>
         `;
     } else if (type === 'category') {
         modalTitle.textContent = 'Edit Category';
@@ -3166,6 +3249,7 @@ function updateClientContext(field, value, target) {
         </div>
     `;
 
+    document.querySelectorAll('#service-modifiers-container .modifier-type').forEach(el => handleModifierTypeChange(el));
     overlay.style.display = 'flex';
 }
         // END: REPLACE THIS FUNCTION
@@ -3175,133 +3259,133 @@ function updateClientContext(field, value, target) {
         }
         // START: ADD THIS MISSING FUNCTION
         function handleAdminSaveEdit(e) {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const type = formData.get('type');
-            
-            if (type === 'service') {
-                const id = formData.get('id');
-                const serviceIndex = config.services.findIndex(s => s.id === id);
-                updateTempModifiersFromDOM();
-                
-                const serviceData = {
-                    id: id,
-                    name: formData.get('name'),
-                    desc: formData.get('desc'),
-                    price: parseFloat(formData.get('price')) || 0,
-                    setupFee: parseFloat(formData.get('setupFee')) || 0,
-                    model: formData.get('model'),
-                    categoryId: formData.get('categoryId'),
-                    unit: formData.get('unit'),
-                    modifiers: tempModifiers,
-                    valuePropositions: formData.get('valuePropositions').split('\n').filter(vp => vp.trim() !== ''),
-                    priority: formData.get('priority'),
-                    timeline: {
-                        phaseName: formData.get('timelinePhaseName'),
-                        durationWeeks: parseInt(formData.get('timelineDuration'), 10) || 0,
-                        hidden: formData.get('timelineHidden') === 'on'
-                    },
-                    roiMetrics: {
-                        metricName: formData.get('roiMetricName'),
-                        metricUnit: formData.get('roiMetricUnit'),
-                        minImpact: parseFloat(formData.get('roiMinImpact')) || 0,
-                        maxImpact: parseFloat(formData.get('roiMaxImpact')) || 0,
-                    },
-                    dependencies: formData.getAll('dependencies'),
-                    corequisite: formData.get('corequisite'),
-                    tags: formData.get('tags').split(',').map(tag => tag.trim()).filter(Boolean),
-                    timelineDependsOn: formData.get('timelineDependsOn')
-                };
-                if (serviceIndex > -1) {
-                    config.services[serviceIndex] = serviceData;
-                } else {
-                    config.services.push(serviceData);
-                }
-            } else if (type === 'package') {
-                const id = formData.get('id');
-                const packageIndex = config.packages.findIndex(p => p.id === id);
-                const packageData = {
-                    id: id,
-                    name: formData.get('name'),
-                    desc: formData.get('desc'),
-                    displayPrice: parseFloat(formData.get('displayPrice')) || 0,
-                    features: formData.get('features'),
-                    services: []
-                };
-                document.querySelectorAll('#package-services-container .package-service-row').forEach(row => {
-                    const serviceId = row.querySelector('.package-service-id').value;
-                    const quantity = parseInt(row.querySelector('.package-service-quantity').value, 10) || 1;
-                    const isLocked = row.querySelector('.package-service-locked').checked;
-                    if (serviceId) {
-                        packageData.services.push({ id: serviceId, quantity: quantity, mods: {}, locked: isLocked });
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const type = formData.get('type');
+    
+    if (type === 'service') {
+        const id = formData.get('id');
+        const serviceIndex = config.services.findIndex(s => s.id === id);
+        updateTempModifiersFromDOM();
+        
+        const serviceData = {
+            id: id,
+            name: formData.get('name'),
+            desc: formData.get('desc'),
+            price: parseFloat(formData.get('price')) || 0,
+            setupFee: parseFloat(formData.get('setupFee')) || 0,
+            model: formData.get('model'),
+            categoryId: formData.get('categoryId'),
+            unit: formData.get('unit'),
+            modifiers: tempModifiers,
+            valuePropositions: formData.get('valuePropositions').split('\n').filter(vp => vp.trim() !== ''),
+            priority: formData.get('priority'),
+            timeline: {
+                phaseName: formData.get('timelinePhaseName'),
+                durationWeeks: parseInt(formData.get('timelineDuration'), 10) || 0,
+                hidden: formData.get('timelineHidden') === 'on'
+            },
+            roiMetrics: {
+                metricName: formData.get('roiMetricName'),
+                metricUnit: formData.get('roiMetricUnit'),
+                minImpact: parseFloat(formData.get('roiMinImpact')) || 0,
+                maxImpact: parseFloat(formData.get('roiMaxImpact')) || 0,
+            },
+            dependencies: formData.getAll('dependencies'),
+            corequisite: formData.get('corequisite'),
+            tags: formData.get('tags').split(',').map(tag => tag.trim()).filter(Boolean),
+            timelineDependsOn: formData.get('timelineDependsOn')
+        };
+        if (serviceIndex > -1) {
+            config.services[serviceIndex] = serviceData;
+        } else {
+            config.services.push(serviceData);
+        }
+    } else if (type === 'package') {
+        const id = formData.get('id');
+        const packageIndex = config.packages.findIndex(p => p.id === id);
+        const packageData = {
+            id: id,
+            name: formData.get('name'),
+            desc: formData.get('desc'),
+            displayPrice: parseFloat(formData.get('displayPrice')) || 0,
+            features: formData.get('features'),
+            services: []
+        };
+        document.querySelectorAll('#package-services-container .package-service-row').forEach(row => {
+            const serviceId = row.querySelector('.package-service-id').value;
+            const quantity = parseInt(row.querySelector('.package-service-quantity').value, 10) || 1;
+            const isLocked = row.querySelector('.package-service-locked').checked;
+            if (serviceId) {
+                packageData.services.push({ id: serviceId, quantity: quantity, mods: {}, locked: isLocked });
+            }
+        });
+        if (packageIndex > -1) {
+            config.packages[packageIndex] = packageData;
+        } else {
+            config.packages.push(packageData);
+        }
+    } else if (type === 'team-augmentation-role') {
+        const id = formData.get('id');
+        const roleIndex = (config.teamAugmentationRoles || []).findIndex(r => r.id === id);
+        const roleData = {
+            id: id,
+            name: formData.get('name'),
+            description: formData.get('description'),
+            costPerHr: parseFloat(formData.get('costPerHr')) || 0,
+            minHrsPerMonth: parseInt(formData.get('minHrsPerMonth'), 10) || 0,
+            fullTimeSalaryComparison: parseFloat(formData.get('fullTimeSalaryComparison')) || 0
+        };
+        if (roleIndex > -1) {
+            config.teamAugmentationRoles[roleIndex] = roleData;
+        } else {
+            if (!config.teamAugmentationRoles) {
+                config.teamAugmentationRoles = [];
+            }
+            config.teamAugmentationRoles.push(roleData);
+        }
+    } else if (type === 'category') {
+        const originalId = formData.get('originalId');
+        const newId = formData.get('id');
+        const newName = formData.get('name');
+        const categoryIndex = config.categories.findIndex(c => c.id === originalId);
+        if (categoryIndex > -1) {
+            config.categories[categoryIndex].name = newName;
+            config.categories[categoryIndex].id = newId;
+            if (originalId !== newId) {
+                config.services.forEach(service => {
+                    if (service.categoryId === originalId) {
+                        service.categoryId = newId;
                     }
                 });
-                if (packageIndex > -1) {
-                    config.packages[packageIndex] = packageData;
-                } else {
-                    config.packages.push(packageData);
-                }
-            } else if (type === 'team-augmentation-role') {
-                const id = formData.get('id');
-                const roleIndex = (config.teamAugmentationRoles || []).findIndex(r => r.id === id);
-                const roleData = {
-                    id: id,
-                    name: formData.get('name'),
-                    description: formData.get('description'),
-                    costPerHr: parseFloat(formData.get('costPerHr')) || 0,
-                    minHrsPerMonth: parseInt(formData.get('minHrsPerMonth'), 10) || 0,
-                    fullTimeSalaryComparison: parseFloat(formData.get('fullTimeSalaryComparison')) || 0
-                };
-                if (roleIndex > -1) {
-                    config.teamAugmentationRoles[roleIndex] = roleData;
-                } else {
-                    if (!config.teamAugmentationRoles) {
-                        config.teamAugmentationRoles = [];
-                    }
-                    config.teamAugmentationRoles.push(roleData);
-                }
-            } else if (type === 'category') {
-                const originalId = formData.get('originalId');
-                const newId = formData.get('id');
-                const newName = formData.get('name');
-                const categoryIndex = config.categories.findIndex(c => c.id === originalId);
-                if (categoryIndex > -1) {
-                    config.categories[categoryIndex].name = newName;
-                    config.categories[categoryIndex].id = newId;
-                    if (originalId !== newId) {
-                        config.services.forEach(service => {
-                            if (service.categoryId === originalId) {
-                                service.categoryId = newId;
-                            }
-                        });
-                        showToast(`Category ID updated. All associated services have been migrated.`, 'info');
-                    }
-                }
-            } else if (type === 'marketing-discount') {
-                const id = formData.get('id');
-                const index = config.settings.marketingDiscounts.findIndex(d => d.id === id);
-                const discountType = formData.get('discountType');
-                const rawValue = parseFloat(formData.get('value')) || 0;
-                const discountData = {
-                    id: id, code: formData.get('code').toUpperCase(), type: discountType,
-                    value: discountType === 'percent' ? rawValue / 100 : rawValue,
-                    applyTo: formData.get('applyTo'),
-                    targetId: formData.get('targetId') || null,
-                    startDate: formData.get('startDate'),
-                    endDate: formData.get('endDate')
-                };
-                if (index > -1) {
-                    config.settings.marketingDiscounts[index] = discountData;
-                } else {
-                    config.settings.marketingDiscounts.push(discountData);
-                }
-                trackAnalytics('admin_action', { action: index > -1 ? 'edit_discount' : 'create_discount', code: discountData.code });
+                showToast(`Category ID updated. All associated services have been migrated.`, 'info');
             }
-
-            showToast(`Item updated. Remember to click "Save All Changes" to persist your edits.`, 'info');
-            renderAdminPanel();
-            closeEditModal();
         }
+    } else if (type === 'marketing-discount') {
+        const id = formData.get('id');
+        const index = config.settings.marketingDiscounts.findIndex(d => d.id === id);
+        const discountType = formData.get('discountType');
+        const rawValue = parseFloat(formData.get('value')) || 0;
+        const discountData = {
+            id: id, code: formData.get('code').toUpperCase(), type: discountType,
+            value: discountType === 'percent' ? rawValue / 100 : rawValue,
+            applyTo: formData.get('applyTo'),
+            targetId: formData.get('targetId') || null,
+            startDate: formData.get('startDate'),
+            endDate: formData.get('endDate')
+        };
+        if (index > -1) {
+            config.settings.marketingDiscounts[index] = discountData;
+        } else {
+            config.settings.marketingDiscounts.push(discountData);
+        }
+        trackAnalytics('admin_action', { action: index > -1 ? 'edit_discount' : 'create_discount', code: discountData.code });
+    }
+
+    showToast(`Item updated. Remember to click "Save All Changes" to persist your edits.`, 'info');
+    renderAdminPanel();
+    closeEditModal();
+}
         // END: ADD THIS MISSING FUNCTION
         // START: REPLACE THIS FUNCTION        
         // #endregion
