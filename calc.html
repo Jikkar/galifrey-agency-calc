@@ -926,37 +926,43 @@ function init() {
             }
         }
         function setupEventListeners() {
-            document.getElementById('main-tabs').addEventListener('click', (e) => {
-                if (e.target.matches('.tab')) {
-                    switchTab(e.target.dataset.tab);
-                }
-            });
-            document.addEventListener('keydown', e => {
-                if (e.ctrlKey && e.shiftKey && e.key === 'A') {
-                    toggleAdminMode();
-                }
-            });
-            document.getElementById('request-quote-btn').addEventListener('click', () => {
-                document.getElementById('quote-modal-overlay').style.display = 'flex';
-            });
-            document.getElementById('export-pdf-btn').addEventListener('click', () => exportSummaryPDF(selections, 'Galifrey-Agency-Estimate.pdf'));
-            document.getElementById('apply-coupon-btn').addEventListener('click', applyCoupon);
-            document.body.addEventListener('click', handleDynamicClicks);
-            document.body.addEventListener('change', handleDynamicChanges);
-            document.body.addEventListener('input', handleDynamicInputs);
-            document.getElementById('quote-form').addEventListener('submit', handleQuoteRequest);
-            document.getElementById('edit-form').addEventListener('submit', handleAdminSaveEdit);
-            document.getElementById('add-modifier-option-btn').addEventListener('click', () => addModifierOptionRow());
-            document.getElementById('cancel-modifier-options-btn').addEventListener('click', closeModifierOptionsModal);
-            document.getElementById('save-modifier-options-btn').addEventListener('click', saveModifierOptions);
+    // General click handler for the whole app
+    document.body.addEventListener('click', handleDynamicClicks);
+    // General change handler for checkboxes and selects
+    document.body.addEventListener('change', handleDynamicChanges);
+    // General input handler for text fields and number inputs
+    document.body.addEventListener('input', handleDynamicInputs);
+
+    // Specific listeners for elements that exist on page load
+    document.getElementById('main-tabs').addEventListener('click', (e) => {
+        if (e.target.matches('.tab')) {
+            switchTab(e.target.dataset.tab);
         }
+    });
+
+    document.addEventListener('keydown', e => {
+        if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+            toggleAdminMode();
+        }
+    });
+
+    const quoteForm = document.getElementById('quote-form');
+    if (quoteForm) {
+        quoteForm.addEventListener('submit', handleQuoteRequest);
+    }
+    
+    const editForm = document.getElementById('edit-form');
+    if (editForm) {
+        editForm.addEventListener('submit', handleAdminSaveEdit);
+    }
+}
         // START: ADD THIS MISSING FUNCTION
 function handleDynamicClicks(e) {
     const target = e.target.closest('[data-action]');
     if (!target) return;
 
-    // This check is for the dedicated listener on the proposals modal.
-    // It prevents this general listener from acting on those specific buttons.
+    // Prevents this general listener from acting on buttons inside the alternatives modal,
+    // as it has its own dedicated listener.
     if (target.closest('#alternatives-content')) {
         return;
     }
@@ -964,7 +970,6 @@ function handleDynamicClicks(e) {
     const action = target.dataset.action;
     const id = target.dataset.id;
     
-    // A comprehensive switch statement that handles every possible action.
     switch (action) {
         // --- Session & Sharing ---
         case 'admin-clear-session': clearSessionData(); break;
@@ -1004,12 +1009,29 @@ function handleDynamicClicks(e) {
         case 'add-ad-channel-confirm': addAdChannel(); break;
         case 'remove-ad-channel': removeAdChannel(id); break;
         case 'clear-builder': clearBuilder(); break;
-        case 'add-phase': const newPhaseName = prompt("Enter name for new phase:", `Phase ${selections.phases.length + 1}`); if (newPhaseName) { const newId = `phase-${Date.now()}`; selections.phases.push({ id: newId, name: newPhaseName, services: {}, adChannels: {} }); selections.activePhaseId = newId; renderBuilder(); } break;
-        case 'delete-phase': if (confirm(`Are you sure you want to delete this phase?`)) { selections.phases = selections.phases.filter(p => p.id !== id); if (selections.activePhaseId === id) { selections.activePhaseId = selections.phases[0]?.id || null; } renderBuilder(); renderSummary(); } break;
+        case 'add-phase': 
+            const newPhaseName = prompt("Enter name for new phase:", `Phase ${selections.phases.length + 1}`); 
+            if (newPhaseName) { 
+                const newId = `phase-${Date.now()}`; 
+                selections.phases.push({ id: newId, name: newPhaseName, services: {}, adChannels: {} }); 
+                selections.activePhaseId = newId; 
+                renderBuilder(); 
+            } 
+            break;
+        case 'delete-phase': 
+            if (confirm(`Are you sure you want to delete this phase?`)) { 
+                selections.phases = selections.phases.filter(p => p.id !== id); 
+                if (selections.activePhaseId === id) { 
+                    selections.activePhaseId = selections.phases[0]?.id || null; 
+                } 
+                renderBuilder(); 
+                renderSummary(); 
+            } 
+            break;
         case 'set-active-phase': selections.activePhaseId = id; renderBuilder(); break;
         case 'set-summary-tab': setSummaryTab(target.dataset.tab); break;
         
-        // --- Admin & Quote Actions (All restored) ---
+        // --- Admin & Quote Actions ---
         case 'admin-delete': handleAdminDelete(target); break;
         case 'admin-add': handleAdminAdd(target); break;
         case 'admin-edit': handleAdminEdit(target); break;
@@ -1032,8 +1054,9 @@ function handleDynamicClicks(e) {
         case 'save-version': saveVersion(); break;
         case 'load-version': loadVersion(target.dataset.key); break;
         case 'delete-version': deleteVersion(target.dataset.key); break;
-        case 'reset-analytics': resetAnalytics(); break; // This was missing
+        case 'reset-analytics': resetAnalytics(); break;
         case 'update-satisfaction-rating': selections.clientContext.satisfaction = parseInt(target.value, 10); break;
+        case 'apply-coupon': applyCoupon(); break;
     }
 }
     
@@ -1042,84 +1065,83 @@ function handleDynamicClicks(e) {
         // #region ########## DYNAMIC EVENT HANDLERS ##########
         // START: REPLACE THIS FUNCTION
         function handleDynamicChanges(e) {
-            const target = e.target.closest('[data-change-action]');
-            if (!target) return;
-            const { changeAction, id, modifierId, path } = target.dataset;
-            let value;
-            if (target.type === 'checkbox') {
-                value = target.checked;
-            } else {
-                value = target.value;
+    const target = e.target.closest('[data-change-action]');
+    if (!target) return;
+    const { changeAction, id, modifierId, path } = target.dataset;
+    let value;
+    if (target.type === 'checkbox') {
+        value = target.checked;
+    } else {
+        value = target.value;
+    }
+    switch (changeAction) {
+        case 'select-modifier': updateModifier(id, modifierId, value); break;
+        case 'select-retainer-term': updateRetainerTerm(id, value); break;
+        case 'update-client-context':
+            updateClientContext(id, value, target);
+            break;
+        case 'update-modifier-type': handleModifierTypeChange(target); break;
+        case 'update-admin-setting': 
+                setNestedValue(config, path, value);
+                renderAdminPanel();
+                break;
+            case 'update-campaign-global':
+            updateCampaignGlobal(id, path, value);
+            break;
+        case 'update-timeline-setting':
+            updateTimelineSetting(id, target.dataset.setting, value);
+            break;
+        case 'toggle-compare-package':
+            if (value) { 
+                selections.packagesToCompare.add(id);
+            } else { 
+                selections.packagesToCompare.delete(id);
             }
-            switch (changeAction) {
-                case 'select-modifier': updateModifier(id, modifierId, value); break;
-                case 'select-retainer-term': updateRetainerTerm(id, value); break;
-                case 'update-client-context':
-                    updateClientContext(id, value, target);
-                    break;
-                case 'update-modifier-type': handleModifierTypeChange(target); break;
-                case 'update-admin-setting': 
-                        setNestedValue(config, path, value);
-                        renderAdminPanel();
-                        break;
-                    case 'update-campaign-global':
-                    updateCampaignGlobal(id, path, value);
-                    break;
-                case 'update-timeline-setting':
-                    updateTimelineSetting(id, target.dataset.setting, value);
-                    break;
-                // --- NEW: Handles the compare checkbox ---
-                case 'toggle-compare-package':
-                    if (value) { // if checked
-                        selections.packagesToCompare.add(id);
-                    } else { // if unchecked
-                        selections.packagesToCompare.delete(id);
-                    }
-                    renderPackages(); // Re-render to show/hide the "Compare Selected" button
-                    break;
-            }
-        }
+            renderPackages();
+            break;
+    }
+}
         // END: REPLACE THIS FUNCTION
         function handleDynamicInputs(e) {
-            const target = e.target.closest('[data-input-action]');
-            if (!target) return;
-            const { inputAction, id, modifierId, path, campaign } = target.dataset;
-            const value = e.target.value;
-            const numValue = parseFloat(value);
-            switch (inputAction) {
-                case 'update-quantity': updateQuantity(id, numValue); break;
-                case 'update-modifier': updateModifier(id, modifierId, target.type === 'number' ? numValue : value); break;
-                case 'update-ad-spend': updateAdSpend(id, numValue); break;
-                case 'update-ad-setup': updateAdSetupFee(id, numValue); break;
-                case 'update-client-context':
-                    updateClientContext(id, value, target);
-                    renderSummary(); 
-                    break;
-                case 'update-campaign-price':
-                    updateCampaignPrice(campaign, id, value);
-                    break;
-                case 'update-campaign-package-price':
-                    updateCampaignPackagePrice(campaign, id, value);
-                    break;
-                case 'update-admin-setting':
-                        const finalValue = path.includes('percentage') || path.includes('discount') || path.includes('value') ? numValue / 100 : numValue;
-                        setNestedValue(config, path, isNaN(finalValue) ? value : finalValue);
-                        break;
-                case 'update-override':
-                    selections.overrides[id] = isNaN(numValue) || value === '' ? null : numValue;
-                    renderSummary();
-                    break;
-                case 'update-campaign-global':
-                    updateCampaignGlobal(id, path, value);
-                    break;
-                case 'update-timeline-setting':
-                    updateTimelineSetting(id, target.dataset.setting, numValue);
-                    break;
-                case 'update-team-augmentation': // This case is new
-                    updateTeamAugmentationHours(id, numValue);
-                    break;
-            }
-        }
+    const target = e.target.closest('[data-input-action]');
+    if (!target) return;
+    const { inputAction, id, modifierId, path, campaign } = target.dataset;
+    const value = e.target.value;
+    const numValue = parseFloat(value);
+    switch (inputAction) {
+        case 'update-quantity': updateQuantity(id, numValue); break;
+        case 'update-modifier': updateModifier(id, modifierId, target.type === 'number' ? numValue : value); break;
+        case 'update-ad-spend': updateAdSpend(id, numValue); break;
+        case 'update-ad-setup': updateAdSetupFee(id, numValue); break;
+        case 'update-client-context':
+            updateClientContext(id, value, target);
+            renderSummary(); 
+            break;
+        case 'update-campaign-price':
+            updateCampaignPrice(campaign, id, value);
+            break;
+        case 'update-campaign-package-price':
+            updateCampaignPackagePrice(campaign, id, value);
+            break;
+        case 'update-admin-setting':
+                const finalValue = path.includes('percentage') || path.includes('discount') || path.includes('value') ? numValue / 100 : numValue;
+                setNestedValue(config, path, isNaN(finalValue) ? value : finalValue);
+                break;
+        case 'update-override':
+            selections.overrides[id] = isNaN(numValue) || value === '' ? null : numValue;
+            renderSummary();
+            break;
+        case 'update-campaign-global':
+            updateCampaignGlobal(id, path, value);
+            break;
+        case 'update-timeline-setting':
+            updateTimelineSetting(id, target.dataset.setting, numValue);
+            break;
+        case 'update-team-augmentation':
+            updateTeamAugmentationHours(id, numValue);
+            break;
+    }
+}
         // #endregion
         // #region ########## RENDER FUNCTIONS ##########
         // START: ADD THIS MISSING FUNCTION
