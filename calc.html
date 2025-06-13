@@ -845,28 +845,47 @@ const defaultConfig = {
         // ... (no changes needed here)
     ],
     packages: [
-        { 
-            id: 'pkg-ignite', name: 'Ignite', displayPrice: 2400,
-            desc: 'Perfect for startups to establish a foundational online presence. ',
-            features: 'Foundational SEO, Social Media Mgmt, 4 Blog Posts',
-            services: [
-                { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true }, // Example: Locked service
-                { id: 's-social-mgmt', quantity: 1, mods: {}, locked: false },
-                { id: 's-content-blog', quantity: 4, mods: {}, locked: false },
-            ]
-        },
-        { 
-            id: 'pkg-accelerate', name: 'Accelerate', displayPrice: 6500,
-            desc: 'For growing businesses ready to scale with a professional website and consistent marketing. ',
-            features: 'Custom Website, SEO Retainer, Social Media Management',
-            services: [
-                { id: 's-web-custom', quantity: 1, mods: {}, locked: true },
-                { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true },
-                { id: 's-social-mgmt', quantity: 1, mods: {}, locked: false },
-            ]
-        },
-        // ... (other packages would be similarly updated)
-    ]
+    {
+        id: 'pkg-launchpad',
+        name: 'Digital Launchpad',
+        displayPrice: 5000,
+        desc: 'Essential for new businesses or those needing a professional digital foundation. This package establishes your brand and launches your online presence.',
+        features: 'Brand Strategy, Logo Design, Custom Website, Website Maintenance Retainer',
+        services: [
+            { id: 's-brand-strategy', quantity: 1, mods: {}, locked: true },
+            { id: 's-logo-design', quantity: 1, mods: {}, locked: true },
+            { id: 's-web-custom', quantity: 1, mods: {}, locked: false },
+            { id: 's-web-maintenance', quantity: 1, mods: {}, locked: false }
+        ]
+    },
+    {
+        id: 'pkg-growth-engine',
+        name: 'Growth Engine',
+        displayPrice: 4500,
+        desc: 'Designed for businesses ready to actively attract and engage customers. This package focuses on driving traffic and generating leads.',
+        features: 'Comprehensive SEO Retainer, PPC Management, Paid Social Ads, Monthly Performance Reporting',
+        services: [
+            { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true },
+            { id: 's-ppc-management', quantity: 1, mods: {}, locked: true },
+            { id: 's-paid-social-management', quantity: 1, mods: {}, locked: false },
+            { id: 's-reporting-retainer', quantity: 1, mods: {}, locked: true }
+        ]
+    },
+    {
+        id: 'pkg-market-leader',
+        name: 'Market Leader',
+        displayPrice: 7500,
+        desc: 'An integrated, all-in-one solution for established businesses aiming to dominate their market through a multi-channel strategy.',
+        features: 'Fractional CMO, Comprehensive SEO, Social Media Management, Email Marketing, Promotional Video',
+        services: [
+            { id: 's-frac-cmo', quantity: 1, mods: {}, locked: true },
+            { id: 's-seo-retainer', quantity: 1, mods: { "mod-seo-tier": "Aggressive (More Content/Links)" }, locked: true },
+            { id: 's-social-management', quantity: 1, mods: { "mod-social-platforms": "3-4 Platforms" }, locked: false },
+            { id: 's-email-management', quantity: 1, mods: {}, locked: false },
+            { id: 's-video-promo', quantity: 1, mods: {}, locked: false }
+        ]
+    }
+]
 };
 // END: REPLACE THIS ENTIRE OBJECT
         // #endregion
@@ -917,17 +936,18 @@ let selections = {
 
 function init() {
     const urlParams = new URLSearchParams(window.location.search);
-    const sharedDataParam = urlParams.get('s');
+    const sharedDataParam = urlParams.get('s'); // Corrected variable name
     let sessionLoadedFromUrl = false;
 
     // Priority 1: Load from a shared URL parameter.
     if (sharedDataParam) {
         try {
+            // The decoding process
             const decoded = atob(sharedDataParam);
             const decompressed = pako.inflate(decoded, { to: 'string' });
             const sharedSelections = JSON.parse(decompressed);
             
-            // Use the new, pure loadSession function to update the state.
+            // Use the pure loadSession function to update the state.
             if (loadSession(sharedSelections)) {
                 sessionLoadedFromUrl = true;
                 showToast("Shared session loaded successfully!", "success");
@@ -939,12 +959,14 @@ function init() {
                     cleanUrl.searchParams.delete('s');
                     window.history.replaceState({}, document.title, cleanUrl.href);
                 } catch (urlError) {
-                    console.warn("URL cleaning was blocked by the environment.");
+                    console.warn("URL cleaning might be blocked by the environment.");
                 }
             } else {
+                 // This case happens if loadSession returns false (e.g., missing core properties)
                  throw new Error("Invalid session data format from URL.");
             }
         } catch (e) {
+            // This catch block handles errors from atob, pako, or JSON.parse
             console.error("Failed to load from shared URL:", e);
             showToast("Could not load the shared link. It may be invalid or corrupted.", "error");
         }
@@ -962,7 +984,7 @@ function init() {
     activeCampaign = urlParams.get('campaign');
     loadConfig();
     setupEventListeners();
-    listenForQuotes();
+    listenForQuotes(); // Firebase listener
 
     // A single, final render call to draw the UI with either the shared data or the default state.
     renderAll();
@@ -2643,18 +2665,26 @@ function renderSubmittedQuotes(quotes = []) {
 
 function loadSession(dataToLoad) {
     try {
+        // Validate that the essential properties exist on the loaded data
         if (dataToLoad && dataToLoad.phases && dataToLoad.clientContext) {
-            // Ensure complex types are correctly reconstructed after JSON parsing.
+            
+            // Reconstruct the 'packagesToCompare' Set from the array that was stringified.
+            // This prevents errors if the saved data is from an older version.
             dataToLoad.packagesToCompare = new Set(dataToLoad.packagesToCompare || []);
             
-            // Overwrite the global `selections` variable with the loaded data.
+            // Ensure other complex or potentially missing properties have defaults
+            dataToLoad.teamAugmentation = dataToLoad.teamAugmentation || {};
+            dataToLoad.overrides = dataToLoad.overrides || { oneTime: null, monthly: null };
+            
+            // Overwrite the global `selections` variable with the fully-formed, loaded data.
             selections = dataToLoad;
-            return true; // Return true on success.
+            return true; // Return true to indicate success.
         }
         // Return false if the data format is invalid.
+        console.warn("loadSession returned false, data is missing core properties.");
         return false;
     } catch (e) {
-        console.error("Error processing session data:", e);
+        console.error("Error processing session data during loadSession:", e);
         return false;
     }
 }
@@ -2662,35 +2692,43 @@ function loadSession(dataToLoad) {
 
         // START: REPLACE THIS FUNCTION
         function shareBuild() {
-            try {
-                // Create a serializable copy of the selections object
-                const sessionToShare = {
-                    ...selections,
-                    packagesToCompare: Array.from(selections.packagesToCompare || []) // Convert Set to Array
-                };
-                const jsonString = JSON.stringify(sessionToShare);
-                const compressed = pako.deflate(jsonString, { to: 'string' });
-                const encoded = btoa(compressed); // Base64 encode
+    try {
+        // Create a serializable copy of the selections object to handle the Set
+        const sessionToShare = {
+            ...selections,
+            packagesToCompare: Array.from(selections.packagesToCompare || []) // Convert Set to Array
+        };
+        const jsonString = JSON.stringify(sessionToShare);
+        const compressed = pako.deflate(jsonString, { to: 'string' });
+        const encoded = btoa(compressed); // Base64 encode
 
-                const url = new URL(window.location);
-                url.searchParams.set('s', encoded);
+        const url = new URL(window.location);
+        url.searchParams.set('s', encoded);
 
-                const textArea = document.createElement("textarea");
-                textArea.value = url.href;
-                textArea.style.position = "fixed";
-                textArea.style.left = "-9999px";
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-
-                showToast("Sharable link copied to clipboard!", "success");
-                trackAnalytics('build_shared');
-            } catch (e) {
-                console.error("Failed to create share link:", e);
-                showToast("Could not create shareable link.", "error");
-            }
+        // Use document.execCommand for robust copying in different environments (like iFrames).
+        const textArea = document.createElement("textarea");
+        textArea.value = url.href;
+        textArea.style.position = "fixed"; // Avoid scrolling to bottom
+        textArea.style.opacity = "0"; // Make it invisible
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showToast("Sharable link copied to clipboard!", "success");
+        } catch (err) {
+            showToast("Failed to copy link automatically.", "error");
+            console.error('Clipboard copy failed:', err);
         }
+        document.body.removeChild(textArea);
+        
+        trackAnalytics('build_shared');
+
+    } catch (e) {
+        console.error("Failed to create share link:", e);
+        showToast("Could not create shareable link.", "error");
+    }
+}
         // END: REPLACE THIS FUNCTION
         // END: ADD THESE NEW FUNCTIONS
         function switchTab(tabId) {
@@ -2941,25 +2979,60 @@ function updateClientContext(field, value, target) {
 
         // END: ADD THIS NEW FUNCTION
         function clearBuilder() {
-            if (confirm("Are you sure you want to clear all selections and phases from the campaign builder? This will also clear the business information you entered.")) {
-                const newPhaseId = `phase-${Date.now()}`;
-                selections.phases = [{ id: newPhaseId, name: 'Phase 1: Campaign Selections', services: {}, adChannels: {} }];
-                selections.activePhaseId = newPhaseId;
-                selections.clientContext = {
-                    businessStage: '', businessGoal: '', industry: '', targetAudience: '',
-                    geographicTarget: '', website: '', competitors: ['', '', ''], marketingHistory: [],
-                    previousProvider: '', previousServices: '', previousBudget: '', reasonForSwitching: '',
-                    durationWithProvider: '', satisfaction: 0, futureGoals: '', referralSource: '',
-                    avgLeadValue: '', avgClv: ''
-                };
-                selections.appliedCoupon = null;
-                document.getElementById('coupon-code-input').value = '';
-                document.getElementById('coupon-status').textContent = '';
-                showToast("Builder selections cleared.", "info");
-                renderBuilder();
-                renderSummary();
-            }
-        }
+    if (confirm("Are you sure you want to clear all selections? This will reset the builder, any selected packages, and the summary to a blank state.")) {
+        // By re-initializing the entire 'selections' object, we ensure a complete and clean reset.
+        const newPhaseId = `phase-${Date.now()}`;
+        selections = {
+            phases: [{ id: newPhaseId, name: 'Phase 1: Campaign Selections', services: {}, adChannels: {} }],
+            activePhaseId: newPhaseId,
+            teamAugmentation: {},
+            packagesToCompare: new Set(),
+            clientContext: {
+                businessStage: '',
+                businessGoal: '',
+                industry: '',
+                targetAudience: '',
+                geographicTarget: '',
+                website: '',
+                marketingHistory: [],
+                previousProvider: '',
+                previousServices: '',
+                previousBudget: '',
+                reasonForSwitching: '',
+                durationWithProvider: '',
+                satisfaction: 0,
+                futureGoals: '',
+                referralSource: '',
+                avgLeadValue: '',
+                avgClv: '',
+                monthlyTraffic: '',
+                conversionRate: '',
+                avgSaleValue: '',
+                competitors: [
+                    { url: '', notes: '' },
+                    { url: '', notes: '' },
+                    { url: '', notes: '' }
+                ],
+                socialUrls: [
+                    { url: '' },
+                    { url: '' },
+                    { url: '' }
+                ]
+            },
+            overrides: { oneTime: null, monthly: null },
+            appliedCoupon: null
+        };
+
+        // Also reset any UI elements that are managed outside the main render flow.
+        document.getElementById('coupon-code-input').value = '';
+        document.getElementById('coupon-status').textContent = '';
+        
+        showToast("All selections have been cleared.", "info");
+        
+        // A single, comprehensive render call to update the entire user interface.
+        renderAll(); 
+    }
+}
                 function addAdChannel() {
             const select = document.getElementById('add-ad-channel-select');
             const channelId = select.value;
