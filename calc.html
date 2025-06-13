@@ -890,11 +890,20 @@ let selections = {
         durationWithProvider: '', satisfaction: 0, futureGoals: '', referralSource: '',
         avgLeadValue: '',
         avgClv: '',
-        // --- NEW PROPERTIES FOR PHASE 4 ---
         monthlyTraffic: '',
         conversionRate: '',
         avgSaleValue: '',
-        competitors: ['', '', ''] // Will hold the 3 competitor URLs
+        // --- UPDATED: 'competitors' is now an array of objects, and 'socialUrls' is new ---
+        competitors: [
+            { url: '', notes: '' },
+            { url: '', notes: '' },
+            { url: '', notes: '' }
+        ],
+        socialUrls: [
+            { url: '' },
+            { url: '' },
+            { url: '' }
+        ]
     },
     overrides: { oneTime: null, monthly: null },
     appliedCoupon: null
@@ -1353,104 +1362,102 @@ function renderBuilder() {
 }
 // END: REPLACE THIS FUNCTION
         // MODIFIED: Greatly expanded client context section
-                function renderClientContextSection() {
-            const { businessStages, businessGoals, geographicTargets, pastMarketingOptions, reasonsForSwitching, referralSources } = config.settings.clientContext;
-            const ctx = selections.clientContext;
-            const isOpen = openAccordions.has('client-context');
-            return `
-                <div class="bg-white rounded-lg shadow-sm">
-                    <button data-action="toggle-accordion" data-id="client-context" class="w-full flex justify-between items-center p-4 text-left font-bold text-xl">
-                        <span>Tell Us About Yourself (Optional, but Recommended)</span>
-                        <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div class="accordion-content ${isOpen ? 'open' : ''}">
-                        <div class="p-6 border-t space-y-8">
-                            <!-- NEW ROI INPUTS -->
-                            <div id="roi-inputs-section">
-                                <h4 class="font-semibold text-lg mb-3">ROI & Value Inputs</h4>
-                                <p class="text-sm text-gray-500 mb-4">Providing these helps us project the potential value of your investment.</p>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div><label class="block text-sm font-medium">Average Value Per Lead ($)</label><input type="number" data-input-action="update-client-context" data-id="avgLeadValue" value="${ctx.avgLeadValue || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
-                                    <div><label class="block text-sm font-medium">Customer Lifetime Value (CLV) ($)</label><input type="number" data-input-action="update-client-context" data-id="avgClv" value="${ctx.avgClv || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
-                                </div>
-                            </div>
-                            <!-- Previous Provider -->
-                            <div id="previous-provider-section">
-                                <h4 class="font-semibold text-lg mb-3">Previous Experience</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div><label class="block text-sm font-medium">Previous Provider Name</label><input type="text" data-input-action="update-client-context" data-id="previousProvider" value="${ctx.previousProvider || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
-                                    <div><label class="block text-sm font-medium">Services They Provided</label><input type="text" data-input-action="update-client-context" data-id="previousServices" value="${ctx.previousServices || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
-                                    <div><label class="block text-sm font-medium">Previous Marketing Budget ($/mo)</label><input type="number" data-input-action="update-client-context" data-id="previousBudget" value="${ctx.previousBudget || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
-                                    <div><label class="block text-sm font-medium">Duration with them</label><input type="text" data-input-action="update-client-context" data-id="durationWithProvider" placeholder="e.g., 2 years" value="${ctx.durationWithProvider || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
-                                    <div>
-                                        <label class="block text-sm font-medium">Reason for Switching</label>
-                                        <select data-change-action="update-client-context" data-id="reasonForSwitching" class="mt-1 w-full p-2 border rounded-md">
-                                            <option value="">Select...</option>
-                                            ${reasonsForSwitching.map(s => `<option value="${s}" ${ctx.reasonForSwitching === s ? 'selected' : ''}>${s}</option>`).join('')}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium mb-1">Satisfaction with Them</label>
-                                        <div class="star-rating">
-                                            ${[5,4,3,2,1].map(star => `
-                                                <input type="radio" id="star${star}" name="rating" value="${star}" data-action="update-satisfaction-rating" ${ctx.satisfaction === star ? 'checked' : ''}><label for="star${star}" title="${star} stars">&#9733;</label>
-                                            `).join('')}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- Goals & Acquisition -->
-                             <div>
-                                <h4 class="font-semibold text-lg mb-3">Your Goals & Background</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Business Stage</label>
-                                        <select data-change-action="update-client-context" data-id="businessStage" class="w-full p-2 border rounded-md">
-                                            <option value="">Select...</option>
-                                            ${businessStages.map(s => `<option value="${s}" ${ctx.businessStage === s ? 'selected' : ''}>${s}</option>`).join('')}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Primary Goal</label>
-                                        <select data-change-action="update-client-context" data-id="businessGoal" class="w-full p-2 border rounded-md">
-                                            <option value="">Select...</option>
-                                            ${businessGoals.map(g => `<option value="${g}" ${ctx.businessGoal === g ? 'selected' : ''}>${g}</option>`).join('')}
-                                        </select>
-                                    </div>
-                                    <div class="md:col-span-2">
-                                        <label class="block text-sm font-medium text-gray-700">Tell us about your expectations and future goals</label>
-                                        <textarea data-input-action="update-client-context" data-id="futureGoals" class="mt-1 w-full p-2 border rounded-md h-20">${ctx.futureGoals || ''}</textarea>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium">How did you hear about us?</label>
-                                        <select data-change-action="update-client-context" data-id="referralSource" class="mt-1 w-full p-2 border rounded-md">
-                                            <option value="">Select...</option>
-                                            ${referralSources.map(s => `<option value="${s}" ${ctx.referralSource === s ? 'selected' : ''}>${s}</option>`).join('')}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                             <!-- Online Presence & Competition -->
+        function renderClientContextSection() {
+    const { businessStages, businessGoals, reasonsForSwitching, referralSources } = config.settings.clientContext;
+    const ctx = selections.clientContext;
+    const isOpen = openAccordions.has('client-context');
+    return `
+        <div class="bg-white rounded-lg shadow-sm">
+            <button data-action="toggle-accordion" data-id="client-context" class="w-full flex justify-between items-center p-4 text-left font-bold text-xl">
+                <span>Tell Us About Yourself (Optional, but Recommended)</span>
+                <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div class="accordion-content ${isOpen ? 'open' : ''}">
+                <div class="p-6 border-t space-y-8">
+                    <!-- ROI & Value Inputs -->
+                    <div id="roi-inputs-section">
+                        <h4 class="font-semibold text-lg mb-3">ROI & Value Inputs</h4>
+                        <p class="text-sm text-gray-500 mb-4">Providing these helps us project the potential value of your investment.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-medium">Average Value Per Lead ($)</label><input type="number" data-input-action="update-client-context" data-id="avgLeadValue" value="${ctx.avgLeadValue || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
+                            <div><label class="block text-sm font-medium">Customer Lifetime Value (CLV) ($)</label><input type="number" data-input-action="update-client-context" data-id="avgClv" value="${ctx.avgClv || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
+                        </div>
+                    </div>
+                    <!-- Previous Provider -->
+                    <div id="previous-provider-section">
+                        <h4 class="font-semibold text-lg mb-3">Previous Experience</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-medium">Previous Provider Name</label><input type="text" data-input-action="update-client-context" data-id="previousProvider" value="${ctx.previousProvider || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
+                            <div><label class="block text-sm font-medium">Services They Provided</label><input type="text" data-input-action="update-client-context" data-id="previousServices" value="${ctx.previousServices || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
+                            <div><label class="block text-sm font-medium">Previous Marketing Budget ($/mo)</label><input type="number" data-input-action="update-client-context" data-id="previousBudget" value="${ctx.previousBudget || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
+                            <div><label class="block text-sm font-medium">Duration with them</label><input type="text" data-input-action="update-client-context" data-id="durationWithProvider" placeholder="e.g., 2 years" value="${ctx.durationWithProvider || ''}" class="mt-1 w-full p-2 border rounded-md"></div>
                             <div>
-                                <h4 class="font-semibold text-lg mb-3">Current Online Presence & Competition</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">Current Website URL (if any)</label>
-                                        <input type="url" data-input-action="update-client-context" data-id="website" value="${ctx.website || ''}" placeholder="https://example.com" class="mt-1 w-full p-2 border rounded-md">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">List up to 3 Competitors</label>
-                                        <input type="text" data-input-action="update-client-context" data-id="competitors" data-index="0" value="${ctx.competitors[0] || ''}" placeholder="Competitor 1" class="mt-1 w-full p-2 border rounded-md">
-                                        <input type="text" data-input-action="update-client-context" data-id="competitors" data-index="1" value="${ctx.competitors[1] || ''}" placeholder="Competitor 2" class="mt-1 w-full p-2 border rounded-md">
-                                        <input type="text" data-input-action="update-client-context" data-id="competitors" data-index="2" value="${ctx.competitors[2] || ''}" placeholder="Competitor 3" class="mt-1 w-full p-2 border rounded-md">
-                                    </div>
+                                <label class="block text-sm font-medium">Reason for Switching</label>
+                                <select data-change-action="update-client-context" data-id="reasonForSwitching" class="mt-1 w-full p-2 border rounded-md">
+                                    <option value="">Select...</option>
+                                    ${reasonsForSwitching.map(s => `<option value="${s}" ${ctx.reasonForSwitching === s ? 'selected' : ''}>${s}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Satisfaction with Them</label>
+                                <div class="star-rating">
+                                    ${[5,4,3,2,1].map(star => `<input type="radio" id="star${star}" name="rating" value="${star}" data-action="update-satisfaction-rating" ${ctx.satisfaction === star ? 'checked' : ''}><label for="star${star}" title="${star} stars">&#9733;</label>`).join('')}
                                 </div>
                             </div>
                         </div>
                     </div>
+                    <!-- Goals & Background -->
+                        <div>
+                        <h4 class="font-semibold text-lg mb-3">Your Goals & Background</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Business Stage</label>
+                                <select data-change-action="update-client-context" data-id="businessStage" class="w-full p-2 border rounded-md">
+                                    <option value="">Select...</option>
+                                    ${businessStages.map(s => `<option value="${s}" ${ctx.businessStage === s ? 'selected' : ''}>${s}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Primary Goal</label>
+                                <select data-change-action="update-client-context" data-id="businessGoal" class="w-full p-2 border rounded-md">
+                                    <option value="">Select...</option>
+                                    ${businessGoals.map(g => `<option value="${g}" ${ctx.businessGoal === g ? 'selected' : ''}>${g}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Tell us about your expectations and future goals</label>
+                                <textarea data-input-action="update-client-context" data-id="futureGoals" class="mt-1 w-full p-2 border rounded-md h-20">${ctx.futureGoals || ''}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium">How did you hear about us?</label>
+                                <select data-change-action="update-client-context" data-id="referralSource" class="mt-1 w-full p-2 border rounded-md">
+                                    <option value="">Select...</option>
+                                    ${referralSources.map(s => `<option value="${s}" ${ctx.referralSource === s ? 'selected' : ''}>${s}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                        <!-- UPDATED: Online Presence -->
+                    <div>
+                        <h4 class="font-semibold text-lg mb-3">Current Online Presence</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Current Website URL (if any)</label>
+                                <input type="url" data-input-action="update-client-context" data-id="website" value="${ctx.website || ''}" placeholder="https://example.com" class="mt-1 w-full p-2 border rounded-md">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Social Media URLs</label>
+                                <input type="url" data-input-action="update-client-context" data-id="socialUrls" data-index="0" value="${(ctx.socialUrls[0] || {}).url || ''}" placeholder="https://linkedin.com/company/..." class="mt-1 w-full p-2 border rounded-md">
+                                <input type="url" data-input-action="update-client-context" data-id="socialUrls" data-index="1" value="${(ctx.socialUrls[1] || {}).url || ''}" placeholder="https://facebook.com/..." class="mt-1 w-full p-2 border rounded-md">
+                                <input type="url" data-input-action="update-client-context" data-id="socialUrls" data-index="2" value="${(ctx.socialUrls[2] || {}).url || ''}" placeholder="https://instagram.com/..." class="mt-1 w-full p-2 border rounded-md">
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            `;
-        }
+            </div>
+        </div>
+    `;
+}
         function attachStarRatingListeners() {
             document.querySelectorAll('.star-rating input[type="radio"]').forEach(radio => {
                 radio.addEventListener('click', (e) => {
@@ -1907,12 +1914,31 @@ function renderCompetitorSnapshotPanel() {
                 <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div class="accordion-content ${isOpen ? 'open' : ''}">
-                <div class="p-6 border-t space-y-4">
-                    <p class="text-sm text-gray-600">Provide up to three competitor URLs for our analysis. This helps us tailor your strategy.</p>
-                    <div class="space-y-3">
-                        <input type="url" data-input-action="update-client-context" data-id="competitors" data-index="0" value="${ctx.competitors[0] || ''}" placeholder="https://competitor1.com" class="w-full p-2 border rounded-md">
-                        <input type="url" data-input-action="update-client-context" data-id="competitors" data-index="1" value="${ctx.competitors[1] || ''}" placeholder="https://competitor2.com" class="w-full p-2 border rounded-md">
-                        <input type="url" data-input-action="update-client-context" data-id="competitors" data-index="2" value="${ctx.competitors[2] || ''}" placeholder="https://competitor3.com" class="w-full p-2 border rounded-md">
+                <div class="p-6 border-t space-y-6">
+                    <p class="text-sm text-gray-600">Provide up to three competitors for analysis. This intelligence is crucial for tailoring your strategy.</p>
+                    
+                    <!-- Competitor 1 -->
+                    <div class="space-y-3 p-4 border rounded-lg bg-gray-50">
+                        <label class="block text-sm font-medium text-gray-800">Competitor 1 URL</label>
+                        <input type="url" data-input-action="update-client-context" data-id="competitors" data-index="0" data-field="url" value="${(ctx.competitors[0] || {}).url || ''}" placeholder="https://competitor1.com" class="w-full p-2 border rounded-md">
+                        <label class="block text-sm font-medium text-gray-800">Notes & Analysis</label>
+                        <textarea data-input-action="update-client-context" data-id="competitors" data-index="0" data-field="notes" class="w-full p-2 border rounded-md h-24" placeholder="e.g., Why are they a competitor? What do they do well? What do you want to explore or counter?">${(ctx.competitors[0] || {}).notes || ''}</textarea>
+                    </div>
+
+                    <!-- Competitor 2 -->
+                    <div class="space-y-3 p-4 border rounded-lg bg-gray-50">
+                        <label class="block text-sm font-medium text-gray-800">Competitor 2 URL</label>
+                        <input type="url" data-input-action="update-client-context" data-id="competitors" data-index="1" data-field="url" value="${(ctx.competitors[1] || {}).url || ''}" placeholder="https://competitor2.com" class="w-full p-2 border rounded-md">
+                        <label class="block text-sm font-medium text-gray-800">Notes & Analysis</label>
+                        <textarea data-input-action="update-client-context" data-id="competitors" data-index="1" data-field="notes" class="w-full p-2 border rounded-md h-24" placeholder="e.g., Strengths, weaknesses, opportunities...">${(ctx.competitors[1] || {}).notes || ''}</textarea>
+                    </div>
+
+                    <!-- Competitor 3 -->
+                    <div class="space-y-3 p-4 border rounded-lg bg-gray-50">
+                        <label class="block text-sm font-medium text-gray-800">Competitor 3 URL</label>
+                        <input type="url" data-input-action="update-client-context" data-id="competitors" data-index="2" data-field="url" value="${(ctx.competitors[2] || {}).url || ''}" placeholder="https://competitor3.com" class="w-full p-2 border rounded-md">
+                        <label class="block text-sm font-medium text-gray-800">Notes & Analysis</label>
+                        <textarea data-input-action="update-client-context" data-id="competitors" data-index="2" data-field="notes" class="w-full p-2 border rounded-md h-24" placeholder="e.g., Market positioning, pricing strategy...">${(ctx.competitors[2] || {}).notes || ''}</textarea>
                     </div>
                 </div>
             </div>
@@ -2733,12 +2759,15 @@ function renderCompetitorSnapshotPanel() {
 function updateClientContext(field, value, target) {
     if (field === 'competitors') {
         const index = parseInt(target.dataset.index, 10);
-        selections.clientContext.competitors[index] = value;
-        // --- NEW: Analytics Tracking for competitor URLs ---
-        if (value.trim() !== '') {
+        const subField = target.dataset.field; // 'url' or 'notes'
+        selections.clientContext.competitors[index][subField] = value;
+        
+        if (subField === 'url' && value.trim() !== '') {
             trackAnalytics('competitor_url_entered', { url: value });
         }
-        // --------------------------------------------------
+    } else if (field === 'socialUrls') {
+        const index = parseInt(target.dataset.index, 10);
+        selections.clientContext.socialUrls[index] = { url: value };
     } else if (field === 'marketingHistory') {
         const historySet = new Set(selections.clientContext.marketingHistory);
         if (target.checked) {
@@ -2751,21 +2780,17 @@ function updateClientContext(field, value, target) {
         selections.clientContext[field] = value;
     }
 
-    // Re-render recommendations on key changes
     if (field === 'businessStage') {
         renderPackages();
     }
     if (field === 'businessGoal') {
         renderBuilder();
     }
-    // Re-calculate totals if an ROI-related field changes
     if (['monthlyTraffic', 'conversionRate', 'avgSaleValue'].includes(field)) {
         renderSummary();
-        // --- NEW: Analytics Tracking for ROI inputs ---
         if (value.trim() !== '') {
             trackAnalytics('roi_data_entered', { field: field, value: value });
         }
-        // ----------------------------------------------
     }
 }
 
@@ -4372,52 +4397,59 @@ function calculateTotals(currentSelections) {
         }
         // MODIFIED: Saves all new client context fields
         function handleQuoteRequest(e) {
-            e.preventDefault();
-            const form = e.target;
-            const name = form.elements.name.value.trim();
-            const email = form.elements.email.value.trim();
-            if (!name || !email) {
-                showToast("Please enter at least your name and email.", "error");
-                return;
+    e.preventDefault();
+    const form = e.target;
+    const name = form.elements.name.value.trim();
+    const email = form.elements.email.value.trim();
+    if (!name || !email) {
+        showToast("Please enter at least your name and email.", "error");
+        return;
+    }
+
+    // --- Create a serializable copy to fix the Set -> Array issue ---
+    const selectionsToSave = {
+        ...selections,
+        packagesToCompare: Array.from(selections.packagesToCompare || [])
+    };
+    // -----------------------------------------------------------------
+
+    const rawSummary = calculateTotals(selectionsToSave);
+    const finalOneTime = selectionsToSave.overrides.oneTime !== null ? selectionsToSave.overrides.oneTime : rawSummary.totals.oneTime;
+    const finalMonthly = selectionsToSave.overrides.monthly !== null ? selectionsToSave.overrides.monthly : rawSummary.totals.monthly;
+    const formData = new FormData(form);
+    
+    const quoteData = {
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        contact: {
+            name: formData.get('name'),
+            email: formData.get('email'),
+            phone: formData.get('phone'),
+            businessName: formData.get('businessName'),
+        },
+        selections: selectionsToSave, // Save the cleaned object
+        summary: {
+            ...rawSummary,
+            totals: {
+                oneTime: finalOneTime,
+                monthly: finalMonthly,
+                adSpend: rawSummary.totals.adSpend,
             }
-            const rawSummary = calculateTotals(selections);
-            const finalOneTime = selections.overrides.oneTime !== null ? selections.overrides.oneTime : rawSummary.totals.oneTime;
-            const finalMonthly = selections.overrides.monthly !== null ? selections.overrides.monthly : rawSummary.totals.monthly;
-            const formData = new FormData(form);
-            const quoteData = {
-                // NOTE: We no longer create a local ID. Firestore will generate one.
-                timestamp: firebase.firestore.FieldValue.serverTimestamp(), // Use server time
-                contact: {
-                    name: formData.get('name'),
-                    email: formData.get('email'),
-                    phone: formData.get('phone'),
-                    businessName: formData.get('businessName'),
-                },
-                selections: JSON.parse(JSON.stringify(selections)),
-                summary: {
-                    ...rawSummary,
-                    totals: {
-                        oneTime: finalOneTime,
-                        monthly: finalMonthly,
-                        adSpend: rawSummary.totals.adSpend,
-                    }
-                },
-                campaign: activeCampaign
-            };
-            
-            // NEW: Save to Firestore
-            db.collection("submittedQuotes").add(quoteData)
-            .then(() => {
-                document.getElementById('quote-modal-overlay').style.display = 'none';
-                form.reset();
-                trackAnalytics('quote_submitted');
-                showToast("Thank you! Your quote has been submitted for review.", "success");
-            })
-            .catch((error) => {
-                console.error("Error writing document: ", error);
-                showToast("Could not submit quote. Please try again.", "error");
-            });
-        }
+        },
+        campaign: activeCampaign
+    };
+    
+    db.collection("submittedQuotes").add(quoteData)
+    .then(() => {
+        document.getElementById('quote-modal-overlay').style.display = 'none';
+        form.reset();
+        trackAnalytics('quote_submitted');
+        showToast("Thank you! Your quote has been submitted for review.", "success");
+    })
+    .catch((error) => {
+        console.error("Error writing document: ", error);
+        showToast("Could not submit quote. Please try again.", "error");
+    });
+}
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
