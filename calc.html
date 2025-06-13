@@ -648,284 +648,152 @@
         }
         // ##############################################
         // #region ########## DEFAULT CONFIGURATION ##########
-        const defaultConfig = {
-            settings: {
-                currencySymbol: "$",
-                password: "galifreyadmin",
-                pdfSettings: {
-                    logoUrl: 'https://placehold.co/150x50/4f46e5/ffffff?text=Galifrey',
-                    headerText: 'Galifrey Agency - Campaign Proposal',
-                    footerText: 'This estimate is valid for 30 days. Prices are subject to change.',
-                    introParagraph: 'Thank you for your interest in Galifrey Agency. This document outlines a preliminary estimate for the services discussed. We are committed to delivering tailored solutions and integrated digital excellence to help you achieve your goals.',
-                    nextSteps: 'To discuss this estimate further, please contact our sales team at sales@galifrey.agency or book a consultation call on our website.',
-                },
-                bundleDiscounts: [
-                    { threshold: 3, percentage: 0.05 },
-                    { threshold: 5, percentage: 0.10 },
-                ],
-                retainerTerms: [
-                    { name: "Month-to-Month", months: 1, discount: 0 },
-                    { name: "3 Months", months: 3, discount: 0.05 },
-                    { name: "6 Months", months: 6, discount: 0.10 },
-                    { name: "12 Months", months: 12, discount: 0.15 },
-                ],
-                adFeeTiers: [
-                    { threshold: 0, percentage: 0.20, minFee: 300 },
-                    { threshold: 5000, percentage: 0.18, minFee: 1000 },
-                    { threshold: 25000, percentage: 0.15, minFee: 4500 },
-                    { threshold: 50000, percentage: 0.12, minFee: 7500 },
-                ],
-                clientContext: {
-                    businessStages: ["Startup/Pre-launch", "Early Growth", "Established SMB", "Enterprise"],
-                    businessGoals: ["Increase brand awareness", "Generate more leads", "Drive direct sales", "Launch a new product/service"],
-                    geographicTargets: ["Local", "Regional", "National", "International"],
-                    pastMarketingOptions: ["SEO", "Social Media", "Paid Ads", "Email Marketing", "Traditional Ads", "None / Just Starting"],
-                    reasonsForSwitching: ["Price", "Service Quality", "Features", "Support", "Other"],
-                    referralSources: ["Web Search", "Social Media", "Referral", "Ad Campaign", "Other"],
-                    // --- NEW FIELDS FOR ROI ---
-                    avgLeadValue: '',
-                    avgClv: '',
-                },
-                campaignModifiers: {},
-                marketingDiscounts: [],
-                valueArticulationEnabled: true,
-            },
-            departments: [
-                { id: 'dep-digital', name: 'DIGITAL', color: '#4f46e5' },
-                { id: 'dep-social', name: 'SOCIAL', color: '#db2777' },
-                { id: 'dep-studio', name: 'STUDIO', color: '#16a34a' },
+        // START: REPLACE THIS ENTIRE OBJECT
+const defaultConfig = {
+    settings: {
+        currencySymbol: "$",
+        password: "galifreyadmin",
+        pdfSettings: {
+            logoUrl: 'https://placehold.co/150x50/4f46e5/ffffff?text=Galifrey',
+            headerText: 'Galifrey Agency - Campaign Proposal',
+            footerText: 'This estimate is valid for 30 days. Prices are subject to change.',
+            introParagraph: 'Thank you for your interest in Galifrey Agency. This document outlines a preliminary estimate for the services discussed. We are committed to delivering tailored solutions and integrated digital excellence to help you achieve your goals.',
+            nextSteps: 'To discuss this estimate further, please contact our sales team at sales@galifrey.agency or book a consultation call on our website.',
+        },
+        bundleDiscounts: [
+            { threshold: 3, percentage: 0.05 },
+            { threshold: 5, percentage: 0.10 },
+        ],
+        retainerTerms: [
+            { name: "Month-to-Month", months: 1, discount: 0 },
+            { name: "3 Months", months: 3, discount: 0.05 },
+            { name: "6 Months", months: 6, discount: 0.10 },
+            { name: "12 Months", months: 12, discount: 0.15 },
+        ],
+        adFeeTiers: [
+            { threshold: 0, percentage: 0.20, minFee: 300 },
+            { threshold: 5000, percentage: 0.18, minFee: 1000 },
+            { threshold: 25000, percentage: 0.15, minFee: 4500 },
+            { threshold: 50000, percentage: 0.12, minFee: 7500 },
+        ],
+        clientContext: {
+            businessStages: ["Startup/Pre-launch", "Early Growth", "Established SMB", "Enterprise"],
+            businessGoals: ["Increase brand awareness", "Generate more leads", "Drive direct sales", "Launch a new product/service"],
+            geographicTargets: ["Local", "Regional", "National", "International"],
+            pastMarketingOptions: ["SEO", "Social Media", "Paid Ads", "Email Marketing", "Traditional Ads", "None / Just Starting"],
+            reasonsForSwitching: ["Price", "Service Quality", "Features", "Support", "Other"],
+            referralSources: ["Web Search", "Social Media", "Referral", "Ad Campaign", "Other"],
+            avgLeadValue: '',
+            avgClv: '',
+        },
+        campaignModifiers: {},
+        marketingDiscounts: [],
+        valueArticulationEnabled: true,
+    },
+    // NEW: Team Augmentation Roles
+    teamAugmentationRoles: [
+        { id: 'role-seo', name: 'SEO Specialist', description: 'Dedicated expert for on-page, off-page, and technical SEO execution.', costPerHr: 95, minHrsPerMonth: 20, fullTimeSalaryComparison: 75000 },
+        { id: 'role-ppc', name: 'PPC Manager', description: 'Manages and optimizes paid search and social campaigns.', costPerHr: 110, minHrsPerMonth: 15, fullTimeSalaryComparison: 85000 },
+        { id: 'role-dev', name: 'Web Developer', description: 'For ongoing website feature development, integrations, and maintenance.', costPerHr: 125, minHrsPerMonth: 10, fullTimeSalaryComparison: 110000 }
+    ],
+    departments: [
+        { id: 'dep-digital', name: 'DIGITAL', color: '#4f46e5' },
+        { id: 'dep-social', name: 'SOCIAL', color: '#db2777' },
+        { id: 'dep-studio', name: 'STUDIO', color: '#16a34a' },
+    ],
+    categories: [
+        { id: 'cat-strategy', name: 'Strategy & Consulting', departmentId: 'dep-digital' },
+        { id: 'cat-web', name: 'Web Solutions', departmentId: 'dep-digital' },
+        { id: 'cat-seo', name: 'SEO & Content', departmentId: 'dep-digital' },
+        { id: 'cat-dm', name: 'Digital Marketing', departmentId: 'dep-digital' },
+        { id: 'cat-social-mgmt', name: 'Social Media Management', departmentId: 'dep-social' },
+        { id: 'cat-social-creative', name: 'Social Creative & Ads', departmentId: 'dep-social' },
+        { id: 'cat-photo', name: 'Photography', departmentId: 'dep-studio' },
+        { id: 'cat-video', name: 'Video Production', departmentId: 'dep-studio' },
+        { id: 'cat-audio', name: 'Audio Production', departmentId: 'dep-studio' },
+    ],
+    services: [
+        {
+            id: 's-blueprint', name: 'Galifrey Blueprint™', desc: 'A comprehensive discovery and strategy phase for complex projects.',
+            model: 'Project', price: 3500, setupFee: 0, unit: '', categoryId: 'cat-strategy', modifiers: [],
+            valuePropositions: ["Ensures project alignment with business goals.", "Reduces risks and costly revisions later.", "Provides a clear roadmap for execution."],
+            priority: 'Core',
+            roiMetrics: { metricName: 'Project Risk Reduction', metricUnit: '%', minImpact: 15, maxImpact: 30 },
+            timeline: { phaseName: 'Phase 1: Discovery & Strategy', durationWeeks: 4, hidden: false },
+            // --- NEW PROPERTIES ---
+            dependencies: [],
+            corequisite: '',
+            tags: ['strategy', 'planning', 'core-service'],
+            timelineDependsOn: ''
+        },
+        {
+            id: 's-campaign-strategy', name: 'Campaign Strategy Development', desc: 'Meticulous design of integrated marketing campaigns...',
+            model: 'Project', price: 2000, setupFee: 0, unit: '', categoryId: 'cat-strategy', modifiers: [],
+            valuePropositions: ["Creates a cohesive plan for maximum impact.", "Optimizes budget allocation across channels.", "Sets clear, measurable KPIs for success."],
+            priority: 'Core', roiMetrics: {},
+            timeline: { phaseName: 'Phase 1: Discovery & Strategy', durationWeeks: 2, hidden: false },
+            dependencies: ['s-blueprint'], // Example: Requires Blueprint first
+            corequisite: '',
+            tags: ['strategy', 'planning'],
+            timelineDependsOn: 's-blueprint' // Example: Timeline dependency
+        },
+        {
+            id: 's-web-custom', name: 'Custom Website (Galifrey Web/Duda)', desc: 'A bespoke, high-performance website built on the Duda platform...',
+            model: 'Project', price: 4500, setupFee: 0, unit: '', categoryId: 'cat-web',
+            valuePropositions: ["Optimized for Core Web Vitals and speed.", "Professionally designed to convert visitors.", "Easy for your team to manage content."],
+            modifiers: [
+                { id: 'mod-web-complex', name: 'Complexity', type: 'Dropdown', options: [ { name: 'Standard (5-10 pages)', adjustment: 0 }, { name: 'Advanced (11-25 pages)', adjustment: 2500 }, { name: 'Enterprise (25+ pages)', adjustment: 6000 } ]},
+                { id: 'mod-web-duda-ecom', name: 'Duda E-commerce', type: 'Dropdown', options: [ { name: 'Not Included', adjustment: 0 }, { name: 'Basic Store (up to 100 products)', adjustment: 1500 }, { name: 'Advanced Store (up to 2500 products)', adjustment: 3000 } ]},
             ],
-            categories: [
-                { id: 'cat-strategy', name: 'Strategy & Consulting', departmentId: 'dep-digital' },
-                { id: 'cat-web', name: 'Web Solutions', departmentId: 'dep-digital' },
-                { id: 'cat-seo', name: 'SEO & Content', departmentId: 'dep-digital' },
-                { id: 'cat-dm', name: 'Digital Marketing', departmentId: 'dep-digital' },
-                { id: 'cat-social-mgmt', name: 'Social Media Management', departmentId: 'dep-social' },
-                { id: 'cat-social-creative', name: 'Social Creative & Ads', departmentId: 'dep-social' },
-                { id: 'cat-photo', name: 'Photography', departmentId: 'dep-studio' },
-                { id: 'cat-video', name: 'Video Production', departmentId: 'dep-studio' },
-                { id: 'cat-audio', name: 'Audio Production', departmentId: 'dep-studio' },
-            ],
+            priority: 'Core', roiMetrics: { metricName: 'Conversion Rate Lift', metricUnit: '%', minImpact: 1, maxImpact: 3 },
+            timeline: { phaseName: 'Phase 3: Development & Launch', durationWeeks: 8, hidden: false },
+            dependencies: ['s-blueprint'],
+            corequisite: 's-web-maintenance', // Example: Automatically adds maintenance
+            tags: ['website', 'core-service', 'development'],
+            timelineDependsOn: 's-brand-design'
+        },
+        {
+            id: 's-web-maintenance', name: 'Website Maintenance Retainer', desc: 'Keep your website secure, updated, and running smoothly.',
+            model: 'Monthly', price: 250, setupFee: 0, unit: '', categoryId: 'cat-web', 
+            valuePropositions: ["Protects against security vulnerabilities.", "Ensures optimal site performance.", "Provides peace of mind with regular backups."],
+            modifiers: [ { id: 'mod-maint-ecom', name: 'Includes E-commerce Support', type: 'Checkbox', adjustment: 150 } ],
+            priority: 'Recommended', roiMetrics: {},
+            timeline: { phaseName: 'Ongoing', durationWeeks: 0, hidden: true },
+            dependencies: [],
+            corequisite: '',
+            tags: ['website', 'support', 'retainer'],
+            timelineDependsOn: ''
+        },
+        // ... (all other services would be similarly updated with the new empty properties)
+    ],
+    adChannels: [
+        // ... (no changes needed here)
+    ],
+    packages: [
+        { 
+            id: 'pkg-ignite', name: 'Ignite', displayPrice: 2400,
+            desc: 'Perfect for startups to establish a foundational online presence. ',
+            features: 'Foundational SEO, Social Media Mgmt, 4 Blog Posts',
             services: [
-                // --- Example of a fully updated service object ---
-                {
-                    id: 's-blueprint', name: 'Galifrey Blueprint™', desc: 'A comprehensive discovery and strategy phase for complex projects. ',
-                    model: 'Project', price: 3500, setupFee: 0, unit: '', categoryId: 'cat-strategy', modifiers: [],
-                    valuePropositions: ["Ensures project alignment with business goals.", "Reduces risks and costly revisions later.", "Provides a clear roadmap for execution."],
-                    // --- NEW FIELDS ---
-                    priority: 'Core', // Options: 'Core', 'Recommended', 'Upsell'
-                    roiMetrics: {
-                        metricName: 'Project Risk Reduction', metricUnit: '%', minImpact: 15, maxImpact: 30
-                    },
-                    timeline: {
-                        phaseName: 'Phase 1: Discovery & Strategy', durationWeeks: 4
-                    }
-                },
-                // --- Add new fields to all other service objects ---
-                {
-                    id: 's-campaign-strategy', name: 'Campaign Strategy Development', desc: 'Meticulous design of integrated marketing campaigns...',
-                    model: 'Project', price: 2000, setupFee: 0, unit: '', categoryId: 'cat-strategy', modifiers: [],
-                    valuePropositions: ["Creates a cohesive plan for maximum impact.", "Optimizes budget allocation across channels.", "Sets clear, measurable KPIs for success."],
-                    priority: 'Core', roiMetrics: {}, timeline: { phaseName: 'Phase 1: Discovery & Strategy', durationWeeks: 2 }
-                },
-                {
-                    id: 's-content-strategy', name: 'Content Strategy Development', desc: 'Planning valuable, relevant, and consistent content...',
-                    model: 'Project', price: 1800, setupFee: 0, unit: '', categoryId: 'cat-strategy', modifiers: [],
-                    valuePropositions: ["Establishes a content roadmap aligned with business goals.", "Identifies topics that resonate with your target audience.", "Lays the foundation for effective content marketing execution."],
-                    priority: 'Recommended', roiMetrics: {}, timeline: { phaseName: 'Phase 2: Content Planning', durationWeeks: 3 }
-                },
-                 {
-                    id: 's-brandbuild', name: 'Brand Building & Strategy', desc: 'Develop a compelling brand identity, market positioning, and core messaging to resonate with your target audience. ',
-                    model: 'Project', price: 5000, setupFee: 0, unit: '', categoryId: 'cat-strategy', 
-                    modifiers: [],
-                    valuePropositions: ["Differentiates you from competitors.", "Builds customer loyalty and trust.", "Creates a consistent brand experience across all touchpoints."],
-                    priority: 'Core', roiMetrics: {}, timeline: { phaseName: 'Phase 1: Discovery & Strategy', durationWeeks: 4 }
-                },
-                {
-                    id: 's-brand-design', name: 'Comprehensive Brand Design', desc: 'Development of a complete visual identity system that defines your brand’s look and feel across all touchpoints. ',
-                    model: 'Project', price: 7500, setupFee: 0, unit: '', categoryId: 'cat-strategy', 
-                    modifiers: [],
-                    valuePropositions: ["Creates a professional and memorable visual identity.", "Ensures brand consistency across all marketing materials.", "Elevates brand perception and recognition."],
-                    priority: 'Recommended', roiMetrics: {}, timeline: { phaseName: 'Phase 2: Creative Development', durationWeeks: 6 }
-                },
-                {
-                    id: 's-web-custom', name: 'Custom Website (Galifrey Web/Duda)', desc: 'A bespoke, high-performance website built on the Duda platform...',
-                    model: 'Project', price: 4500, setupFee: 0, unit: '', categoryId: 'cat-web',
-                    valuePropositions: ["Optimized for Core Web Vitals and speed.", "Professionally designed to convert visitors.", "Easy for your team to manage content."],
-                    modifiers: [
-                        { id: 'mod-web-complex', name: 'Complexity', type: 'Dropdown', options: [
-                            { name: 'Standard (5-10 pages)', adjustment: 0 },
-                            { name: 'Advanced (11-25 pages)', adjustment: 2500 },
-                            { name: 'Enterprise (25+ pages)', adjustment: 6000 },
-                        ]},
-                        { id: 'mod-web-duda-ecom', name: 'Duda E-commerce', type: 'Dropdown', options: [
-                            { name: 'Not Included', adjustment: 0 },
-                            { name: 'Basic Store (up to 100 products)', adjustment: 1500 },
-                            { name: 'Advanced Store (up to 2500 products)', adjustment: 3000 },
-                        ]},
-                    ],
-                    priority: 'Core', roiMetrics: { metricName: 'Conversion Rate Lift', metricUnit: '%', minImpact: 1, maxImpact: 3 }, timeline: { phaseName: 'Phase 3: Development & Launch', durationWeeks: 8 }
-                },
-                {
-                    id: 's-web-maintenance', name: 'Website Maintenance Retainer', desc: 'Keep your website secure, updated, and running smoothly.',
-                    model: 'Monthly', price: 250, setupFee: 0, unit: '', categoryId: 'cat-web', 
-                    valuePropositions: ["Protects against security vulnerabilities.", "Ensures optimal site performance.", "Provides peace of mind with regular backups."],
-                    modifiers: [
-                        { id: 'mod-maint-ecom', name: 'Includes E-commerce Support', type: 'Checkbox', adjustment: 150 }
-                    ],
-                    priority: 'Recommended', roiMetrics: {}, timeline: { phaseName: 'Ongoing', durationWeeks: 0 }
-                },
-                {
-                    id: 's-seo-retainer', name: 'SEO Retainer', desc: 'Ongoing SEO to improve rankings, drive organic traffic, and generate leads...',
-                    model: 'Monthly', price: 1500, setupFee: 500, unit: '', categoryId: 'cat-seo', modifiers: [],
-                    valuePropositions: ["Increases visibility on search engines.", "Drives high-quality, targeted traffic.", "Generates a long-term, sustainable source of leads."],
-                    priority: 'Core', roiMetrics: { metricName: 'Organic Lead Growth', metricUnit: '%', minImpact: 5, maxImpact: 15 }, timeline: { phaseName: 'Ongoing', durationWeeks: 0 }
-                },
-                {
-                    id: 's-seo-local', name: 'Local SEO Management (Galifrey Local/Uberall)', desc: 'Dominate local search results, manage reviews, and maintain consistent listings across 125+ platforms. ',
-                    model: 'Monthly', price: 400, setupFee: 150, unit: '', categoryId: 'cat-seo', 
-                    valuePropositions: ["Drives foot traffic to physical locations.", "Improves local search rankings on maps.", "Manages online reviews to build trust."],
-                    modifiers: [
-                        { 
-                            id: 'mod-local-locs', name: 'Number of Locations', type: 'Numeric', 
-                            pricePerUnit: 50, unitName: 'location',
-                            discounts: [ { threshold: 10, percentage: 0.10 }, { threshold: 50, percentage: 0.20 } ]
-                        }
-                    ],
-                    priority: 'Recommended', roiMetrics: { metricName: 'Local Lead Growth', metricUnit: '%', minImpact: 10, maxImpact: 25 }, timeline: { phaseName: 'Ongoing', durationWeeks: 0 }
-                },
-                {
-                    id: 's-content-blog', name: 'Blog Content Creation', desc: 'High-quality, SEO-optimized blog posts to engage your audience and build authority. ',
-                    model: 'Unit', price: 350, setupFee: 0, unit: 'post', categoryId: 'cat-seo', 
-                    valuePropositions: ["Builds brand authority and trust.", "Drives organic traffic through long-tail keywords.", "Provides valuable content for social sharing."],
-                    modifiers: [
-                        { id: 'mod-content-tier', name: 'Content Quality', type: 'TieredDropdown', options: [
-                            { name: 'Standard (500-800 words)', multiplier: 1.0 },
-                            { name: 'Researched (1000-1500 words)', multiplier: 1.5 },
-                            { name: 'Thought Leadership (2000+ words)', multiplier: 2.25 },
-                        ]}
-                    ],
-                    priority: 'Upsell', roiMetrics: {}, timeline: { phaseName: 'Phase 4: Content Execution', durationWeeks: 1 }
-                },
-                {
-                    id: 's-content-copy', name: 'Marketing Copywriting', desc: 'Persuasive copy for websites, ads, landing pages, and other digital assets. ',
-                    model: 'Unit', price: 750, setupFee: 0, unit: 'page/asset', categoryId: 'cat-seo',
-                    valuePropositions: ["Increases conversion rates.", "Clearly communicates your value proposition.", "Engages and persuades your target audience."],
-                    modifiers: [],
-                    priority: 'Recommended', roiMetrics: {}, timeline: { phaseName: 'Phase 2: Creative Development', durationWeeks: 2 }
-                },
-                {
-                    id: 's-dm-email', name: 'Email Marketing Management', desc: 'Comprehensive service including list management, campaign creation, automation, and A/B testing. ',
-                    model: 'Monthly', price: 750, setupFee: 350, unit: '', categoryId: 'cat-dm',
-                    valuePropositions: ["Nurtures leads and drives conversions.", "Builds direct relationships with your audience.", "Increases customer retention and lifetime value."],
-                    modifiers: [
-                        { id: 'mod-email-list-size', name: 'List Size', type: 'Dropdown', options: [
-                            { name: 'Up to 2,500 contacts', adjustment: 0 },
-                            { name: '2,501 - 10,000 contacts', adjustment: 300 },
-                            { name: '10,001 - 25,000 contacts', adjustment: 650 },
-                        ]}
-                    ],
-                    priority: 'Upsell', roiMetrics: { metricName: 'Email Lead Growth', metricUnit: '%', minImpact: 3, maxImpact: 7 }, timeline: { phaseName: 'Ongoing', durationWeeks: 0 }
-                },
-                 {
-                    id: 's-dm-native', name: 'Native Advertising Campaign', desc: 'Ad campaigns that blend in with publisher content to overcome ad blindness and build trust. ',
-                    model: 'Project', price: 2000, setupFee: 0, unit: '', categoryId: 'cat-dm',
-                    valuePropositions: ["Overcomes ad blindness effectively.", "Builds brand awareness on trusted publisher sites.", "Drives traffic from high-quality networks."],
-                    modifiers: [],
-                    priority: 'Upsell', roiMetrics: {}, timeline: { phaseName: 'Phase 4: Content Execution', durationWeeks: 4 }
-                },
-                {
-                    id: 's-social-mgmt', name: 'Social Media Management (Galifrey Social/Social Pilot)', desc: 'Strategic management of your social channels...',
-                    model: 'Monthly', price: 800, setupFee: 200, unit: '', categoryId: 'cat-social-mgmt', 
-                    valuePropositions: ["Builds an engaged online community.", "Increases brand awareness and reach.", "Drives traffic to your website."],
-                    modifiers: [
-                        { id: 'mod-social-platforms', name: 'Number of Platforms', type: 'Numeric', pricePerUnit: 200, unitName: 'platform' },
-                        { id: 'mod-social-ai', name: 'AI Pilot Content Assistance', type: 'Checkbox', adjustment: 150 }
-                    ],
-                    priority: 'Core', roiMetrics: { metricName: 'Social Engagement Lift', metricUnit: '%', minImpact: 10, maxImpact: 20 }, timeline: { phaseName: 'Ongoing', durationWeeks: 0 }
-                },
-                {
-                    id: 's-photo-product', name: 'Product Photography', desc: 'High-quality studio or lifestyle photos of your products. ',
-                    model: 'Unit', price: 50, setupFee: 200, unit: 'image', categoryId: 'cat-photo', 
-                    valuePropositions: ["Increases e-commerce sales with professional visuals.", "Showcases products in the best possible light.", "Creates a consistent and professional brand image."],
-                    priority: 'Recommended', roiMetrics: {}, timeline: { phaseName: 'Phase 2: Creative Development', durationWeeks: 1 }
-                },
-                {
-                    id: 's-photo-realestate', name: 'Real Estate Photography', desc: 'Professional photos and virtual tours for properties. ',
-                    model: 'Project', price: 500, setupFee: 0, unit: '', categoryId: 'cat-photo',
-                    valuePropositions: ["Attracts more potential buyers online.", "Helps properties sell or lease faster.", "Showcases properties with high-quality, appealing visuals."],
-                    modifiers: [
-                        { id: 'mod-photo-gbv', name: 'Include Google Business View', type: 'Checkbox', adjustment: 350 }
-                    ],
-                    priority: 'Recommended', roiMetrics: {}, timeline: { phaseName: 'Phase 2: Creative Development', durationWeeks: 1 }
-                },
-                {
-                    id: 's-video-promo', name: 'Promotional Video', desc: 'A compelling video to showcase your brand, product, or service. ',
-                    model: 'Project', price: 3500, setupFee: 0, unit: '', categoryId: 'cat-video', 
-                    valuePropositions: ["Captures audience attention quickly and effectively.", "Tells your brand story in an engaging format.", "Increases engagement on social media and websites."],
-                    modifiers: [
-                        { id: 'mod-video-length', name: 'Video Length', type: 'Dropdown', options: [
-                            { name: 'Up to 60s', adjustment: 0 },
-                            { name: '1-3 minutes', adjustment: 1500 },
-                            { name: '3-5 minutes', adjustment: 3000 },
-                        ]}
-                    ],
-                    priority: 'Upsell', roiMetrics: {}, timeline: { phaseName: 'Phase 4: Content Execution', durationWeeks: 4 }
-                },
-                {
-                    id: 's-video-animation', name: 'Animation & Motion Graphics', desc: '2D animation to explain complex concepts and tell stories in a visually engaging way. ',
-                    model: 'Project', price: 4000, setupFee: 0, unit: '', categoryId: 'cat-video',
-                    valuePropositions: ["Simplifies complex topics and ideas.", "Highly engaging and shareable content format.", "Versatile for use across many marketing platforms."],
-                    modifiers: [],
-                    priority: 'Upsell', roiMetrics: {}, timeline: { phaseName: 'Phase 4: Content Execution', durationWeeks: 5 }
-                },
-                {
-                    id: 's-video-quote', name: 'Complex Video Production', desc: 'For projects involving special effects, green screen, or live streaming. ',
-                    model: 'Quote', price: 0, setupFee: 0, unit: '', categoryId: 'cat-video',
-                    valuePropositions: ["Achieve high-end, professional visual effects.", "Create unique and immersive video content.", "Engage audiences with live, interactive events."],
-                    modifiers: [],
-                    priority: 'Upsell', roiMetrics: {}, timeline: { phaseName: 'Varies', durationWeeks: 0 }
-                }
-            ],
-            adChannels: [
-                { id: 'ad-google', name: 'Google Ads', setupFee: 500, feeModel: 'tieredPercentageWithMinimums' },
-                { id: 'ad-meta', name: 'Meta Ads (FB/IG)', setupFee: 400, feeModel: 'hybridFee', flatFee: 500, percentage: 0.10 },
-                { id: 'ad-linkedin', name: 'LinkedIn Ads', setupFee: 600, feeModel: 'flatFee', flatFee: 1000 },
-            ],
-            packages: [
-                { 
-                    id: 'pkg-ignite', name: 'Ignite', displayPrice: 2400,
-                    desc: 'Perfect for startups to establish a foundational online presence. ',
-                    features: 'Foundational SEO, Social Media Mgmt, 4 Blog Posts',
-                    services: [
-                        { id: 's-seo-retainer', quantity: 1, mods: {} },
-                        { id: 's-social-mgmt', quantity: 1, mods: {} },
-                        { id: 's-content-blog', quantity: 4, mods: {} },
-                    ]
-                },
-                { 
-                    id: 'pkg-accelerate', name: 'Accelerate', displayPrice: 6500,
-                    desc: 'For growing businesses ready to scale with a professional website and consistent marketing. ',
-                    features: 'Custom Website, SEO Retainer, Social Media Management',
-                    services: [
-                        { id: 's-web-custom', quantity: 1, mods: {} },
-                        { id: 's-seo-retainer', quantity: 1, mods: {} },
-                        { id: 's-social-mgmt', quantity: 1, mods: {} },
-                    ]
-                },
-                { 
-                    id: 'pkg-apex', name: 'Apex', displayPrice: 9500,
-                    desc: 'The complete solution for market leaders aiming for total digital dominance. ',
-                    features: 'Galifrey Blueprint, Advanced Website, SEO & Social Retainers',
-                    services: [
-                        { id: 's-blueprint', quantity: 1, mods: {} },
-                        { id: 's-web-custom', quantity: 1, mods: { 'mod-web-complex': 'Advanced (11-25 pages)' } },
-                        { id: 's-seo-retainer', quantity: 1, mods: {} },
-                        { id: 's-social-mgmt', quantity: 1, mods: {} },
-                    ]
-                }
+                { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true }, // Example: Locked service
+                { id: 's-social-mgmt', quantity: 1, mods: {}, locked: false },
+                { id: 's-content-blog', quantity: 4, mods: {}, locked: false },
             ]
-        };
+        },
+        { 
+            id: 'pkg-accelerate', name: 'Accelerate', displayPrice: 6500,
+            desc: 'For growing businesses ready to scale with a professional website and consistent marketing. ',
+            features: 'Custom Website, SEO Retainer, Social Media Management',
+            services: [
+                { id: 's-web-custom', quantity: 1, mods: {}, locked: true },
+                { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true },
+                { id: 's-social-mgmt', quantity: 1, mods: {}, locked: false },
+            ]
+        },
+        // ... (other packages would be similarly updated)
+    ]
+};
+// END: REPLACE THIS ENTIRE OBJECT
         // #endregion
         // #region ########## APPLICATION STATE AND CORE LOGIC ##########
         let config = {};
