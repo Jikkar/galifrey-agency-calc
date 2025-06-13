@@ -4144,130 +4144,97 @@ function calculateTotals(currentSelections) {
             return growthSelections;
         }
         function generateAlternativeProposals() {
-            const container = document.getElementById('alternatives-content');
-            container.innerHTML = '<p class="text-center col-span-3">Generating proposals...</p>';
-            document.getElementById('alternatives-modal-overlay').style.display = 'flex';
-            const originalSelections = JSON.parse(JSON.stringify(selections));
-            const { totals: originalTotals } = calculateTotals(originalSelections);
-            const originalInvestment = originalTotals.oneTime + originalTotals.monthly + originalTotals.adSpend;
-            if (originalInvestment === 0) {
-                container.innerHTML = '<p class="text-center text-gray-500 col-span-3 py-8">Please select some services before generating alternatives.</p>';
-                return;
+    const container = document.getElementById('alternatives-content');
+    container.innerHTML = '<p class="text-center col-span-3">Generating proposals...</p>';
+    document.getElementById('alternatives-modal-overlay').style.display = 'flex';
+
+    // Create a pristine, deep copy of the current selections to work from.
+    const originalSelections = JSON.parse(JSON.stringify(selections));
+    const { totals: originalTotals } = calculateTotals(originalSelections);
+    const originalInvestment = originalTotals.oneTime + originalTotals.monthly + originalTotals.adSpend;
+
+    if (originalInvestment === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 col-span-3 py-8">Please select some services before generating alternatives.</p>';
+        return;
+    }
+
+    // --- PROPOSAL 1: BUDGET FOCUS (-30%) ---
+    const budgetSelections = createBudgetProposal(originalSelections);
+    
+    // --- PROPOSAL 2: YOUR CURRENT SELECTION ---
+    // This is just the untouched original copy.
+
+    // --- PROPOSAL 3: GROWTH ACCELERATOR (+30%) ---
+    const growthSelections = createGrowthProposal(originalSelections);
+
+    const proposals = [
+        { name: "Budget Focus", desc: "A streamlined version of your selection focusing on core essentials.", selections: budgetSelections, type: 'budget' },
+        { name: "Your Current Selection", desc: "The custom campaign you built.", selections: originalSelections, type: 'current', isCurrent: true },
+        { name: "Growth Accelerator", desc: "An enhanced version with additional strategic services to maximize impact.", selections: growthSelections, type: 'growth' }
+    ];
+
+    let html = '';
+    proposals.forEach(p => {
+        const { totals, breakdown } = calculateTotals(p.selections);
+        const totalInvestment = totals.oneTime + totals.monthly + totals.adSpend;
+        const hasSelections = breakdown.items.length > 0;
+        
+        let diffHtml = '';
+        if (!p.isCurrent && originalInvestment > 0) {
+            const diffPercent = ((totalInvestment - originalInvestment) / originalInvestment) * 100;
+            if (Math.abs(diffPercent) > 1) {
+                    diffHtml = `<span class="text-xs font-bold ${diffPercent > 0 ? 'text-green-600' : 'text-red-600'}">(${diffPercent > 0 ? '+' : ''}${diffPercent.toFixed(0)}%)</span>`;
             }
-            // --- PROPOSAL 1: BUDGET FOCUS (-30%) ---
-            const budgetSelections = JSON.parse(JSON.stringify(originalSelections));
-            const budgetTargetCost = originalInvestment * 0.70;
-            if (originalInvestment > budgetTargetCost) {
-                const servicesToRemove = budgetSelections.phases.flatMap(phase => 
-                    Object.keys(phase.services).map(id => ({ service: findService(id), phaseId: phase.id }))
-                ).filter(item => item.service).sort((a, b) => {
-                    const priorityOrder = { 'Upsell': 0, 'Recommended': 1, 'Core': 2 };
-                    const priorityA = priorityOrder[a.service.priority] || 3;
-                    const priorityB = priorityOrder[b.service.priority] || 3;
-                    if (priorityA !== priorityB) return priorityA - priorityB;
-                    const costA = (a.service.price || 0) + (a.service.setupFee || 0);
-                    const costB = (b.service.price || 0) + (b.service.setupFee || 0);
-                    return costB - costA;
-                });
-                for (const item of servicesToRemove) {
-                    const currentTotals = calculateTotals(budgetSelections).totals;
-                    const currentInvestment = currentTotals.oneTime + currentTotals.monthly + currentTotals.adSpend;
-                    if (currentInvestment <= budgetTargetCost) break;
-                    const phase = budgetSelections.phases.find(p => p.id === item.phaseId);
-                    if (phase && phase.services[item.service.id]) {
-                        delete phase.services[item.service.id];
-                    }
-                }
-            }
-            // --- PROPOSAL 3: GROWTH ACCELERATOR (+30%) ---
-            const growthSelections = JSON.parse(JSON.stringify(originalSelections));
-            const growthTargetCost = originalInvestment * 1.30;
-            const currentServiceIds = new Set(originalSelections.phases.flatMap(p => Object.keys(p.services)));
-            const potentialAdditions = config.services
-                .filter(s => !currentServiceIds.has(s.id) && s.model !== 'Quote')
-                .sort((a, b) => {
-                    const priorityOrder = { 'Recommended': 0, 'Upsell': 1, 'Core': 2 };
-                    const priorityA = priorityOrder[a.priority] || 3;
-                    const priorityB = priorityOrder[b.priority] || 3;
-                    if (priorityA !== priorityB) return priorityA - priorityB;
-                    const costA = (a.price || 0) + (a.setupFee || 0);
-                    const costB = (b.price || 0) + (b.setupFee || 0);
-                    return costA - costB;
-                });
-            for (const serviceToAdd of potentialAdditions) {
-                const currentTotals = calculateTotals(growthSelections).totals;
-                const currentInvestment = currentTotals.oneTime + currentTotals.monthly + currentTotals.adSpend;
-                if (currentInvestment >= growthTargetCost) break;
-                const phaseToAdd = growthSelections.phases.find(p => p.id === selections.activePhaseId) || growthSelections.phases[0];
-                if (phaseToAdd) {
-                     phaseToAdd.services[serviceToAdd.id] = {
-                        quantity: 1,
-                        mods: createDefaultModsForService(serviceToAdd),
-                        termMonths: config.settings.retainerTerms[0]?.months || 1,
-                        timeline: { 
-                            enabled: !!(serviceToAdd.timeline && serviceToAdd.timeline.durationWeeks > 0), 
-                            order: 0, 
-                            duration: serviceToAdd.timeline?.durationWeeks || 0 
-                        }
-                    };
-                }
-            }
-            const proposals = [
-                { name: "Budget Focus", desc: "A streamlined version of your selection focusing on core essentials.", selections: budgetSelections, type: 'budget' },
-                { name: "Your Current Selection", desc: "The custom campaign you built.", selections: originalSelections, type: 'current', isCurrent: true },
-                { name: "Growth Accelerator", desc: "An enhanced version with additional strategic services to maximize impact.", selections: growthSelections, type: 'growth' }
-            ];
-            let html = '';
-            proposals.forEach(p => {
-                const { totals, breakdown } = calculateTotals(p.selections);
-                const totalInvestment = totals.oneTime + totals.monthly + totals.adSpend;
-                const hasSelections = breakdown.items.length > 0;
-                let diffHtml = '';
-                if (!p.isCurrent && originalInvestment > 0) {
-                    const diffPercent = ((totalInvestment - originalInvestment) / originalInvestment) * 100;
-                    if (Math.abs(diffPercent) > 1) {
-                         diffHtml = `<span class="text-xs font-bold ${diffPercent > 0 ? 'text-green-600' : 'text-red-600'}">(${diffPercent > 0 ? '+' : ''}${diffPercent.toFixed(0)}%)</span>`;
-                    }
-                }
-                html += `
-                    <div class="p-6 border rounded-xl flex flex-col ${p.isCurrent ? 'border-indigo-500 ring-4 ring-indigo-200' : 'bg-gray-50'}">
-                        <h4 class="text-xl font-bold">${p.name}</h4>
-                        <p class="text-sm text-gray-500 flex-grow min-h-[40px]">${p.desc}</p>
-                        <div class="my-6">
-                            <p class="text-sm text-gray-600">Total Investment ${diffHtml}</p>
-                            <p class="text-3xl font-bold text-indigo-600">${formatCurrency(totalInvestment)}</p>
-                            <p class="text-xs text-gray-500 mt-1">(${formatCurrency(totals.oneTime)} one-time + ${formatCurrency(totals.monthly + totals.adSpend)}/mo)</p>
-                        </div>
-                        <h5 class="font-semibold mb-2 text-sm">Included Services:</h5>
-                        <ul class="text-xs space-y-1 list-disc list-inside mb-6 flex-grow">
-                           ${hasSelections ? breakdown.items.map(i => `<li>${i.name}</li>`).join('') : '<li class="list-none text-gray-400">No services in this proposal.</li>'}
-                        </ul>
-                        <button class="mt-auto w-full font-bold py-2 px-4 rounded-lg transition-colors ${p.isCurrent ? 'bg-indigo-600 text-white' : 'bg-white hover:bg-indigo-100 border'}"
-                                data-action="select-proposal" data-proposal-type="${p.type}" ${!hasSelections && !p.isCurrent ? 'disabled class="bg-gray-200 text-gray-400 cursor-not-allowed"' : ''}>
-                            ${p.isCurrent ? "Keep This Selection" : "Switch to This Proposal"}
-                        </button>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
-            window.tempProposals = {
-                budget: proposals[0].selections,
-                current: proposals[1].selections,
-                growth: proposals[2].selections
-            };
         }
+
+        html += `
+            <div class="p-6 border rounded-xl flex flex-col ${p.isCurrent ? 'border-indigo-500 ring-4 ring-indigo-200' : 'bg-gray-50'}">
+                <h4 class="text-xl font-bold">${p.name}</h4>
+                <p class="text-sm text-gray-500 flex-grow min-h-[40px]">${p.desc}</p>
+                <div class="my-6">
+                    <p class="text-sm text-gray-600">Total Investment ${diffHtml}</p>
+                    <p class="text-3xl font-bold text-indigo-600">${formatCurrency(totalInvestment)}</p>
+                    <p class="text-xs text-gray-500 mt-1">(${formatCurrency(totals.oneTime)} one-time + ${formatCurrency(totals.monthly + totals.adSpend)}/mo)</p>
+                </div>
+                <h5 class="font-semibold mb-2 text-sm">Included Services:</h5>
+                <ul class="text-xs space-y-1 list-disc list-inside mb-6 flex-grow">
+                    ${hasSelections ? breakdown.items.map(i => `<li>${i.name}</li>`).join('') : '<li class="list-none text-gray-400">No services in this proposal.</li>'}
+                </ul>
+                <button class="mt-auto w-full font-bold py-2 px-4 rounded-lg transition-colors ${p.isCurrent ? 'bg-indigo-600 text-white' : 'bg-white hover:bg-indigo-100 border'}"
+                        data-action="select-proposal" data-proposal-type="${p.type}" ${!hasSelections && !p.isCurrent ? 'disabled class="bg-gray-200 text-gray-400 cursor-not-allowed"' : ''}>
+                    ${p.isCurrent ? "Keep This Selection" : "Switch to This Proposal"}
+                </button>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+    
+    // Store the fully generated proposal objects in a temporary global variable for easy access.
+    window.tempProposals = {
+        budget: proposals[0].selections,
+        current: proposals[1].selections,
+        growth: proposals[2].selections
+    };
+}
         function selectProposal(proposalType) {
-            if (window.tempProposals && window.tempProposals[proposalType]) {
-                // Deep copy the selected proposal back into the main state
-                selections = JSON.parse(JSON.stringify(window.tempProposals[proposalType]));
-                document.getElementById('alternatives-modal-overlay').style.display = 'none';
-                window.tempProposals = null;
-                showToast("Proposal updated!", "success");
-                renderAll(); // Re-render everything with the new selections
-            } else {
-                showToast("Could not switch proposal. Please try again.", "error");
-            }
-        }
+    if (window.tempProposals && window.tempProposals[proposalType]) {
+        // This is the key fix: Perform a deep copy to ensure the global 'selections' object
+        // is completely replaced with the data from the chosen proposal, breaking any old references.
+        selections = JSON.parse(JSON.stringify(window.tempProposals[proposalType]));
+        
+        // Clean up and update UI
+        document.getElementById('alternatives-modal-overlay').style.display = 'none';
+        window.tempProposals = null;
+        showToast("Proposal updated!", "success");
+        
+        // This function now correctly renders the newly selected state.
+        renderAll(); 
+    } else {
+        showToast("Could not switch proposal. Please try again.", "error");
+        console.error("Attempted to select a proposal that was not found in window.tempProposals", proposalType);
+    }
+}
         // START: ADD THIS NEW FUNCTION
         function renderCompareModal() {
             const overlay = document.getElementById('compare-modal-overlay');
