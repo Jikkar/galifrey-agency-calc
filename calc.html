@@ -1091,19 +1091,18 @@ function handleDynamicClicks(e) {
     const target = e.target.closest('[data-action]');
     if (!target) return;
 
-    // This check prevents the document-level listener from interfering with
-    // the more specific listener we're adding to the proposals modal.
-    if (target.closest('#alternatives-content')) {
-        return;
-    }
-
     const action = target.dataset.action;
     const id = target.dataset.id;
     
-    // For debugging: log the action to the console to confirm it's being captured.
-    // console.log(`Action triggered: ${action}`, target);
-
+    // The switch statement handles all clicks except for proposal selection,
+    // which is now handled by a dedicated listener for reliability.
     switch (action) {
+        // --- THIS CASE IS NOW HANDLED BY A DEDICATED LISTENER ---
+        case 'select-proposal':
+            // This is intentionally left blank to prevent conflicts.
+            // The dedicated listener in `generateAlternativeProposals` handles this.
+            break;
+            
         // --- Session & Sharing ---
         case 'admin-clear-session': clearSessionData(); break;
         case 'save-session': saveSession(); break;
@@ -1137,8 +1136,6 @@ function handleDynamicClicks(e) {
         case 'close-alternatives-modal': document.getElementById('alternatives-modal-overlay').style.display = 'none'; break;
 
         // --- Core Calculator Actions ---
-        // Note: 'select-proposal' is now intentionally removed from this switch statement.
-        
         case 'select-package': selectPackage(id); break;
         case 'toggle-service': if (e.target.closest('.service-config')) return; toggleService(id); break;
         case 'add-ad-channel-confirm': addAdChannel(); break;
@@ -1150,29 +1147,25 @@ function handleDynamicClicks(e) {
         case 'set-summary-tab': setSummaryTab(target.dataset.tab); break;
 
         // --- Admin & Quote Actions ---
-        case 'admin-delete': handleAdminDelete(target); break;
-        case 'admin-add': handleAdminAdd(target); break;
-        case 'admin-edit': handleAdminEdit(target); break;
-        case 'delete-quote': deleteQuote(id); break;
-        case 'export-quote-pdf': exportQuotePDF(id); break;
-        case 'toggle-quote-details': document.getElementById(`quote-content-${id}`).classList.toggle('open'); break;
-        case 'move-category': moveCategory(id, target.dataset.direction); break;
-        case 'add-campaign-modifier': addCampaignModifier(); break;
-        case 'edit-campaign-modifier': openCampaignModifierModal(id); break;
-        case 'delete-campaign-modifier': deleteCampaignModifier(id); break;
-        case 'close-campaign-modal': document.getElementById('campaign-modifier-modal').style.display = 'none'; break;
-        case 'edit-modifier-options': openModifierOptionsModal(target.dataset.modifierIndex); break;
-        case 'add-service-modifier': addModifierRow(); break;
-        case 'remove-service-modifier': removeModifierRow(target); break;
-        case 'remove-modifier-option': target.closest('.modifier-option-row').remove(); break;
-        case 'add-modifier-discount-tier': addDiscountTierRow(target); break;
-        case 'remove-modifier-discount-tier': target.closest('.discount-tier-row').remove(); break;
-        case 'add-package-service': addPackageServiceRow(); break;
-        case 'remove-package-service': target.closest('.package-service-row').remove(); break;
-        case 'save-version': saveVersion(); break;
-        case 'load-version': loadVersion(target.dataset.key); break;
-        case 'delete-version': deleteVersion(target.dataset.key); break;
-        case 'update-satisfaction-rating': selections.clientContext.satisfaction = parseInt(target.value, 10); break;
+        default:
+            // This handles all the admin actions without listing them all out again.
+            if (action.startsWith('admin-') || action.startsWith('delete-') || action.startsWith('export-') || action.startsWith('toggle-') || action.startsWith('move-') || action.startsWith('add-') || action.startsWith('edit-') || action.startsWith('remove-') || action.startsWith('save-') || action.startsWith('load-') || action.startsWith('update-')) {
+                const adminActions = {
+                    'admin-delete': handleAdminDelete, 'admin-add': handleAdminAdd, 'admin-edit': handleAdminEdit, 'delete-quote': deleteQuote,
+                    'export-quote-pdf': exportQuotePDF, 'toggle-quote-details': (t) => document.getElementById(`quote-content-${t.dataset.id}`).classList.toggle('open'),
+                    'move-category': (t) => moveCategory(t.dataset.id, t.dataset.direction), 'add-campaign-modifier': addCampaignModifier,
+                    'edit-campaign-modifier': (t) => openCampaignModifierModal(t.dataset.id), 'delete-campaign-modifier': (t) => deleteCampaignModifier(t.dataset.id),
+                    'close-campaign-modal': () => document.getElementById('campaign-modifier-modal').style.display = 'none',
+                    'edit-modifier-options': (t) => openModifierOptionsModal(t.dataset.modifierIndex), 'add-service-modifier': addModifierRow,
+                    'remove-service-modifier': removeModifierRow, 'remove-modifier-option': (t) => t.closest('.modifier-option-row').remove(),
+                    'add-modifier-discount-tier': addDiscountTierRow, 'remove-modifier-discount-tier': (t) => t.closest('.discount-tier-row').remove(),
+                    'add-package-service': addPackageServiceRow, 'remove-package-service': (t) => t.closest('.package-service-row').remove(),
+                    'save-version': saveVersion, 'load-version': (t) => loadVersion(t.dataset.key), 'delete-version': (t) => deleteVersion(t.dataset.key),
+                    'update-satisfaction-rating': (t) => selections.clientContext.satisfaction = parseInt(t.value, 10)
+                };
+                if (adminActions[action]) adminActions[action](target);
+            }
+            break;
     }
 }
     
@@ -4089,78 +4082,90 @@ function calculateTotals(currentSelections) {
             });
         }
         function createBudgetProposal(originalSelections) {
-            const budgetSelections = JSON.parse(JSON.stringify(originalSelections));
-            const { totals: originalTotals } = calculateTotals(budgetSelections);
-            const targetCost = (originalTotals.monthly + originalTotals.adSpend) * 0.70;
-            const allSelectedServices = budgetSelections.phases.flatMap(phase => 
-                Object.keys(phase.services).map(id => ({ service: findService(id), selection: phase.services[id], phaseId: phase.id }))
-            ).filter(item => item.service);
-            // Sort services to remove: Upsell -> Recommended -> Core (by highest price first)
-            allSelectedServices.sort((a, b) => {
-                const priorityOrder = { 'Upsell': 0, 'Recommended': 1, 'Core': 2, 'default': 3 };
-                const priorityA = priorityOrder[a.service.priority] ?? priorityOrder['default'];
-                const priorityB = priorityOrder[b.service.priority] ?? priorityOrder['default'];
-                if (priorityA !== priorityB) {
-                    return priorityA - priorityB;
-                }
-                return (b.service.price || 0) - (a.service.price || 0);
-            });
-            for (const item of allSelectedServices) {
-                let currentTotals = calculateTotals(budgetSelections).totals;
-                let currentCost = currentTotals.monthly + currentTotals.adSpend;
-                if (currentCost <= targetCost) break;
-                // Try removing the service if it's not 'Core'
-                if (item.service.priority !== 'Core') {
-                    const phase = budgetSelections.phases.find(p => p.id === item.phaseId);
-                    if (phase && phase.services[item.service.id]) {
-                        delete phase.services[item.service.id];
-                    }
-                }
+    const budgetSelections = JSON.parse(JSON.stringify(originalSelections));
+    budgetSelections.packagesToCompare = new Set(originalSelections.packagesToCompare);
+
+    const { totals: originalTotals } = calculateTotals(budgetSelections);
+    const targetCost = (originalTotals.monthly + originalTotals.adSpend) * 0.75; // Target 75% of monthly
+
+    // Get a list of all removable services with their monthly cost contribution
+    const removableServices = [];
+    budgetSelections.phases.forEach(phase => {
+        for (const serviceId in phase.services) {
+            const service = findService(serviceId);
+            const selection = phase.services[serviceId];
+            if (service && !selection.locked) {
+                // Calculate just the monthly portion of this service's cost
+                const tempCalc = calculateTotals({ ...budgetSelections, phases: [{...phase, services: {[serviceId]: selection}}] });
+                const monthlyCost = tempCalc.totals.monthly;
+                removableServices.push({ serviceId, phaseId: phase.id, monthlyCost });
             }
-            return budgetSelections;
         }
+    });
+
+    // Sort services to remove by the most expensive monthly cost first
+    removableServices.sort((a, b) => b.monthlyCost - a.monthlyCost);
+
+    // Iteratively remove services until the budget target is met
+    for (const item of removableServices) {
+        let currentMonthly = calculateTotals(budgetSelections).totals.monthly;
+        if (currentMonthly <= targetCost || currentMonthly === 0) {
+            break; // Stop if we've hit our target or have nothing left
+        }
+        
+        const phase = budgetSelections.phases.find(p => p.id === item.phaseId);
+        if (phase && phase.services[item.serviceId]) {
+            delete phase.services[item.serviceId];
+        }
+    }
+    return budgetSelections;
+}
         function createGrowthProposal(originalSelections) {
-            const growthSelections = JSON.parse(JSON.stringify(originalSelections));
-            const { totals: originalTotals } = calculateTotals(growthSelections);
-            const targetCost = (originalTotals.monthly + originalTotals.adSpend) * 1.30;
-            const currentServiceIds = new Set(growthSelections.phases.flatMap(p => Object.keys(p.services)));
-            const potentialAdditions = config.services
-                .filter(s => !currentServiceIds.has(s.id) && s.model !== 'Quote')
-                .sort((a, b) => {
-                    const priorityOrder = { 'Recommended': 0, 'Upsell': 1, 'Core': 2, 'default': 3 };
-                    const priorityA = priorityOrder[a.priority] ?? priorityOrder['default'];
-                    const priorityB = priorityOrder[b.priority] ?? priorityOrder['default'];
-                    if (priorityA !== priorityB) {
-                        return priorityA - priorityB;
-                    }
-                    return (a.price || 0) - (b.price || 0); // Add cheapest first
-                });
-            for (const serviceToAdd of potentialAdditions) {
-                let currentTotals = calculateTotals(growthSelections).totals;
-                let currentCost = currentTotals.monthly + currentTotals.adSpend;
-                if (currentCost >= targetCost) break;
-                const phaseToAdd = growthSelections.phases.find(p => p.id === selections.activePhaseId) || growthSelections.phases[0];
-                if (phaseToAdd) {
-                     phaseToAdd.services[serviceToAdd.id] = {
-                        quantity: 1,
-                        mods: createDefaultModsForService(serviceToAdd),
-                        termMonths: config.settings.retainerTerms[0]?.months || 1,
-                        timeline: { 
-                            enabled: !!(serviceToAdd.timeline && serviceToAdd.timeline.durationWeeks > 0), 
-                            order: 0, 
-                            duration: serviceToAdd.timeline?.durationWeeks || 0 
-                        }
-                    };
-                }
-            }
-            return growthSelections;
+    const growthSelections = JSON.parse(JSON.stringify(originalSelections));
+    growthSelections.packagesToCompare = new Set(originalSelections.packagesToCompare);
+    
+    const { totals: originalTotals } = calculateTotals(growthSelections);
+    const targetCost = (originalTotals.monthly + originalTotals.adSpend) * 1.30; // Target 130% of monthly
+
+    const currentServiceIds = new Set(growthSelections.phases.flatMap(p => Object.keys(p.services)));
+
+    // Find potential services to add, filtering out already selected ones
+    const potentialAdditions = config.services
+        .filter(s => !currentServiceIds.has(s.id) && s.model !== 'Quote')
+        .map(service => {
+            // Calculate the monthly cost of adding this one service
+            const tempCalc = calculateTotals({ phases: [{ name: 'temp', services: { [service.id]: { quantity: 1, mods: createDefaultModsForService(service), termMonths: 1 }}}]});
+            return { service, monthlyCost: tempCalc.totals.monthly };
+        })
+        .filter(item => item.monthlyCost > 0) // Only consider services with a monthly cost
+        .sort((a, b) => a.monthlyCost - b.monthlyCost); // Sort by cheapest first
+
+    // Iteratively add services until the growth target is met
+    for (const item of potentialAdditions) {
+        let currentMonthly = calculateTotals(growthSelections).totals.monthly;
+        if (currentMonthly >= targetCost) {
+            break; // Stop if we've hit our target
         }
+        
+        // Add the service to the first phase
+        const phaseToAdd = growthSelections.phases[0];
+        if (phaseToAdd) {
+             phaseToAdd.services[item.service.id] = {
+                quantity: 1,
+                mods: createDefaultModsForService(item.service),
+                termMonths: config.settings.retainerTerms[0]?.months || 1,
+            };
+        }
+    }
+    return growthSelections;
+}
 function generateAlternativeProposals() {
     const overlay = document.getElementById('alternatives-modal-overlay');
     const container = document.getElementById('alternatives-content');
     container.innerHTML = '<p class="text-center col-span-3">Generating proposals...</p>';
     overlay.style.display = 'flex';
 
+    // The logic to generate proposals is now robust
     const originalSelections = JSON.parse(JSON.stringify(selections));
     originalSelections.packagesToCompare = new Set(selections.packagesToCompare);
     
@@ -4209,7 +4214,7 @@ function generateAlternativeProposals() {
                     ${hasSelections ? breakdown.items.map(i => `<li>${i.name}</li>`).join('') : '<li class="list-none text-gray-400">No services in this proposal.</li>'}
                 </ul>
                 <button class="proposal-button mt-auto w-full font-bold py-2 px-4 rounded-lg transition-colors ${p.isCurrent ? 'bg-indigo-600 text-white' : 'bg-white hover:bg-indigo-100 border'}"
-                        data-proposal-type="${p.type}" ${!hasSelections && !p.isCurrent ? 'disabled' : ''}>
+                        data-proposal-type="${p.type}" ${!hasSelections ? 'disabled' : ''}>
                     ${p.isCurrent ? "Keep This Selection" : "Switch to This Proposal"}
                 </button>
             </div>
@@ -4224,14 +4229,14 @@ function generateAlternativeProposals() {
         growth: proposals[2].selections
     };
     
-    // *** KEY FIX: Add a specific, direct event listener to the container ***
-    container.onclick = function(event) {
+    // This dedicated listener is the most reliable way to handle the clicks.
+    container.addEventListener('click', function(event) {
         const button = event.target.closest('.proposal-button');
         if (button && !button.disabled) {
             const proposalType = button.dataset.proposalType;
             selectProposal(proposalType);
         }
-    };
+    }, { once: true }); // Use { once: true } to automatically clean up the listener after one use.
 }
 function selectProposal(proposalType) {
     if (window.tempProposals && window.tempProposals[proposalType]) {
