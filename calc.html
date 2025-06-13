@@ -2563,7 +2563,7 @@
                 const pricingModels = ['Project', 'Monthly', 'Unit', 'Hourly', 'Quote'];
                 const priorities = ['Core', 'Recommended', 'Upsell'];
                 const roi = item.roiMetrics || {};
-                const timeline = item.timeline || {}; // Get existing timeline data
+                const timeline = item.timeline || {};
                 form.innerHTML = `
                     <input type="hidden" name="id" value="${item.id || `s-${Date.now()}`}">
                     <input type="hidden" name="type" value="service">
@@ -2588,10 +2588,15 @@
                                 <select name="priority" class="mt-1 block w-full p-2 border rounded-md">${priorities.map(p => `<option value="${p}" ${item.priority === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <!-- These are the new fields -->
                                 <div><label class="block text-sm font-medium">Timeline Phase Name</label><input type="text" name="timelinePhaseName" value="${timeline.phaseName || ''}" class="mt-1 w-full p-2 border rounded-md" placeholder="e.g., Phase 1: Onboarding"></div>
                                 <div><label class="block text-sm font-medium">Est. Duration (Weeks)</label><input type="number" name="timelineDuration" value="${timeline.durationWeeks || 0}" class="mt-1 w-full p-2 border rounded-md"></div>
                             </div>
+                            <!-- START: New Checkbox -->
+                            <div class="flex items-center">
+                                <input type="checkbox" name="timelineHidden" id="timelineHidden" ${timeline.hidden ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <label for="timelineHidden" class="ml-2 block text-sm font-medium text-gray-900">Hide this service from the Visual Timeline</label>
+                            </div>
+                            <!-- END: New Checkbox -->
                             <div>
                                 <h5 class="font-semibold text-md mb-2">ROI Metrics (Optional)</h5>
                                 <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -2652,11 +2657,11 @@
                     unit: formData.get('unit'),
                     modifiers: tempModifiers,
                     valuePropositions: formData.get('valuePropositions').split('\n').filter(vp => vp.trim() !== ''),
-                    // UPDATED FIELDS
                     priority: formData.get('priority'),
                     timeline: {
                         phaseName: formData.get('timelinePhaseName'),
                         durationWeeks: parseInt(formData.get('timelineDuration'), 10) || 0,
+                        hidden: formData.get('timelineHidden') === 'on' // <-- ADD THIS LINE
                     },
                     roiMetrics: {
                         metricName: formData.get('roiMetricName'),
@@ -2672,7 +2677,7 @@
                 }
             } else if (type === 'package') {
                 const id = formData.get('id');
-                const originalPackage = findPackage(id); // Get original package to reference mods
+                const originalPackage = findPackage(id);
                 const packageIndex = config.packages.findIndex(p => p.id === id);
                 const packageData = {
                     id: id, name: formData.get('name'), desc: formData.get('desc'),
@@ -3062,7 +3067,7 @@
             let allDiscounts = [];
             let allValueProps = [];
             let roiProjections = [];
-            let timelineData = []; // This will now be built from master service config
+            let timelineData = [];
             let breakdown = {
                 items: [],
                 serviceMonthlyCosts: {},
@@ -3082,13 +3087,16 @@
 
                     if (service.valuePropositions) allValueProps.push(...service.valuePropositions);
 
-                    if (service.timeline && service.timeline.durationWeeks > 0) {
+                    // --- UPDATED TIMELINE LOGIC ---
+                    // Only add to timeline if it has a duration AND is not hidden
+                    if (service.timeline && service.timeline.durationWeeks > 0 && !service.timeline.hidden) {
                         timelineData.push({
                             name: service.name,
                             order: service.timeline.order || 0,
                             duration: service.timeline.durationWeeks || 0
                         });
                     }
+                    // -----------------------------
 
                     if (service.roiMetrics && service.roiMetrics.metricName && (source.clientContext.avgLeadValue > 0 || source.clientContext.avgClv > 0)) {
                         const { metricName, metricUnit, minImpact, maxImpact } = service.roiMetrics;
