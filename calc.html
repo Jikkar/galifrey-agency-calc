@@ -1526,7 +1526,7 @@ function renderBuilder() {
             });
         }
         // START: REPLACE THIS FUNCTION
-        function renderServiceCard(service) {
+function renderServiceCard(service) {
     const activePhase = selections.phases.find(p => p.id === selections.activePhaseId);
     const isSelected = !!(activePhase && activePhase.services[service.id]);
     const selectionData = isSelected ? activePhase.services[service.id] : {};
@@ -3744,9 +3744,12 @@ function calculateTotals(currentSelections) {
     let preDiscountTotals = { oneTime: 0, monthly: 0 };
     let allDiscounts = [];
     let breakdown = { items: [], serviceMonthlyCosts: {} };
+    let allValueProps = []; // Restored
+    let roiProjections = []; // Restored
+    let timelineData = []; // Restored
+    let forecast = {}; // Restored
 
     // --- Step 1: Calculate Gross Costs from all selections ---
-    // This loop calculates the base cost of every selected item, including its own modifiers and any campaign price adjustments.
     source.phases.forEach(phase => {
         // Services
         for (const serviceId in phase.services) {
@@ -3754,12 +3757,17 @@ function calculateTotals(currentSelections) {
             const selection = phase.services[serviceId];
             if (!service) continue;
 
+            // Add value props, timeline data, etc. for other parts of the app
+            if (service.valuePropositions) allValueProps.push(...service.valuePropositions);
+            if (service.timeline && service.timeline.durationWeeks > 0 && !service.timeline.hidden) {
+                timelineData.push({ name: service.name, order: service.timeline.order || 0, duration: service.timeline.durationWeeks || 0 });
+            }
+
             let serviceOneTime = service.setupFee || 0;
             let serviceMonthly = 0;
             let multiplier = 1;
             let summaryDesc = [];
             
-            // Apply campaign-specific price or global adjustment
             const campaignPrice = getCampaignPrice(serviceId);
             const globalAdjust = activeCampaign ? config.settings.campaignModifiers[activeCampaign]?.globalAdjust : null;
             let basePrice = campaignPrice ?? service.price;
@@ -3768,14 +3776,15 @@ function calculateTotals(currentSelections) {
                 if (globalAdjust.type === 'percent') {
                     basePrice *= (1 + globalAdjust.value);
                     if (serviceOneTime > 0) serviceOneTime *= (1 + globalAdjust.value);
-                } else if (basePrice > 0) {
-                    basePrice += globalAdjust.value;
-                } else if (serviceOneTime > 0) {
-                    serviceOneTime += globalAdjust.value;
+                } else {
+                    const totalServiceBaseCost = basePrice + serviceOneTime;
+                     if(totalServiceBaseCost > 0) {
+                        if(basePrice > 0) basePrice += globalAdjust.value;
+                        else serviceOneTime += globalAdjust.value;
+                    }
                 }
             }
 
-            // Apply service-level modifiers
             if(service.modifiers && selection.mods) {
                 for (const modId in selection.mods) {
                     const mod = service.modifiers.find(m => m.id === modId);
@@ -3783,35 +3792,24 @@ function calculateTotals(currentSelections) {
                     const modValue = selection.mods[modId];
                     summaryDesc.push(mod.type === 'Checkbox' ? mod.name : modValue);
                     switch(mod.type) {
-                        case 'Dropdown':
-                            basePrice += mod.options?.find(o => o.name === modValue)?.adjustment || 0;
-                            break;
-                        case 'TieredDropdown':
-                            multiplier *= mod.options?.find(o => o.name === modValue)?.multiplier || 1;
-                            break;
-                        case 'Numeric':
-                            const numQty = parseInt(modValue, 10) || 0;
-                            basePrice += numQty * (mod.pricePerUnit || 0);
-                            break;
-                        case 'Checkbox':
-                            if (modValue === true) basePrice += mod.adjustment || 0;
-                            break;
+                        case 'Dropdown': basePrice += mod.options?.find(o => o.name === modValue)?.adjustment || 0; break;
+                        case 'TieredDropdown': multiplier *= mod.options?.find(o => o.name === modValue)?.multiplier || 1; break;
+                        case 'Numeric': basePrice += (parseInt(modValue, 10) || 0) * (mod.pricePerUnit || 0); break;
+                        case 'Checkbox': if (modValue === true) basePrice += mod.adjustment || 0; break;
                     }
                 }
             }
 
             basePrice *= multiplier;
 
-            // Assign cost to one-time or monthly based on model
             if (service.model === 'Project' || service.model === 'Unit' || service.model === 'Hourly') {
                 serviceOneTime += basePrice * (selection.quantity || 1);
             } else if (service.model === 'Monthly') {
                 serviceMonthly += basePrice * (selection.quantity || 1);
             }
             
-            // Add to breakdown
             const itemDesc = summaryDesc.length > 0 ? summaryDesc.join(', ') : 'Standard';
-            breakdown.items.push({ name: service.name, desc: itemDesc, cost: serviceOneTime + serviceMonthly, type: service.model, phaseId: phase.id, categoryId: service.categoryId });
+            breakdown.items.push({ name: service.name, desc: itemDesc, cost: serviceOneTime + serviceMonthly, type: service.model, phaseId: phase.id, categoryId: service.categoryId, serviceId: serviceId });
             if (serviceMonthly > 0) {
                 breakdown.serviceMonthlyCosts[serviceId] = (breakdown.serviceMonthlyCosts[serviceId] || 0) + serviceMonthly;
             }
@@ -3842,11 +3840,9 @@ function calculateTotals(currentSelections) {
         }
     }
 
-    // Store the pre-discount totals
     preDiscountTotals = { ...totals };
     
-    // --- Step 2: Apply Global Discounts to the calculated totals ---
-    // Term Discounts
+    // --- Step 2: Apply Global Discounts ---
     source.phases.forEach(phase => {
         for(const serviceId in phase.services) {
             const service = findService(serviceId);
@@ -3864,7 +3860,6 @@ function calculateTotals(currentSelections) {
         }
     });
 
-    // Bundle Discount (applied to remaining monthly total)
     const totalServiceCount = source.phases.reduce((acc, p) => acc + Object.keys(p.services).length, 0);
     const applicableBundle = [...(config.settings.bundleDiscounts || [])].sort((a, b) => b.threshold - a.threshold).find(d => totalServiceCount >= d.threshold);
     if (applicableBundle?.percentage > 0) {
@@ -3875,7 +3870,6 @@ function calculateTotals(currentSelections) {
         }
     }
     
-    // Coupon Code (applied last)
     if (source.appliedCoupon) {
         const coupon = source.appliedCoupon;
         let discountAmount = 0;
@@ -3883,9 +3877,9 @@ function calculateTotals(currentSelections) {
         
         switch (coupon.applyTo) {
             case 'oneTime': discountableAmount = preDiscountTotals.oneTime; break;
-            case 'monthly': discountableAmount = preDiscountTotals.monthly; break; // Note: based on pre-discount total
+            case 'monthly': discountableAmount = preDiscountTotals.monthly; break;
             case 'service':
-                const targetItems = breakdown.items.filter(item => findService(item.categoryId)?.id === coupon.targetId);
+                const targetItems = breakdown.items.filter(item => item.serviceId === coupon.targetId);
                 discountableAmount = targetItems.reduce((sum, item) => sum + item.cost, 0);
                 break;
             case 'category':
@@ -3910,15 +3904,10 @@ function calculateTotals(currentSelections) {
         }
     }
     
-    // Ensure totals don't go below zero
     totals.oneTime = Math.max(0, totals.oneTime);
     totals.monthly = Math.max(0, totals.monthly);
 
-    // Other calculations (Value props, ROI, etc.) remain largely the same and are omitted here for brevity
-    // but would be included in a full implementation.
-    const { valueProps, roiProjections, timelineData, forecast } = {}; // Placeholder
-
-    return { totals, breakdown, discounts: allDiscounts, valueProps, roiProjections, timelineData, forecast };
+    return { totals, breakdown, discounts: allDiscounts, valueProps: allValueProps, roiProjections, timelineData, forecast };
 }
 // END: REPLACE THIS FUNCTION
         // END: REPLACE THIS FUNCTION
@@ -4941,7 +4930,7 @@ function selectProposal(proposalType) {
                 config.settings.campaignModifiers[campaign].services[serviceId] = price;
             }
         }
-        function updateCampaignGlobal(campaign, path, value) {
+function updateCampaignGlobal(campaign, path, value) {
     let mod = config.settings.campaignModifiers[campaign];
     if (!mod.globalAdjust) {
         mod.globalAdjust = { type: 'percent', value: 0 };
