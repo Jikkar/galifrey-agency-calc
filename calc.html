@@ -1986,7 +1986,7 @@ function renderCompetitorSnapshotPanel() {
         // #endregion
         // #region ########## SUBMITTED QUOTES PANEL ##########
         // MODIFIED: Greatly expanded to show all new client data
-        unction renderSubmittedQuotes(quotes = []) {
+function renderSubmittedQuotes(quotes = []) {
     const container = document.getElementById('content-quotes');
     if (!container) return;
     
@@ -2015,7 +2015,17 @@ function renderCompetitorSnapshotPanel() {
             
             let itemizedHtml = '';
             if (quoteSelections?.phases && summary?.breakdown?.items) {
-                // ... (itemized logic remains the same)
+                 quoteSelections.phases.forEach(phase => {
+                    const itemsInPhase = summary.breakdown.items.filter(item => item.phaseId === phase.id);
+                    if (itemsInPhase.length > 0) {
+                        itemizedHtml += `<p class="font-semibold mt-2 text-indigo-700">${phase.name}</p>
+                        <ul class="list-disc list-inside pl-2">
+                            ${itemsInPhase.map(item => `<li>${item.name} (${item.desc}) - <strong>${formatCurrency(item.cost)}</strong></li>`).join('')}
+                        </ul>`;
+                    }
+                });
+            } else if (summary?.breakdown?.items) {
+                    itemizedHtml = `<ul class="list-disc list-inside pl-2">${summary.breakdown.items.map(item => `<li>${item.name} (${item.desc}) - <strong>${formatCurrency(item.cost)}</strong></li>`).join('')}</ul>`;
             } else {
                 itemizedHtml = '<p>No itemized data available.</p>';
             }
@@ -2031,7 +2041,18 @@ function renderCompetitorSnapshotPanel() {
             contentHtml += `
                 <div class="border border-gray-200 rounded-lg">
                     <div class="bg-gray-50 p-4 flex justify-between items-center cursor-pointer" data-action="toggle-quote-details" data-id="${id}">
-                        <!-- header logic unchanged -->
+                        <div>
+                            <p class="font-bold text-lg">${contact.name} <span class="text-base font-normal text-gray-600">- ${contact.businessName || 'N/A'}</span></p>
+                            <p class="text-sm text-gray-500">${contact.email}${contact.phone ? ` | ${contact.phone}` : ''} | Submitted: ${submittedDate}</p>
+                            ${quote.campaign ? `<p class="text-xs text-yellow-700 font-semibold mt-1">Campaign: ${quote.campaign}</p>` : ''}
+                        </div>
+                        <div class="flex items-center gap-4">
+                                <button data-action="export-quote-pdf" data-id="${id}" class="bg-indigo-600 text-white font-semibold py-1 px-3 rounded hover:bg-indigo-700 text-sm">Export PDF</button>
+                                <button data-action="delete-quote" data-id="${id}" class="text-red-500 hover:text-red-700 font-semibold py-1 px-2 rounded hover:bg-red-100 text-sm">Delete</button>
+                            <span class="text-sm font-semibold text-gray-700">Details
+                                <svg class="w-5 h-5 inline-block transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </span>
+                        </div>
                     </div>
                     <div id="quote-content-${id}" class="quote-card-content">
                         <div class="p-6 border-t grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
@@ -2044,8 +2065,8 @@ function renderCompetitorSnapshotPanel() {
                                     ${(clientContext.socialUrls || []).filter(s => s.url).map((s, i) => renderQuoteDetail(`Social URL ${i+1}`, `<a href="${s.url}" target="_blank" class="text-blue-600 hover:underline">${s.url}</a>`)).join('')}
                                     ${renderQuoteDetail('Referral', clientContext.referralSource)}
                                 </dl>
-                                    <h4 class="font-bold border-b pb-1 mt-4">Previous Provider Info</h4>
-                                    <dl class="text-sm space-y-3">
+                                <h4 class="font-bold border-b pb-1 mt-4">Previous Provider Info</h4>
+                                <dl class="text-sm space-y-3">
                                     ${renderQuoteDetail('Provider Name', clientContext.previousProvider)}
                                     ${renderQuoteDetail('Provided Services', clientContext.previousServices)}
                                     ${renderQuoteDetail('Budget', clientContext.previousBudget ? formatCurrency(clientContext.previousBudget) : null)}
@@ -2057,10 +2078,23 @@ function renderCompetitorSnapshotPanel() {
                                 <dl class="text-sm space-y-3">${competitorHtml}</dl>
                             </div>
                             <div class="md:col-span-1">
-                                <!-- itemized summary logic unchanged -->
+                                <h4 class="font-bold mb-2 border-b pb-1">Itemized Summary</h4>
+                                <div class="text-sm space-y-2">${itemizedHtml}</div>
                             </div>
                             <div class="md:col-span-1">
-                                <!-- totals logic unchanged -->
+                                <h4 class="font-bold mb-2 border-b pb-1">Totals</h4>
+                                <div class="space-y-2 text-sm">
+                                        <div class="flex justify-between"><span>One-Time Fees:</span> <strong class="text-gray-900">${formatCurrency(oneTime)}</strong></div>
+                                        <div class="flex justify-between"><span>Monthly Retainer:</span> <strong class="text-gray-900">${formatCurrency(monthly)}</strong></div>
+                                        ${adSpend > 0 ? `<div class="flex justify-between"><span>Est. Monthly Ad Spend:</span> <strong class="text-gray-900">${formatCurrency(adSpend)}</strong></div>` : ''}
+                                        ${totalInvestment > 0 && adSpend > 0 ? `<div class="flex justify-between border-t pt-2 mt-2"><strong>Total Monthly Investment:</strong> <strong class="text-indigo-600 text-base">${formatCurrency(totalInvestment)}</strong></div>` : ''}
+                                </div>
+                                ${summary?.discounts && summary.discounts.length > 0 ? `
+                                    <h4 class="font-bold mt-4 mb-2 border-b pb-1">Discounts Applied</h4>
+                                    <div class="space-y-1 text-sm text-green-600">
+                                            ${summary.discounts.map(d => `<div class="flex justify-between"><span>${d.name}:</span> <strong>-${formatCurrency(d.amount)}</strong></div>`).join('')}
+                                    </div>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
@@ -2647,7 +2681,7 @@ function renderCompetitorSnapshotPanel() {
         }
         // END: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
-        function toggleService(serviceId) {
+function toggleService(serviceId) {
     const phase = selections.phases.find(p => p.id === selections.activePhaseId);
     if (!phase) {
         showToast("No active phase selected.", "error");
@@ -3669,7 +3703,68 @@ function calculateTotals(currentSelections) {
 
     let oneTimeAfterDiscounts = grandTotals.oneTime;
     let monthlyAfterDiscounts = grandTotals.preDiscountMonthly;
-    // ... (discount logic remains the same)
+    
+    // --- FULL, CORRECTED DISCOUNT LOGIC ---
+    if (source.appliedCoupon) {
+        const coupon = source.appliedCoupon;
+        let discountAmount = 0;
+        let discountableAmount = 0;
+        if (coupon.applyTo === 'oneTime') {
+            discountableAmount = oneTimeAfterDiscounts;
+        } else if (coupon.applyTo === 'monthly') {
+            discountableAmount = monthlyAfterDiscounts;
+        } else if (coupon.applyTo === 'service' && coupon.targetId) {
+            const targetService = findService(coupon.targetId);
+            if(targetService) {
+                const targetItems = breakdown.items.filter(item => item.name === targetService.name);
+                discountableAmount = targetItems.reduce((sum, item) => sum + item.cost, 0);
+            }
+        } else if (coupon.applyTo === 'category' && coupon.targetId) {
+            const itemsInCategory = breakdown.items.filter(item => item.categoryId === coupon.targetId);
+            discountableAmount = itemsInCategory.reduce((sum, item) => sum + item.cost, 0);
+        }
+        if (coupon.type === 'percent') {
+            discountAmount = discountableAmount * coupon.value;
+        } else {
+            discountAmount = Math.min(discountableAmount, coupon.value);
+        }
+        if (discountAmount > 0) {
+            allDiscounts.push({ name: `Coupon: ${coupon.code}`, amount: discountAmount });
+            if (coupon.applyTo === 'oneTime' || coupon.applyTo === 'service' || coupon.applyTo === 'category') {
+                 oneTimeAfterDiscounts -= discountAmount;
+            } else {
+                monthlyAfterDiscounts -= discountAmount;
+            }
+        }
+    }
+
+    source.phases.forEach(phase => {
+        for(const serviceId in phase.services) {
+            const service = findService(serviceId);
+            const selection = phase.services[serviceId];
+            if (!service || service.model !== 'Monthly') continue;
+            const term = findRetainerTerm(selection.termMonths);
+            if (term?.discount > 0) {
+                const serviceCost = breakdown.serviceMonthlyCosts[serviceId] || 0;
+                const discountAmount = serviceCost * term.discount;
+                if (discountAmount > 0) {
+                    allDiscounts.push({name: `Term Discount on ${service.name}`, amount: discountAmount});
+                    monthlyAfterDiscounts -= discountAmount;
+                }
+            }
+        }
+    });
+    
+    const totalServiceCount = source.phases.reduce((acc, p) => acc + Object.keys(p.services).length, 0);
+    const applicableBundle = [...(config.settings.bundleDiscounts || [])].sort((a, b) => b.threshold - a.threshold).find(d => totalServiceCount >= d.threshold);
+    if (applicableBundle?.percentage > 0) {
+        const discountAmount = monthlyAfterDiscounts * applicableBundle.percentage;
+        if (discountAmount > 0) {
+            allDiscounts.push({ name: `Bundle Discount (${totalServiceCount} services)`, amount: discountAmount });
+            monthlyAfterDiscounts -= discountAmount;
+        }
+    }
+    // --- END OF DISCOUNT LOGIC ---
 
     grandTotals.oneTime = Math.max(0, oneTimeAfterDiscounts);
     grandTotals.monthly = Math.max(0, monthlyAfterDiscounts);
