@@ -860,9 +860,11 @@ const defaultConfig = {
         let timelineChart = null; // For the new timeline chart instance
         const { jsPDF } = window.jspdf;
         // START: REPLACE THIS FUNCTION
+        // START: REPLACE THIS FUNCTION
         function init() {
             const urlParams = new URLSearchParams(window.location.search);
             const sharedDataParam = urlParams.get('s');
+            let loadedFromUrl = false;
 
             // Logic to load data on page start
             if (sharedDataParam) {
@@ -871,32 +873,40 @@ const defaultConfig = {
                     const decompressed = pako.inflate(decoded, { to: 'string' });
                     const sharedSelections = JSON.parse(decompressed);
                     loadSession(sharedSelections);
-                    // Clean the URL after loading
-                    const cleanUrl = new URL(window.location);
-                    cleanUrl.searchParams.delete('s');
-                    window.history.replaceState({}, document.title, cleanUrl);
+                    loadedFromUrl = true; // Mark that we loaded successfully from the URL
+
+                    // After successful loading, TRY to clean the URL.
+                    // This is in a separate try...catch so it fails silently if blocked.
+                    try {
+                        const cleanUrl = new URL(window.location);
+                        cleanUrl.searchParams.delete('s');
+                        window.history.replaceState({}, document.title, cleanUrl.href);
+                    } catch (urlError) {
+                        console.warn("Could not clean URL, likely due to security restrictions in the environment. This is non-critical.");
+                    }
+
                 } catch (e) {
                     console.error("Failed to load from shared URL:", e);
                     showToast("The shared link is invalid or corrupted.", "error");
-                    // Fallback to checking local storage
-                    const savedSession = localStorage.getItem('galifreyCalcSession');
-                    if (savedSession) {
-                        document.getElementById('load-session-banner').classList.remove('hidden');
-                    }
                 }
-            } else {
+            }
+            
+            // If we didn't load from a URL, check for a local session.
+            if (!loadedFromUrl) {
                 const savedSession = localStorage.getItem('galifreyCalcSession');
                 if (savedSession) {
                     document.getElementById('load-session-banner').classList.remove('hidden');
                 }
             }
 
+            // Continue with normal setup
             activeCampaign = urlParams.get('campaign');
             loadConfig();
             setupEventListeners();
             listenForQuotes();
             renderAll();
         }
+        // END: REPLACE THIS FUNCTION
         function loadConfig() {
             const savedConfig = localStorage.getItem('galifreyCalcConfig');
             try {
