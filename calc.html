@@ -1322,34 +1322,74 @@ const defaultConfig = {
                 });
             });
         }
+        // START: REPLACE THIS FUNCTION
         function renderServiceCard(service) {
             const activePhase = selections.phases.find(p => p.id === selections.activePhaseId);
             const isSelected = !!(activePhase && activePhase.services[service.id]);
             const selectionData = isSelected ? activePhase.services[service.id] : {};
-            // --- CORRECTED LOGIC: Apply global adjustment for display ---
+            
+            // Check if the service is locked in the current selection
+            const isLocked = selectionData.locked || false;
+
+            // --- NEW: Dependency Check Logic ---
+            let dependenciesMet = true;
+            let requiredServices = [];
+            if (service.dependencies && service.dependencies.length > 0) {
+                const selectedServiceIds = Object.keys(activePhase.services);
+                for (const depId of service.dependencies) {
+                    if (!selectedServiceIds.includes(depId)) {
+                        dependenciesMet = false;
+                        const depService = findService(depId);
+                        if (depService) {
+                            requiredServices.push(depService.name);
+                        }
+                    }
+                }
+            }
+            // ------------------------------------
+
             let displayPrice = getCampaignPrice(service.id) ?? service.price;
             const campaignModifier = activeCampaign ? config.settings.campaignModifiers[activeCampaign] : null;
             const globalAdjust = campaignModifier?.globalAdjust;
             if (globalAdjust?.value) {
                 if (globalAdjust.type === 'percent') {
                     displayPrice *= (1 + globalAdjust.value);
-                } else { // fixed
-                    // Only adjust the main price for display purposes.
+                } else {
                     if (displayPrice !== 0) {
                         displayPrice += globalAdjust.value;
                     }
                 }
             }
-            // --- END OF CORRECTION ---
+
             const isRecommended = checkServiceRecommendation(service.id);
+            
+            // --- UPDATED: Card Classes and Attributes ---
+            let cardClasses = 'service-card p-4 border-2 rounded-lg transition-all';
+            let cardAttributes = '';
+            let clickAction = `data-action="toggle-service" data-id="${service.id}"`;
+
+            if (isLocked) {
+                cardClasses += ' selected bg-indigo-100 cursor-default'; // Locked style
+                clickAction = ''; // Remove click action for locked cards
+            } else if (!dependenciesMet) {
+                cardClasses += ' bg-gray-100 opacity-60 cursor-not-allowed'; // Disabled style
+                cardAttributes = `title="Requires: ${requiredServices.join(', ')}"`; // Tooltip
+                clickAction = ''; // Remove click action for disabled cards
+            } else {
+                cardClasses += isSelected ? ' selected bg-indigo-50' : ' bg-white hover:bg-gray-50';
+                cardClasses += ' cursor-pointer';
+            }
+            // --------------------------------------------
+
             return `
-                <div class="service-card p-4 border-2 rounded-lg cursor-pointer transition-all ${isSelected ? 'selected bg-indigo-50' : 'bg-white hover:bg-gray-50'}" data-action="toggle-service" data-id="${service.id}">
-                    ${isRecommended && !isSelected ? `
-                        <div class="recommendation-badge">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" ></path></svg>
-                            Recommended
+                <div class="${cardClasses}" ${clickAction} ${cardAttributes}>
+                    ${isLocked ? `
+                        <div class="absolute top-2 right-2 text-gray-400" title="Locked by package selection">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd" /></svg>
                         </div>
                     ` : ''}
+                    ${isRecommended && !isSelected ? `...` : ''} <!-- Recommendation badge logic unchanged -->
+                    
                     <div class="flex justify-between items-start">
                         <h5 class="font-bold">${service.name}</h5>
                         <div class="flex items-center">
@@ -1360,10 +1400,11 @@ const defaultConfig = {
                         </div>
                     </div>
                     <p class="text-sm text-gray-600 mt-1">${service.desc}</p>
-                    ${isSelected ? `<div class="mt-4 pt-4 border-t space-y-4 service-config">${renderServiceConfig(service, selectionData)}</div>` : ''}
+                    ${isSelected && !isLocked ? `<div class="mt-4 pt-4 border-t space-y-4 service-config">${renderServiceConfig(service, selectionData)}</div>` : ''}
                 </div>
             `;
         }
+        // END: REPLACE THIS FUNCTION
         function renderServiceConfig(service, selectionData) {
             let html = '';
             if (service.model === 'Unit' || service.model === 'Hourly') {
@@ -2313,29 +2354,55 @@ const defaultConfig = {
             showToast(`${pkg.name} package added to builder.`, 'info');
         }
         // END: REPLACE THIS FUNCTION
+        // START: REPLACE THIS FUNCTION
         function toggleService(serviceId) {
             const phase = selections.phases.find(p => p.id === selections.activePhaseId);
             if (!phase) {
                 showToast("No active phase selected.", "error");
                 return;
             }
+
+            const service = findService(serviceId);
+            if (!service) return;
+
             if (phase.services[serviceId]) {
+                // Prevent deselection if locked
+                if (phase.services[serviceId].locked) {
+                    showToast(`${service.name} is locked by the selected package and cannot be removed.`, 'error');
+                    return;
+                }
                 delete phase.services[serviceId];
                 trackAnalytics('service_deselected', { serviceId });
             } else {
-                const service = findService(serviceId);
-                if (!service) return;
+                // Add the primary service
                 phase.services[serviceId] = {
                     quantity: 1,
                     mods: createDefaultModsForService(service),
                     termMonths: config.settings.retainerTerms[0]?.months || 1,
-                    // NOTE: Timeline settings are no longer added here.
+                    locked: false // Services added manually are never locked
                 };
-                 trackAnalytics('service_selected', { serviceId });
+                trackAnalytics('service_selected', { serviceId });
+
+                // --- NEW: Co-requisite Logic ---
+                if (service.corequisite && !phase.services[service.corequisite]) {
+                    const coreqService = findService(service.corequisite);
+                    if (coreqService) {
+                        phase.services[coreqService.id] = {
+                            quantity: 1,
+                            mods: createDefaultModsForService(coreqService),
+                            termMonths: config.settings.retainerTerms[0]?.months || 1,
+                            locked: false
+                        };
+                        trackAnalytics('service_selected', { serviceId: coreqService.id, reason: 'co-requisite' });
+                        showToast(`${coreqService.name} was automatically added as a required co-requisite.`, 'info');
+                    }
+                }
+                // -----------------------------
             }
             renderBuilder();
             renderSummary();
         }
+        // END: REPLACE THIS FUNCTION
         function createDefaultModsForService(service) {
             if (!service.modifiers) return {};
             return service.modifiers.reduce((acc, mod) => {
