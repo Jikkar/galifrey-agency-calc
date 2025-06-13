@@ -862,12 +862,11 @@ const defaultConfig = {
         // START: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
+// START: REPLACE THIS FUNCTION
 function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const sharedDataParam = urlParams.get('s');
-
-    // Default to checking for a local session
-    let checkForLocalStorage = true;
+    let loadedFromUrl = false;
 
     // First, try to load from a shared URL parameter
     if (sharedDataParam) {
@@ -876,24 +875,26 @@ function init() {
             const decompressed = pako.inflate(decoded, { to: 'string' });
             const sharedSelections = JSON.parse(decompressed);
             loadSession(sharedSelections);
-            checkForLocalStorage = false; // Successfully loaded from URL, so don't check localStorage
+            loadedFromUrl = true; // Mark that we loaded successfully from the URL
 
-            // Attempt to clean the URL, but don't let it cause a user-facing error
+            // Attempt to clean the URL, but let it fail silently if blocked
             try {
                 const cleanUrl = new URL(window.location);
                 cleanUrl.searchParams.delete('s');
                 window.history.replaceState({}, document.title, cleanUrl.href);
             } catch (urlError) {
-                console.warn("Could not clean URL. This is non-critical.");
+                // Do nothing. This is not critical.
+                console.warn("URL cleaning was blocked by the environment.");
             }
         } catch (e) {
-            console.error("Failed to load from shared URL:", e);
-            showToast("The shared link is invalid or corrupted.", "error");
+            // If any part of loading from URL fails, do not show an error.
+            // Just fall back to checking local storage.
+            console.error("Failed to load from shared URL, falling back:", e);
         }
     }
-
-    // If we didn't load from a URL, check for a locally saved session
-    if (checkForLocalStorage) {
+    
+    // If we didn't load from a URL, check for a locally saved session.
+    if (!loadedFromUrl) {
         const savedSession = localStorage.getItem('galifreyCalcSession');
         if (savedSession) {
             document.getElementById('load-session-banner').classList.remove('hidden');
@@ -907,8 +908,7 @@ function init() {
     listenForQuotes();
     renderAll();
 }
-// END: REPLACE THIS FUNCTION
-        // END: REPLACE THIS FUNCTION
+
         function loadConfig() {
             const savedConfig = localStorage.getItem('galifreyCalcConfig');
             try {
