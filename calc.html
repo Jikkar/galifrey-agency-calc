@@ -344,6 +344,9 @@
     <button id="tab-builder" data-tab="builder" class="tab py-4 px-1 border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
      Custom Campaign Builder
     </button>
+    <button id="tab-augmentation" data-tab="augmentation" class="tab py-4 px-1 border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+     Team Augmentation
+    </button>
     <button id="tab-admin" data-tab="admin" class="tab hidden py-4 px-1 border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
      Admin Panel
     </button>
@@ -360,6 +363,9 @@
     <div id="content-packages" data-content="packages">
     </div>
     <div id="content-builder" data-content="builder" class="hidden">
+    </div>
+    <div id="content-augmentation" data-content="augmentation" class="hidden">
+        <!-- The calculator UI will be rendered here by JavaScript -->
     </div>
     <div id="content-admin" data-content="admin" class="hidden">
     </div>
@@ -797,23 +803,25 @@ const defaultConfig = {
         // #endregion
         // #region ########## APPLICATION STATE AND CORE LOGIC ##########
         let config = {};
+        // START: REPLACE THIS OBJECT
         let selections = {
             phases: [
                 { id: `phase-${Date.now()}`, name: 'Phase 1: Campaign Selections', services: {}, adChannels: {} }
             ],
             activePhaseId: null, // Will be set on init
+            teamAugmentation: {}, // This line is new
             clientContext: {
                 businessStage: '', businessGoal: '', industry: '', targetAudience: '',
                 geographicTarget: '', website: '', competitors: ['', '', ''], marketingHistory: [],
                 previousProvider: '', previousServices: '', previousBudget: '', reasonForSwitching: '',
                 durationWithProvider: '', satisfaction: 0, futureGoals: '', referralSource: '',
-                // --- NEW FIELDS ---
                 avgLeadValue: '',
                 avgClv: ''
             },
             overrides: { oneTime: null, monthly: null },
             appliedCoupon: null
         };
+        // END: REPLACE THIS OBJECT
         let isAdmin = false;
         let activeCampaign = null; 
         let openAccordions = new Set();
@@ -1053,47 +1061,36 @@ const defaultConfig = {
                 case 'update-ad-spend': updateAdSpend(id, numValue); break;
                 case 'update-ad-setup': updateAdSetupFee(id, numValue); break;
                 case 'update-client-context':
-                    // This is the fix: It now calls renderSummary() to update the ROI section
                     updateClientContext(id, value, target);
                     renderSummary(); 
                     break;
                 case 'update-campaign-price':
                     updateCampaignPrice(campaign, id, value);
                     break;
-                // ... rest of the function
                 case 'update-campaign-package-price':
                     updateCampaignPackagePrice(campaign, id, value);
                     break;
                 case 'update-admin-setting':
-                     const finalValue = path.includes('percentage') || path.includes('discount') || path.includes('value') ? numValue / 100 : numValue;
-                     setNestedValue(config, path, isNaN(finalValue) ? value : finalValue);
-                     break;
-                // ... inside handleDynamicInputs switch statement
+                        const finalValue = path.includes('percentage') || path.includes('discount') || path.includes('value') ? numValue / 100 : numValue;
+                        setNestedValue(config, path, isNaN(finalValue) ? value : finalValue);
+                        break;
                 case 'update-override':
                     selections.overrides[id] = isNaN(numValue) || value === '' ? null : numValue;
                     renderSummary();
                     break;
-                 case 'update-campaign-global':
+                case 'update-campaign-global':
                     updateCampaignGlobal(id, path, value);
                     break;
-                // --- ADD THIS NEW CASE ---
                 case 'update-timeline-setting':
                     updateTimelineSetting(id, target.dataset.setting, numValue);
+                    break;
+                case 'update-team-augmentation': // This case is new
+                    updateTeamAugmentationHours(id, numValue);
                     break;
             }
         }
         // #endregion
         // #region ########## RENDER FUNCTIONS ##########
-        function renderAll() {
-            renderPackages();
-            renderBuilder();
-            renderSummary();
-            if (isAdmin) {
-                renderAdminPanel();
-                renderSubmittedQuotes();
-                updateQuoteCountBadge();
-            }
-        }
         function renderPackages() {
             const container = document.getElementById('content-packages');
             if (!container) return;
@@ -1628,9 +1625,66 @@ const defaultConfig = {
                 </div>
             `;
         }
+        // START: ADD THIS NEW FUNCTION
+        function renderAugmentationCalculator() {
+            const container = document.getElementById('content-augmentation');
+            if (!container) return;
+
+            const roles = config.teamAugmentationRoles || [];
+
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-2xl font-bold">Team Augmentation Calculator</h2>
+                        <p class="text-gray-600 mt-1">Select roles and specify hours to augment your team with our dedicated specialists.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        ${roles.map(role => {
+                            const selection = selections.teamAugmentation[role.id] || { hours: 0 };
+                            const monthlyCost = selection.hours * role.costPerHr;
+                            const fullTimeMonthly = role.fullTimeSalaryComparison / 12;
+                            const savings = fullTimeMonthly - monthlyCost;
+
+                            return `
+                            <div class="service-card p-6 border-2 rounded-xl transition-all ${selection.hours > 0 ? 'selected bg-indigo-50' : 'bg-white hover:bg-gray-50'}">
+                                <h4 class="text-xl font-bold text-gray-800">${role.name}</h4>
+                                <p class="text-sm text-gray-500 mt-1 h-10">${role.description}</p>
+
+                                <div class="mt-4">
+                                    <label for="hours-${role.id}" class="block text-sm font-medium text-gray-700">Hours per Month</label>
+                                    <input 
+                                        type="number" 
+                                        id="hours-${role.id}"
+                                        name="hours-${role.id}"
+                                        value="${selection.hours > 0 ? selection.hours : ''}"
+                                        min="0"
+                                        placeholder="0"
+                                        data-input-action="update-team-augmentation"
+                                        data-id="${role.id}"
+                                        class="mt-1 w-full p-2 border rounded-md"
+                                    >
+                                </div>
+
+                                <div class="mt-4 pt-4 border-t">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-gray-600 font-medium">Monthly Cost:</span>
+                                        <span class="text-lg font-bold text-indigo-600">${formatCurrency(monthlyCost)}</span>
+                                    </div>
+                                    ${selection.hours > 0 && savings > 0 ? `
+                                    <div class="flex justify-between items-center mt-2 text-sm">
+                                        <span class="text-gray-500">vs. Full-Time Hire:</span>
+                                        <span class="text-green-600 font-semibold">Save ~${formatCurrency(savings)}/mo</span>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
         // END: ADD THIS NEW FUNCTION
-        // START: REPLACE THIS FUNCTION
-        // START: REPLACE THIS FUNCTION
         function renderAdminPanel() {
             const container = document.getElementById('content-admin');
             if (!isAdmin) {
@@ -2310,6 +2364,17 @@ const defaultConfig = {
             }
             // ------------------------------------
         }
+        // START: ADD THIS NEW FUNCTION
+        function updateTeamAugmentationHours(roleId, hours) {
+            if (isNaN(hours) || hours <= 0) {
+                delete selections.teamAugmentation[roleId];
+            } else {
+                selections.teamAugmentation[roleId] = { hours: hours };
+            }
+            renderAugmentationCalculator(); // Re-render this tab to update costs/savings
+            renderSummary(); // Re-render the main summary
+        }
+        // END: ADD THIS NEW FUNCTION
         function clearBuilder() {
             if (confirm("Are you sure you want to clear all selections and phases from the campaign builder? This will also clear the business information you entered.")) {
                 const newPhaseId = `phase-${Date.now()}`;
