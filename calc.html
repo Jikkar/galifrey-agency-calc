@@ -3835,12 +3835,14 @@ function handleAdminSaveEdit(e) {
 // 1. Replace the 'calculateTotals' function
 // ========================================================================
 
-function calculateTotals(currentSelections) {
+function calculateTotals(currentSelections, campaignOverride = null) {
     const source = currentSelections || selections;
+    const campaignToUse = campaignOverride || activeCampaign;
+
     let totals = { oneTime: 0, monthly: 0, adSpend: 0 };
     let preDiscountTotals = { oneTime: 0, monthly: 0 };
     let allDiscounts = [];
-    let breakdown = { items: [], serviceMonthlyCosts: {}, phaseData: {} }; // Re-added phaseData
+    let breakdown = { items: [], serviceMonthlyCosts: {}, phaseData: {} };
     let allValueProps = [];
     let roiProjections = [];
     let timelineData = [];
@@ -3864,8 +3866,9 @@ function calculateTotals(currentSelections) {
             let multiplier = 1;
             let summaryDesc = [];
             
-            const campaignPrice = getCampaignPrice(serviceId);
-            const globalAdjust = activeCampaign ? config.settings.campaignModifiers[activeCampaign]?.globalAdjust : null;
+            // Use the specific campaign context for this calculation
+            const campaignPrice = getCampaignPrice(serviceId, campaignToUse);
+            const globalAdjust = campaignToUse ? config.settings.campaignModifiers[campaignToUse]?.globalAdjust : null;
             let basePrice = campaignPrice ?? service.price;
 
             if (campaignPrice === null && globalAdjust?.value) {
@@ -3873,11 +3876,8 @@ function calculateTotals(currentSelections) {
                     basePrice *= (1 + globalAdjust.value);
                     if (serviceOneTime > 0) serviceOneTime *= (1 + globalAdjust.value);
                 } else {
-                    const totalServiceBaseCost = basePrice + serviceOneTime;
-                     if(totalServiceBaseCost > 0) {
-                        if(basePrice > 0) basePrice += globalAdjust.value;
-                        else serviceOneTime += globalAdjust.value;
-                    }
+                    if (basePrice > 0) basePrice += globalAdjust.value;
+                    else if(serviceOneTime > 0) serviceOneTime += globalAdjust.value;
                 }
             }
 
@@ -3906,9 +3906,7 @@ function calculateTotals(currentSelections) {
             
             const itemDesc = summaryDesc.length > 0 ? summaryDesc.join(', ') : 'Standard';
             breakdown.items.push({ name: service.name, desc: itemDesc, cost: serviceOneTime + serviceMonthly, type: service.model, phaseId: phase.id, categoryId: service.categoryId, serviceId: serviceId });
-            if (serviceMonthly > 0) {
-                breakdown.serviceMonthlyCosts[serviceId] = (breakdown.serviceMonthlyCosts[serviceId] || 0) + serviceMonthly;
-            }
+            if (serviceMonthly > 0) breakdown.serviceMonthlyCosts[serviceId] = (breakdown.serviceMonthlyCosts[serviceId] || 0) + serviceMonthly;
             phaseOneTime += serviceOneTime;
             phaseMonthly += serviceMonthly;
         }
@@ -3996,7 +3994,6 @@ function calculateTotals(currentSelections) {
     totals.oneTime = Math.max(0, totals.oneTime);
     totals.monthly = Math.max(0, totals.monthly);
 
-    // This object key was renamed from 'phaseData' to 'phaseTotals' to match the PDF function
     return { totals, phaseTotals: breakdown.phaseData, breakdown, discounts: allDiscounts, valueProps: allValueProps, roiProjections, timelineData, forecast };
 }
 // END: REPLACE THIS FUNCTION
@@ -4392,12 +4389,13 @@ function selectProposal(proposalType) {
             return false;
         }
         // MODIFIED: Gets campaign-specific price if available
-        function getCampaignPrice(serviceId) {
-            if (activeCampaign && config.settings.campaignModifiers[activeCampaign] && config.settings.campaignModifiers[activeCampaign].services[serviceId]) {
-                 return config.settings.campaignModifiers[activeCampaign].services[serviceId];
-            }
-            return null; // Use null to indicate no override
-        }
+function getCampaignPrice(serviceId, campaignOverride = null) {
+    const campaignToUse = campaignOverride || activeCampaign;
+    if (campaignToUse && config.settings.campaignModifiers[campaignToUse] && config.settings.campaignModifiers[campaignToUse].services[serviceId]) {
+         return config.settings.campaignModifiers[campaignToUse].services[serviceId];
+    }
+    return null;
+}
         function getCampaignPackagePrice(packageId) {
             const modifier = config.settings.campaignModifiers[activeCampaign];
             if (modifier && modifier.packages && modifier.packages[packageId]) {
@@ -4600,37 +4598,47 @@ function selectProposal(proposalType) {
             trackAnalytics('pdf_exported');
         }
         // NEW: Handles exporting a specific submitted quote to PDF.
-        function exportQuotePDF(quoteId) {
-            const quotes = JSON.parse(localStorage.getItem('submittedQuotes') || '[]');
-            const quote = quotes.find(q => q.id === quoteId);
-            if (!quote) {
-                showToast('Quote not found.', 'error');
-                return;
-            }
-            // CORRECTED: Pass the clientContext from within the saved selections object
-             exportQuoteToPDF(
-                quote.selections.clientContext, 
-                quote.summary,
-                {}, // Overrides are baked into the final totals for submitted quotes
-                quote.campaign,
-                `Galifrey-Quote-${quote.contact.name.replace(/\s/g, '_')}-${quote.id}.pdf`
-            );
+async function exportQuotePDF(quoteId) {
+    try {
+        const quoteDoc = await db.collection("submittedQuotes").doc(quoteId).get();
+        if (!quoteDoc.exists) {
+            showToast('Quote not found.', 'error');
+            return;
         }
+        const quote = { id: quoteDoc.id, ...quoteDoc.data() };
+
+        // This now passes the specific campaign from the saved quote to the calculation function.
+        // This is the primary fix for the totals appearing as $0.00.
+        const freshSummary = calculateTotals(quote.selections, quote.campaign);
+
+        exportQuoteToPDF(
+            quote.selections.clientContext,
+            freshSummary,
+            {},
+            quote.campaign,
+            `Galifrey-Quote-${quote.contact.name.replace(/\s/g, '_')}-${quote.id}.pdf`
+        );
+        trackAnalytics('quote_pdf_exported', { quoteId });
+
+    } catch (error) {
+        console.error("Error exporting quote PDF from Firestore:", error);
+        showToast("Could not export PDF. Please try again.", "error");
+    }
+}
         // NEW: Centralized PDF generation logic
-        function exportQuoteToPDF(clientContext, summaryData, overrides, campaign, filename) {
-    // This check prevents errors if summaryData is incomplete.
+function exportQuoteToPDF(clientContext, summaryData, overrides, campaign, filename) {
     if (!summaryData || !summaryData.totals || !summaryData.breakdown) {
         showToast("Cannot generate PDF: Calculation data is missing.", "error");
-        console.error("PDF generation failed due to missing summaryData.", summaryData);
         return;
     }
 
-    const { totals, phaseTotals, breakdown, discounts, valueProps, roiProjections, timelineData } = summaryData;
-    const finalOneTime = overrides.oneTime !== null ? overrides.oneTime : totals.oneTime;
-    const finalMonthly = overrides.monthly !== null ? overrides.monthly : totals.monthly;
+    const { totals, phaseTotals, breakdown, discounts, timelineData } = summaryData;
+    const finalOneTime = totals.oneTime;
+    const finalMonthly = totals.monthly;
     const totalInvestment = finalMonthly + totals.adSpend;
-    const pdf = new jsPDF({unit: 'pt', format: 'a4'});
-    const settings = config.settings.pdfSettings; // This correctly uses the customization options.
+
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+    const settings = config.settings.pdfSettings;
     const today = new Date().toLocaleDateString('en-US');
     const pageMargin = 40;
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -4638,10 +4646,7 @@ function selectProposal(proposalType) {
     let yPos = 60;
 
     const checkPageBreak = (neededHeight) => {
-        if (yPos + neededHeight > 780) {
-            pdf.addPage();
-            yPos = 60;
-        }
+        if (yPos + neededHeight > 780) { pdf.addPage(); yPos = 60; }
     };
     const addSectionTitle = (title) => {
         checkPageBreak(40);
@@ -4662,11 +4667,8 @@ function selectProposal(proposalType) {
         const valueWidth = contentWidth - 140;
         let processedValue = value;
 
-        // This section correctly processes complex data like competitors into a readable format.
         if (label === 'Competitors' && Array.isArray(value)) {
              processedValue = value.filter(c => c.url).map(c => `${c.url}${c.notes ? ` (${c.notes})` : ''}`).join('\n');
-        } else if (label === 'Satisfaction' && !isNaN(value) && value > 0) {
-            processedValue = `${'★'.repeat(value)}${'☆'.repeat(5-value)}`;
         } else if (Array.isArray(value)) {
             processedValue = value.filter(v => v).join(', ');
         }
@@ -4677,7 +4679,21 @@ function selectProposal(proposalType) {
         yPos += valueLines.length * 12 + 8;
     };
 
-    // Header (Uses customization settings)
+    // --- THIS IS THE FIX FOR THE LOGO ---
+    // Try to add the logo image from the settings.
+    try {
+        if (settings.logoUrl) {
+            // We assume a standard logo aspect ratio. Adjust width/height as needed.
+            const logoWidth = 90; 
+            const logoHeight = 30;
+            pdf.addImage(settings.logoUrl, 'PNG', pageWidth - pageMargin - logoWidth, yPos - 15, logoWidth, logoHeight);
+        }
+    } catch (e) {
+        console.error("Failed to add logo to PDF. Check URL and CORS policy.", e);
+        // If it fails, we just log the error and continue without the logo.
+    }
+
+
     pdf.setFontSize(22);
     pdf.setFont(undefined, 'bold');
     pdf.setTextColor(49, 46, 129);
@@ -4691,13 +4707,13 @@ function selectProposal(proposalType) {
     pdf.setFontSize(10);
     pdf.setFont(undefined, 'normal');
     pdf.setTextColor(107, 114, 128);
-    pdf.text(`Date: ${today}`, pageWidth - pageMargin, yPos, { align: 'right' });
+    // Adjust y-position of date if no logo, for better alignment.
+    pdf.text(`Date: ${today}`, pageWidth - pageMargin, settings.logoUrl ? yPos + 15 : yPos, { align: 'right' });
     yPos += 30;
     pdf.setDrawColor(229, 231, 235);
     pdf.line(pageMargin, yPos, pageWidth - pageMargin, yPos);
     yPos += 25;
 
-    // Intro (Uses customization settings)
     pdf.setFontSize(11);
     pdf.setTextColor(55, 65, 81);
     const introLines = pdf.splitTextToSize(settings.introParagraph, contentWidth);
@@ -4705,19 +4721,17 @@ function selectProposal(proposalType) {
     pdf.text(introLines, pageMargin, yPos);
     yPos += introLines.length * 14 + 20;
 
-    // Client Profile Section
     if (clientContext && Object.values(clientContext).some(v => v)) {
         addSectionTitle('Client Profile & Project Details');
         addDetailRow('Business Stage', clientContext.businessStage);
         addDetailRow('Primary Goal', clientContext.businessGoal);
         addDetailRow('Future Goals', clientContext.futureGoals);
-        addDetailRow('Website', clientContext.website ? `<a href="${clientContext.website}" target="_blank" class="text-blue-600 hover:underline">${clientContext.website}</a>` : null);
+        addDetailRow('Website', clientContext.website);
         addDetailRow('Competitors', clientContext.competitors);
         addDetailRow('Referral Source', clientContext.referralSource);
         yPos += 15;
     }
 
-    // Itemized Estimate
     addSectionTitle('Itemized Estimate');
     if (phaseTotals && breakdown?.items) {
          for (const phaseId in phaseTotals) {
@@ -4754,7 +4768,6 @@ function selectProposal(proposalType) {
         }
     }
 
-    // Timeline Section (gracefully handles if chart doesn't exist)
     if (timelineChart && timelineData && timelineData.length > 0) {
          addSectionTitle('Estimated Project Timeline');
          try {
@@ -4764,12 +4777,9 @@ function selectProposal(proposalType) {
              checkPageBreak(imgHeight);
              pdf.addImage(chartImage, 'PNG', pageMargin, yPos, contentWidth, imgHeight);
              yPos += imgHeight + 20;
-         } catch(e) {
-             console.error("Could not add timeline chart to PDF:", e);
-         }
+         } catch(e) { console.error("Could not add timeline chart to PDF:", e); }
     }
 
-    // Totals Section
     checkPageBreak(150);
     let totalsX = pageWidth - pageMargin - 200;
     if (discounts && discounts.length > 0) {
@@ -4808,7 +4818,6 @@ function selectProposal(proposalType) {
         yPos += 18;
     }
 
-    // Footer (Uses customization settings)
     const pageCount = pdf.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
         pdf.setPage(i);
