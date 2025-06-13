@@ -936,15 +936,22 @@ let selections = {
 
 function init() {
     const urlParams = new URLSearchParams(window.location.search);
-    const sharedDataParam = urlParams.get('s'); // Corrected variable name
+    const sharedDataParam = urlParams.get('s');
     let sessionLoadedFromUrl = false;
 
     // Priority 1: Load from a shared URL parameter.
     if (sharedDataParam) {
         try {
-            // The decoding process
-            const decoded = atob(sharedDataParam);
-            const decompressed = pako.inflate(decoded, { to: 'string' });
+            // DECODING PROCESS - Decodes the URL-safe Base64 string back to a Uint8Array
+            const binaryString = atob(sharedDataParam.replace(/-/g, '+').replace(/_/g, '/'));
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            // Decompress the data
+            const decompressed = pako.inflate(bytes, { to: 'string' });
             const sharedSelections = JSON.parse(decompressed);
             
             // Use the pure loadSession function to update the state.
@@ -962,11 +969,9 @@ function init() {
                     console.warn("URL cleaning might be blocked by the environment.");
                 }
             } else {
-                 // This case happens if loadSession returns false (e.g., missing core properties)
                  throw new Error("Invalid session data format from URL.");
             }
         } catch (e) {
-            // This catch block handles errors from atob, pako, or JSON.parse
             console.error("Failed to load from shared URL:", e);
             showToast("Could not load the shared link. It may be invalid or corrupted.", "error");
         }
@@ -2669,7 +2674,6 @@ function loadSession(dataToLoad) {
         if (dataToLoad && dataToLoad.phases && dataToLoad.clientContext) {
             
             // Reconstruct the 'packagesToCompare' Set from the array that was stringified.
-            // This prevents errors if the saved data is from an older version.
             dataToLoad.packagesToCompare = new Set(dataToLoad.packagesToCompare || []);
             
             // Ensure other complex or potentially missing properties have defaults
@@ -2691,7 +2695,7 @@ function loadSession(dataToLoad) {
 
 
         // START: REPLACE THIS FUNCTION
-        function shareBuild() {
+function shareBuild() {
     try {
         // Create a serializable copy of the selections object to handle the Set
         const sessionToShare = {
@@ -2699,8 +2703,10 @@ function loadSession(dataToLoad) {
             packagesToCompare: Array.from(selections.packagesToCompare || []) // Convert Set to Array
         };
         const jsonString = JSON.stringify(sessionToShare);
-        const compressed = pako.deflate(jsonString, { to: 'string' });
-        const encoded = btoa(compressed); // Base64 encode
+        
+        // ENCODING PROCESS - Compresses the data and converts it to a URL-safe Base64 string
+        const compressed = pako.deflate(jsonString);
+        const encoded = btoa(String.fromCharCode.apply(null, compressed)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
         const url = new URL(window.location);
         url.searchParams.set('s', encoded);
