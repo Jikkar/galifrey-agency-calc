@@ -689,164 +689,231 @@
  <script>
   document.addEventListener('DOMContentLoaded', function() {
     // ########## FIREBASE INITIALIZATION ##########
-    const firebaseConfig = {
-        apiKey: "AIzaSyCw4QA3yeLQHvOuCq6IO0qn4lIO2UzhlsU",
-        authDomain: "agency-calc.firebaseapp.com",
-        projectId: "agency-calc",
-        storageBucket: "agency-calc.firebasestorage.app",
-        messagingSenderId: "602758494985",
-        appId: "1:602758494985:web:61f0cdaf04088ad471f1d8",
-        measurementId: "G-DVV8FWWXXB"
-    };
-    const app = firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    let quotesListener = null;
-    // ##############################################
+        const firebaseConfig = {
+            apiKey: "AIzaSyCw4QA3yeLQHvOuCq6IO0qn4lIO2UzhlsU",
+            authDomain: "agency-calc.firebaseapp.com",
+            projectId: "agency-calc",
+            storageBucket: "agency-calc.firebasestorage.app",
+            messagingSenderId: "602758494985",
+            appId: "1:602758494985:web:61f0cdaf04088ad471f1d8",
+            measurementId: "G-DVV8FWWXXB"
+        };
 
-    // #region ########## DEFAULT CONFIGURATION ##########
-    const defaultConfig = {
-        settings: {
-            currencySymbol: "$",
-            password: "galifreyadmin",
-            pdfSettings: {
-                logoUrl: 'https://placehold.co/150x50/4f46e5/ffffff?text=Galifrey',
-                headerText: 'Galifrey Agency - Campaign Proposal',
-                footerText: 'This estimate is valid for 30 days. Prices are subject to change.',
-                introParagraph: 'Thank you for your interest in Galifrey Agency. This document outlines a preliminary estimate for the services discussed. We are committed to delivering tailored solutions and integrated digital excellence to help you achieve your goals.',
-                nextSteps: 'To discuss this estimate further, please contact our sales team at sales@galifrey.agency or book a consultation call on our website.',
-            },
-            bundleDiscounts: [{ threshold: 3, percentage: 0.05 },{ threshold: 5, percentage: 0.10 },],
-            retainerTerms: [{ name: "Month-to-Month", months: 1, discount: 0 },{ name: "3 Months", months: 3, discount: 0.05 },{ name: "6 Months", months: 6, discount: 0.10 },{ name: "12 Months", months: 12, discount: 0.15 },],
-            adFeeTiers: [{ threshold: 0, percentage: 0.20, minFee: 300 },{ threshold: 5000, percentage: 0.18, minFee: 1000 },{ threshold: 25000, percentage: 0.15, minFee: 4500 },{ threshold: 50000, percentage: 0.12, minFee: 7500 },],
-            clientContext: {
-                businessStages: ["Startup/Pre-launch", "Early Growth", "Established SMB", "Enterprise"],
-                businessGoals: ["Increase brand awareness", "Generate more leads", "Drive direct sales", "Launch a new product/service"],
-                geographicTargets: ["Local", "Regional", "National", "International"],
-                pastMarketingOptions: ["SEO", "Social Media", "Paid Ads", "Email Marketing", "Traditional Ads", "None / Just Starting"],
-                reasonsForSwitching: ["Price", "Service Quality", "Features", "Support", "Other"],
-                referralSources: ["Web Search", "Social Media", "Referral", "Ad Campaign", "Other"],
-                avgLeadValue: '',
-                avgClv: '',
-            },
-            campaignModifiers: {},
-            marketingDiscounts: [],
-            valueArticulationEnabled: true,
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        let quotesListener = null; // To hold our real-time listener
+
+        // This function will listen for real-time updates from Firebase
+        function listenForQuotes() {
+            // Unsubscribe from any previous listener to avoid duplicates
+            if (quotesListener) {
+                quotesListener();
+            }
+
+            const quotesCollection = db.collection("submittedQuotes").orderBy("timestamp", "desc");
+            quotesListener = quotesCollection.onSnapshot((snapshot) => {
+                const quotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderSubmittedQuotes(quotes); // Re-render the list with fresh data
+                updateQuoteCountBadge(quotes.length);
+            }, (error) => {
+                console.error("Error fetching quotes: ", error);
+                showToast("Could not connect to the quotes database.", "error");
+            });
+        }
+        // ##############################################
+        // #region ########## DEFAULT CONFIGURATION ##########
+        // START: REPLACE THIS ENTIRE OBJECT
+const defaultConfig = {
+    settings: {
+        currencySymbol: "$",
+        password: "galifreyadmin",
+        pdfSettings: {
+            logoUrl: 'https://placehold.co/150x50/4f46e5/ffffff?text=Galifrey',
+            headerText: 'Galifrey Agency - Campaign Proposal',
+            footerText: 'This estimate is valid for 30 days. Prices are subject to change.',
+            introParagraph: 'Thank you for your interest in Galifrey Agency. This document outlines a preliminary estimate for the services discussed. We are committed to delivering tailored solutions and integrated digital excellence to help you achieve your goals.',
+            nextSteps: 'To discuss this estimate further, please contact our sales team at sales@galifrey.agency or book a consultation call on our website.',
         },
-        teamAugmentationRoles: [
-            { id: 'role-seo', name: 'SEO Specialist', description: 'Dedicated expert for on-page, off-page, and technical SEO execution.', costPerHr: 95, minHrsPerMonth: 20, fullTimeSalaryComparison: 75000 },
-            { id: 'role-ppc', name: 'PPC Manager', description: 'Manages and optimizes paid search and social campaigns.', costPerHr: 110, minHrsPerMonth: 15, fullTimeSalaryComparison: 85000 },
-            { id: 'role-dev', name: 'Web Developer', description: 'For ongoing website feature development, integrations, and maintenance.', costPerHr: 125, minHrsPerMonth: 10, fullTimeSalaryComparison: 110000 }
+        bundleDiscounts: [
+            { threshold: 3, percentage: 0.05 },
+            { threshold: 5, percentage: 0.10 },
         ],
-        departments: [
-            { id: 'dep-digital', name: 'DIGITAL', color: '#4f46e5' },
-            { id: 'dep-social', name: 'SOCIAL', color: '#db2777' },
-            { id: 'dep-studio', name: 'STUDIO', color: '#16a34a' },
+        retainerTerms: [
+            { name: "Month-to-Month", months: 1, discount: 0 },
+            { name: "3 Months", months: 3, discount: 0.05 },
+            { name: "6 Months", months: 6, discount: 0.10 },
+            { name: "12 Months", months: 12, discount: 0.15 },
         ],
-        categories: [
-            { id: 'cat-strategy', name: 'Strategy & Consulting', departmentId: 'dep-digital' },
-            { id: 'cat-web', name: 'Web Solutions', departmentId: 'dep-digital' },
-            { id: 'cat-seo', name: 'SEO & Content', departmentId: 'dep-digital' },
-            { id: 'cat-dm', name: 'Digital Marketing', departmentId: 'dep-digital' },
-            { id: 'cat-social-mgmt', name: 'Social Media Management', departmentId: 'dep-social' },
-            { id: 'cat-social-creative', name: 'Social Creative & Ads', departmentId: 'dep-social' },
-            { id: 'cat-photo', name: 'Photography', departmentId: 'dep-studio' },
-            { id: 'cat-video', name: 'Video Production', departmentId: 'dep-studio' },
-            { id: 'cat-audio', name: 'Audio Production', departmentId: 'dep-studio' },
+        adFeeTiers: [
+            { threshold: 0, percentage: 0.20, minFee: 300 },
+            { threshold: 5000, percentage: 0.18, minFee: 1000 },
+            { threshold: 25000, percentage: 0.15, minFee: 4500 },
+            { threshold: 50000, percentage: 0.12, minFee: 7500 },
         ],
-        services: [
-            {
-                id: 's-blueprint', name: 'Galifrey Blueprint™', desc: 'A comprehensive discovery and strategy phase for complex projects.',
-                model: 'Project', price: 3500, setupFee: 0, unit: '', categoryId: 'cat-strategy', modifiers: [],
-                valuePropositions: ["Ensures project alignment with business goals.", "Reduces risks and costly revisions later.", "Provides a clear roadmap for execution."],
-                priority: 'Core',
-                roiMetrics: { metricName: 'Project Risk Reduction', metricUnit: '%', minImpact: 15, maxImpact: 30 },
-                timeline: { phaseName: 'Phase 1: Discovery & Strategy', durationWeeks: 4, hidden: false },
-                dependencies: [], corequisite: '', tags: ['strategy', 'planning', 'core-service'], timelineDependsOn: ''
-            },
-            {
-                id: 's-campaign-strategy', name: 'Campaign Strategy Development', desc: 'Meticulous design of integrated marketing campaigns...',
-                model: 'Project', price: 2000, setupFee: 0, unit: '', categoryId: 'cat-strategy', modifiers: [],
-                valuePropositions: ["Creates a cohesive plan for maximum impact.", "Optimizes budget allocation across channels.", "Sets clear, measurable KPIs for success."],
-                priority: 'Core', roiMetrics: {},
-                timeline: { phaseName: 'Phase 1: Discovery & Strategy', durationWeeks: 2, hidden: false },
-                dependencies: ['s-blueprint'], corequisite: '', tags: ['strategy', 'planning'], timelineDependsOn: 's-blueprint'
-            },
-            {
-                id: 's-web-custom', name: 'Custom Website (Galifrey Web/Duda)', desc: 'A bespoke, high-performance website built on the Duda platform...',
-                model: 'Project', price: 4500, setupFee: 0, unit: '', categoryId: 'cat-web',
-                valuePropositions: ["Optimized for Core Web Vitals and speed.", "Professionally designed to convert visitors.", "Easy for your team to manage content."],
-                modifiers: [
-                    { id: 'mod-web-complex', name: 'Complexity', type: 'Dropdown', options: [ { name: 'Standard (5-10 pages)', adjustment: 0 }, { name: 'Advanced (11-25 pages)', adjustment: 2500 }, { name: 'Enterprise (25+ pages)', adjustment: 6000 } ]},
-                    { id: 'mod-web-duda-ecom', name: 'Duda E-commerce', type: 'Dropdown', options: [ { name: 'Not Included', adjustment: 0 }, { name: 'Basic Store (up to 100 products)', adjustment: 1500 }, { name: 'Advanced Store (up to 2500 products)', adjustment: 3000 } ]},
-                ],
-                priority: 'Core', roiMetrics: { metricName: 'Conversion Rate Lift', metricUnit: '%', minImpact: 1, maxImpact: 3 },
-                timeline: { phaseName: 'Phase 3: Development & Launch', durationWeeks: 8, hidden: false },
-                dependencies: ['s-blueprint'], corequisite: 's-web-maintenance', tags: ['website', 'core-service', 'development'], timelineDependsOn: 's-brand-design'
-            },
-            // ... all other service objects would go here, with the new properties added ...
-        ],
-        adChannels: [
-            { id: 'ad-google', name: 'Google Ads', setupFee: 500, feeModel: 'tieredPercentageWithMinimums' },
-            { id: 'ad-meta', name: 'Meta Ads (FB/IG)', setupFee: 400, feeModel: 'hybridFee', flatFee: 500, percentage: 0.10 },
-            { id: 'ad-linkedin', name: 'LinkedIn Ads', setupFee: 600, feeModel: 'flatFee', flatFee: 1000 },
-        ],
-        packages: [
-             { 
-                id: 'pkg-ignite', name: 'Ignite', displayPrice: 2400,
-                desc: 'Perfect for startups to establish a foundational online presence. ',
-                features: 'Foundational SEO, Social Media Mgmt, 4 Blog Posts',
-                services: [
-                    { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true },
-                    { id: 's-social-mgmt', quantity: 1, mods: {}, locked: false },
-                    { id: 's-content-blog', quantity: 4, mods: {}, locked: false },
-                ]
-            },
-            { 
-                id: 'pkg-accelerate', name: 'Accelerate', displayPrice: 6500,
-                desc: 'For growing businesses ready to scale with a professional website and consistent marketing. ',
-                features: 'Custom Website, SEO Retainer, Social Media Management',
-                services: [
-                    { id: 's-web-custom', quantity: 1, mods: {}, locked: true },
-                    { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true },
-                    { id: 's-social-mgmt', quantity: 1, mods: {}, locked: false },
-                ]
-            },
-            // ... other packages ...
-        ]
-    };
-    // #endregion
-
-    // #region ########## APPLICATION STATE AND CORE LOGIC ##########
-    let config = {};
-    let selections = {
-        phases: [{ id: `phase-${Date.now()}`, name: 'Phase 1: Campaign Selections', services: {}, adChannels: {} }],
-        activePhaseId: null,
-        teamAugmentation: {},
-        packagesToCompare: new Set(),
         clientContext: {
-            businessStage: '', businessGoal: '', industry: '', targetAudience: '',
-            geographicTarget: '', website: '', marketingHistory: [],
-            previousProvider: '', previousServices: '', previousBudget: '', reasonForSwitching: '',
-            durationWithProvider: '', satisfaction: 0, futureGoals: '', referralSource: '',
-            avgLeadValue: '', avgClv: '', monthlyTraffic: '', conversionRate: '', avgSaleValue: '',
-            competitors: [{ url: '', notes: '' }, { url: '', notes: '' }, { url: '', notes: '' }],
-            socialUrls: [{ url: '' }, { url: '' }, { url: '' }]
+            businessStages: ["Startup/Pre-launch", "Early Growth", "Established SMB", "Enterprise"],
+            businessGoals: ["Increase brand awareness", "Generate more leads", "Drive direct sales", "Launch a new product/service"],
+            geographicTargets: ["Local", "Regional", "National", "International"],
+            pastMarketingOptions: ["SEO", "Social Media", "Paid Ads", "Email Marketing", "Traditional Ads", "None / Just Starting"],
+            reasonsForSwitching: ["Price", "Service Quality", "Features", "Support", "Other"],
+            referralSources: ["Web Search", "Social Media", "Referral", "Ad Campaign", "Other"],
+            avgLeadValue: '',
+            avgClv: '',
         },
-        overrides: { oneTime: null, monthly: null },
-        appliedCoupon: null
-    };
-    let isAdmin = false;
-    let activeCampaign = null; 
-    let openAccordions = new Set();
-    let tempModifiers = [];
-    let timelineChart = null;
-    const { jsPDF } = window.jspdf;
-
-    // ... (All other functions from renderAll down to init will be pasted here by me) ...
-    // ...
-    // The final line will be:
-    init();
-});
+        campaignModifiers: {},
+        marketingDiscounts: [],
+        valueArticulationEnabled: true,
+    },
+    // NEW: Team Augmentation Roles
+    teamAugmentationRoles: [
+        { id: 'role-seo', name: 'SEO Specialist', description: 'Dedicated expert for on-page, off-page, and technical SEO execution.', costPerHr: 95, minHrsPerMonth: 20, fullTimeSalaryComparison: 75000 },
+        { id: 'role-ppc', name: 'PPC Manager', description: 'Manages and optimizes paid search and social campaigns.', costPerHr: 110, minHrsPerMonth: 15, fullTimeSalaryComparison: 85000 },
+        { id: 'role-dev', name: 'Web Developer', description: 'For ongoing website feature development, integrations, and maintenance.', costPerHr: 125, minHrsPerMonth: 10, fullTimeSalaryComparison: 110000 }
+    ],
+    departments: [
+        { id: 'dep-digital', name: 'DIGITAL', color: '#4f46e5' },
+        { id: 'dep-social', name: 'SOCIAL', color: '#db2777' },
+        { id: 'dep-studio', name: 'STUDIO', color: '#16a34a' },
+    ],
+    categories: [
+        { id: 'cat-strategy', name: 'Strategy & Consulting', departmentId: 'dep-digital' },
+        { id: 'cat-web', name: 'Web Solutions', departmentId: 'dep-digital' },
+        { id: 'cat-seo', name: 'SEO & Content', departmentId: 'dep-digital' },
+        { id: 'cat-dm', name: 'Digital Marketing', departmentId: 'dep-digital' },
+        { id: 'cat-social-mgmt', name: 'Social Media Management', departmentId: 'dep-social' },
+        { id: 'cat-social-creative', name: 'Social Creative & Ads', departmentId: 'dep-social' },
+        { id: 'cat-photo', name: 'Photography', departmentId: 'dep-studio' },
+        { id: 'cat-video', name: 'Video Production', departmentId: 'dep-studio' },
+        { id: 'cat-audio', name: 'Audio Production', departmentId: 'dep-studio' },
+    ],
+    services: [
+        {
+            id: 's-blueprint', name: 'Galifrey Blueprint™', desc: 'A comprehensive discovery and strategy phase for complex projects.',
+            model: 'Project', price: 3500, setupFee: 0, unit: '', categoryId: 'cat-strategy', modifiers: [],
+            valuePropositions: ["Ensures project alignment with business goals.", "Reduces risks and costly revisions later.", "Provides a clear roadmap for execution."],
+            priority: 'Core',
+            roiMetrics: { metricName: 'Project Risk Reduction', metricUnit: '%', minImpact: 15, maxImpact: 30 },
+            timeline: { phaseName: 'Phase 1: Discovery & Strategy', durationWeeks: 4, hidden: false },
+            // --- NEW PROPERTIES ---
+            dependencies: [],
+            corequisite: '',
+            tags: ['strategy', 'planning', 'core-service'],
+            timelineDependsOn: ''
+        },
+        {
+            id: 's-campaign-strategy', name: 'Campaign Strategy Development', desc: 'Meticulous design of integrated marketing campaigns...',
+            model: 'Project', price: 2000, setupFee: 0, unit: '', categoryId: 'cat-strategy', modifiers: [],
+            valuePropositions: ["Creates a cohesive plan for maximum impact.", "Optimizes budget allocation across channels.", "Sets clear, measurable KPIs for success."],
+            priority: 'Core', roiMetrics: {},
+            timeline: { phaseName: 'Phase 1: Discovery & Strategy', durationWeeks: 2, hidden: false },
+            dependencies: ['s-blueprint'], // Example: Requires Blueprint first
+            corequisite: '',
+            tags: ['strategy', 'planning'],
+            timelineDependsOn: 's-blueprint' // Example: Timeline dependency
+        },
+        {
+            id: 's-web-custom', name: 'Custom Website (Galifrey Web/Duda)', desc: 'A bespoke, high-performance website built on the Duda platform...',
+            model: 'Project', price: 4500, setupFee: 0, unit: '', categoryId: 'cat-web',
+            valuePropositions: ["Optimized for Core Web Vitals and speed.", "Professionally designed to convert visitors.", "Easy for your team to manage content."],
+            modifiers: [
+                { id: 'mod-web-complex', name: 'Complexity', type: 'Dropdown', options: [ { name: 'Standard (5-10 pages)', adjustment: 0 }, { name: 'Advanced (11-25 pages)', adjustment: 2500 }, { name: 'Enterprise (25+ pages)', adjustment: 6000 } ]},
+                { id: 'mod-web-duda-ecom', name: 'Duda E-commerce', type: 'Dropdown', options: [ { name: 'Not Included', adjustment: 0 }, { name: 'Basic Store (up to 100 products)', adjustment: 1500 }, { name: 'Advanced Store (up to 2500 products)', adjustment: 3000 } ]},
+            ],
+            priority: 'Core', roiMetrics: { metricName: 'Conversion Rate Lift', metricUnit: '%', minImpact: 1, maxImpact: 3 },
+            timeline: { phaseName: 'Phase 3: Development & Launch', durationWeeks: 8, hidden: false },
+            dependencies: ['s-blueprint'],
+            corequisite: 's-web-maintenance', // Example: Automatically adds maintenance
+            tags: ['website', 'core-service', 'development'],
+            timelineDependsOn: 's-brand-design'
+        },
+        {
+            id: 's-web-maintenance', name: 'Website Maintenance Retainer', desc: 'Keep your website secure, updated, and running smoothly.',
+            model: 'Monthly', price: 250, setupFee: 0, unit: '', categoryId: 'cat-web', 
+            valuePropositions: ["Protects against security vulnerabilities.", "Ensures optimal site performance.", "Provides peace of mind with regular backups."],
+            modifiers: [ { id: 'mod-maint-ecom', name: 'Includes E-commerce Support', type: 'Checkbox', adjustment: 150 } ],
+            priority: 'Recommended', roiMetrics: {},
+            timeline: { phaseName: 'Ongoing', durationWeeks: 0, hidden: true },
+            dependencies: [],
+            corequisite: '',
+            tags: ['website', 'support', 'retainer'],
+            timelineDependsOn: ''
+        },
+        // ... (all other services would be similarly updated with the new empty properties)
+    ],
+    adChannels: [
+        // ... (no changes needed here)
+    ],
+    packages: [
+        { 
+            id: 'pkg-ignite', name: 'Ignite', displayPrice: 2400,
+            desc: 'Perfect for startups to establish a foundational online presence. ',
+            features: 'Foundational SEO, Social Media Mgmt, 4 Blog Posts',
+            services: [
+                { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true }, // Example: Locked service
+                { id: 's-social-mgmt', quantity: 1, mods: {}, locked: false },
+                { id: 's-content-blog', quantity: 4, mods: {}, locked: false },
+            ]
+        },
+        { 
+            id: 'pkg-accelerate', name: 'Accelerate', displayPrice: 6500,
+            desc: 'For growing businesses ready to scale with a professional website and consistent marketing. ',
+            features: 'Custom Website, SEO Retainer, Social Media Management',
+            services: [
+                { id: 's-web-custom', quantity: 1, mods: {}, locked: true },
+                { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true },
+                { id: 's-social-mgmt', quantity: 1, mods: {}, locked: false },
+            ]
+        },
+        // ... (other packages would be similarly updated)
+    ]
+};
+// END: REPLACE THIS ENTIRE OBJECT
+        // #endregion
+        // #region ########## APPLICATION STATE AND CORE LOGIC ##########
+        let config = {};
+        // START: REPLACE THIS OBJECT
+        // START: REPLACE THIS OBJECT
+        // START: REPLACE THIS OBJECT
+let selections = {
+    phases: [
+        { id: `phase-${Date.now()}`, name: 'Phase 1: Campaign Selections', services: {}, adChannels: {} }
+    ],
+    activePhaseId: null,
+    teamAugmentation: {},
+    packagesToCompare: new Set(),
+    clientContext: {
+        businessStage: '', businessGoal: '', industry: '', targetAudience: '',
+        geographicTarget: '', website: '',
+        marketingHistory: [],
+        previousProvider: '', previousServices: '', previousBudget: '', reasonForSwitching: '',
+        durationWithProvider: '', satisfaction: 0, futureGoals: '', referralSource: '',
+        avgLeadValue: '',
+        avgClv: '',
+        monthlyTraffic: '',
+        conversionRate: '',
+        avgSaleValue: '',
+        // --- UPDATED: 'competitors' is now an array of objects, and 'socialUrls' is new ---
+        competitors: [
+            { url: '', notes: '' },
+            { url: '', notes: '' },
+            { url: '', notes: '' }
+        ],
+        socialUrls: [
+            { url: '' },
+            { url: '' },
+            { url: '' }
+        ]
+    },
+    overrides: { oneTime: null, monthly: null },
+    appliedCoupon: null
+};
+        let isAdmin = false;
+        let activeCampaign = null; 
+        let openAccordions = new Set();
+        let tempModifiers = [];
+        let timelineChart = null; // For the new timeline chart instance
+        const { jsPDF } = window.jspdf;
 
 function init() {
     const urlParams = new URLSearchParams(window.location.search);
