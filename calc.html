@@ -3704,7 +3704,6 @@ function calculateTotals(currentSelections) {
     let oneTimeAfterDiscounts = grandTotals.oneTime;
     let monthlyAfterDiscounts = grandTotals.preDiscountMonthly;
     
-    // --- FULL, CORRECTED DISCOUNT LOGIC ---
     if (source.appliedCoupon) {
         const coupon = source.appliedCoupon;
         let discountAmount = 0;
@@ -3764,7 +3763,6 @@ function calculateTotals(currentSelections) {
             monthlyAfterDiscounts -= discountAmount;
         }
     }
-    // --- END OF DISCOUNT LOGIC ---
 
     grandTotals.oneTime = Math.max(0, oneTimeAfterDiscounts);
     grandTotals.monthly = Math.max(0, monthlyAfterDiscounts);
