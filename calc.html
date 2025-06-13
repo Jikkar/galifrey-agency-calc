@@ -276,6 +276,9 @@
             transform: scale(0.95);
             transition: transform 0.3s ease;
         }
+        .version-item:hover .version-actions {
+            opacity: 1;
+        }
         .modal-content h3, .modal-content h4 {
             line-height: 1.3; /* Ensure modal headers don't clip */
         }
@@ -765,7 +768,6 @@ const defaultConfig = {
         marketingDiscounts: [],
         valueArticulationEnabled: true,
     },
-    // NEW: Team Augmentation Roles
     teamAugmentationRoles: [
         { id: 'role-seo', name: 'SEO Specialist', description: 'Dedicated expert for on-page, off-page, and technical SEO execution.', costPerHr: 95, minHrsPerMonth: 20, fullTimeSalaryComparison: 75000 },
         { id: 'role-ppc', name: 'PPC Manager', description: 'Manages and optimizes paid search and social campaigns.', costPerHr: 110, minHrsPerMonth: 15, fullTimeSalaryComparison: 85000 },
@@ -842,50 +844,47 @@ const defaultConfig = {
         // ... (all other services would be similarly updated with the new empty properties)
     ],
     adChannels: [
-        // ... (no changes needed here)
+        { id: 'ad-google', name: 'Google Ads', feeModel: 'tieredPercentageWithMinimums', setupFee: 500 },
+        { id: 'ad-meta', name: 'Meta Ads (Facebook/Instagram)', feeModel: 'tieredPercentageWithMinimums', setupFee: 500 },
+        { id: 'ad-linkedin', name: 'LinkedIn Ads', feeModel: 'tieredPercentageWithMinimums', setupFee: 650 },
+        { id: 'ad-tiktok', name: 'TikTok Ads', feeModel: 'tieredPercentageWithMinimums', setupFee: 650 }
     ],
     packages: [
-    {
-        id: 'pkg-launchpad',
-        name: 'Digital Launchpad',
-        displayPrice: 5000,
-        desc: 'Essential for new businesses or those needing a professional digital foundation. This package establishes your brand and launches your online presence.',
-        features: 'Brand Strategy, Logo Design, Custom Website, Website Maintenance Retainer',
-        services: [
-            { id: 's-brand-strategy', quantity: 1, mods: {}, locked: true },
-            { id: 's-logo-design', quantity: 1, mods: {}, locked: true },
-            { id: 's-web-custom', quantity: 1, mods: {}, locked: false },
-            { id: 's-web-maintenance', quantity: 1, mods: {}, locked: false }
-        ]
-    },
-    {
-        id: 'pkg-growth-engine',
-        name: 'Growth Engine',
-        displayPrice: 4500,
-        desc: 'Designed for businesses ready to actively attract and engage customers. This package focuses on driving traffic and generating leads.',
-        features: 'Comprehensive SEO Retainer, PPC Management, Paid Social Ads, Monthly Performance Reporting',
-        services: [
-            { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true },
-            { id: 's-ppc-management', quantity: 1, mods: {}, locked: true },
-            { id: 's-paid-social-management', quantity: 1, mods: {}, locked: false },
-            { id: 's-reporting-retainer', quantity: 1, mods: {}, locked: true }
-        ]
-    },
-    {
-        id: 'pkg-market-leader',
-        name: 'Market Leader',
-        displayPrice: 7500,
-        desc: 'An integrated, all-in-one solution for established businesses aiming to dominate their market through a multi-channel strategy.',
-        features: 'Fractional CMO, Comprehensive SEO, Social Media Management, Email Marketing, Promotional Video',
-        services: [
-            { id: 's-frac-cmo', quantity: 1, mods: {}, locked: true },
-            { id: 's-seo-retainer', quantity: 1, mods: { "mod-seo-tier": "Aggressive (More Content/Links)" }, locked: true },
-            { id: 's-social-management', quantity: 1, mods: { "mod-social-platforms": "3-4 Platforms" }, locked: false },
-            { id: 's-email-management', quantity: 1, mods: {}, locked: false },
-            { id: 's-video-promo', quantity: 1, mods: {}, locked: false }
-        ]
-    }
-]
+        { 
+            id: 'pkg-launchpad', name: 'Digital Launchpad', displayPrice: 5000,
+            desc: 'Essential for new businesses or those needing a professional digital foundation. This package establishes your brand and launches your online presence.',
+            features: 'Brand Strategy, Logo Design, Custom Website, Website Maintenance Retainer',
+            services: [
+                { id: 's-brand-strategy', quantity: 1, mods: {}, locked: true },
+                { id: 's-logo-design', quantity: 1, mods: {}, locked: true },
+                { id: 's-web-custom', quantity: 1, mods: {}, locked: false },
+                { id: 's-web-maintenance', quantity: 1, mods: {}, locked: false }
+            ]
+        },
+        { 
+            id: 'pkg-growth-engine', name: 'Growth Engine', displayPrice: 4500,
+            desc: 'Designed for businesses ready to actively attract and engage customers. This package focuses on driving traffic and generating leads.',
+            features: 'Comprehensive SEO Retainer, PPC Management, Paid Social Ads, Monthly Performance Reporting',
+            services: [
+                { id: 's-seo-retainer', quantity: 1, mods: {}, locked: true },
+                { id: 's-ppc-management', quantity: 1, mods: {}, locked: true },
+                { id: 's-paid-social-management', quantity: 1, mods: {}, locked: false },
+                { id: 's-reporting-retainer', quantity: 1, mods: {}, locked: true }
+            ]
+        },
+        { 
+            id: 'pkg-market-leader', name: 'Market Leader', displayPrice: 7500,
+            desc: 'An integrated, all-in-one solution for established businesses aiming to dominate their market through a multi-channel strategy.',
+            features: 'Fractional CMO, Comprehensive SEO, Social Media Management, Email Marketing, Promotional Video',
+            services: [
+                { id: 's-frac-cmo', quantity: 1, mods: {}, locked: true },
+                { id: 's-seo-retainer', quantity: 1, mods: { "mod-seo-tier": "Aggressive (More Content/Links)" }, locked: true },
+                { id: 's-social-management', quantity: 1, mods: { "mod-social-platforms": "3-4 Platforms" }, locked: false },
+                { id: 's-email-management', quantity: 1, mods: {}, locked: false },
+                { id: 's-video-promo', quantity: 1, mods: {}, locked: false }
+            ]
+        }
+    ]
 };
 // END: REPLACE THIS ENTIRE OBJECT
         // #endregion
