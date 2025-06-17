@@ -4351,7 +4351,7 @@
             // 1. Replace the 'calculateTotals' function
             // ========================================================================
 
-            function calculateTotals(currentSelections, campaignOverride = null) {
+    function calculateTotals(currentSelections, campaignOverride = null) {
     const source = currentSelections || selections;
     const campaignToUse = campaignOverride || activeCampaign;
 
@@ -4373,21 +4373,21 @@
             const selection = phase.services[serviceId];
             if (!service) continue;
 
-            // --- START NEW RETAINER LOGIC ---
+            // Check if the service has the retainer option selected
             const isRetainerSelected = service.retainerOptions?.isEligible && selection.retainerSelected;
 
             if (isRetainerSelected) {
-                // This block runs ONLY if the user has checked "Add to Monthly Retainer"
+                // --- NEW RETAINER LOGIC ---
                 const retainerOpts = service.retainerOptions;
 
                 // Add the fixed monthly cost of the retainer
                 phaseMonthly += retainerOpts.monthlyCost;
 
-                // Add cost for any estimated overage hours at the discounted rate
+                // Add cost for any estimated overage hours
                 const overageCost = (selection.overageHours || 0) * retainerOpts.overageRate;
                 phaseMonthly += overageCost;
 
-                // Add line items to the summary breakdown for clarity
+                // Add specific line items to the breakdown for clarity
                 breakdown.items.push({
                     name: `${service.name} Retainer`,
                     desc: `${retainerOpts.includedHours} hrs/mo included`,
@@ -4404,11 +4404,8 @@
                         phaseId: phase.id
                     });
                 }
-                // --- END NEW RETAINER LOGIC ---
             } else {
-                // --- FALLBACK TO EXISTING LOGIC ---
-                // This block runs if the retainer option is NOT selected.
-                // It calculates the price based on the service's standard model.
+                // --- EXISTING PRICING LOGIC (Fallback) ---
                 if (service.valuePropositions) allValueProps.push(...service.valuePropositions);
                 if (service.timeline && service.timeline.durationWeeks > 0 && !service.timeline.hidden) {
                     timelineData.push({ name: service.name, order: service.timeline.order || 0, duration: service.timeline.durationWeeks || 0 });
@@ -4440,18 +4437,10 @@
                         const modValue = selection.mods[modId];
                         summaryDesc.push(mod.type === 'Checkbox' ? mod.name : modValue);
                         switch (mod.type) {
-                            case 'Dropdown':
-                                basePrice += mod.options?.find(o => o.name === modValue)?.adjustment || 0;
-                                break;
-                            case 'TieredDropdown':
-                                multiplier *= mod.options?.find(o => o.name === modValue)?.multiplier || 1;
-                                break;
-                            case 'Numeric':
-                                basePrice += (parseInt(modValue, 10) || 0) * (mod.pricePerUnit || 0);
-                                break;
-                            case 'Checkbox':
-                                if (modValue === true) basePrice += mod.adjustment || 0;
-                                break;
+                            case 'Dropdown': basePrice += mod.options?.find(o => o.name === modValue)?.adjustment || 0; break;
+                            case 'TieredDropdown': multiplier *= mod.options?.find(o => o.name === modValue)?.multiplier || 1; break;
+                            case 'Numeric': basePrice += (parseInt(modValue, 10) || 0) * (mod.pricePerUnit || 0); break;
+                            case 'Checkbox': if (modValue === true) basePrice += mod.adjustment || 0; break;
                         }
                     }
                 }
@@ -4472,7 +4461,7 @@
             }
         }
 
-        // Ad Spend calculation remains unchanged
+        // Ad Spend calculation
         for (const selectionId in phase.adChannels) {
             const selection = phase.adChannels[selectionId];
             const channel = findAdChannel(selection.id);
@@ -4489,7 +4478,7 @@
         totals.monthly += phaseMonthly;
     });
 
-    // Team Augmentation calculation remains unchanged
+    // Team Augmentation calculation
     for (const roleId in source.teamAugmentation) {
         const role = (config.teamAugmentationRoles || []).find(r => r.id === roleId);
         const selection = source.teamAugmentation[roleId];
@@ -4500,9 +4489,9 @@
         }
     }
 
-    // All discount logic remains the same
     preDiscountTotals = { ...totals };
 
+    // All discount logic
     source.phases.forEach(phase => {
         for (const serviceId in phase.services) {
             const service = findService(serviceId);
@@ -4535,12 +4524,8 @@
         let discountAmount = 0;
         let discountableAmount = 0;
         switch (coupon.applyTo) {
-            case 'oneTime':
-                discountableAmount = preDiscountTotals.oneTime;
-                break;
-            case 'monthly':
-                discountableAmount = preDiscountTotals.monthly;
-                break;
+            case 'oneTime': discountableAmount = preDiscountTotals.oneTime; break;
+            case 'monthly': discountableAmount = preDiscountTotals.monthly; break;
             case 'service':
                 const targetItems = breakdown.items.filter(item => item.serviceId === coupon.targetId);
                 discountableAmount = targetItems.reduce((sum, item) => sum + item.cost, 0);
