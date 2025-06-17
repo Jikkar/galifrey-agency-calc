@@ -411,6 +411,7 @@
     </div>
    </div>
    <!-- Sticky Summary Sidebar -->
+   <!-- Sticky Summary Sidebar -->
    <aside id="summary-sidebar" class="lg:w-1/3 lg:sticky top-8 self-start p-6 rounded-2xl">
     <div class="border-b border-gray-200 mb-4">
      <nav id="summary-tabs" class="flex -mb-px" aria-label="Tabs">
@@ -497,6 +498,10 @@
        </div>
       </div>
       <!-- ROI Sections -->
+      <!-- NEW: Placeholder for Goal-Aligned Value -->
+      <div id="goal-value-section" class="mt-6 p-4 bg-purple-50 rounded-lg hidden">
+          <!-- Goal-aligned value will be injected here by the new render function -->
+      </div>
       <div id="value-articulation-section" class="mt-6 p-4 bg-indigo-50 rounded-lg hidden">
         <h4 class="font-bold text-indigo-800 mb-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"></path></svg>
@@ -1308,6 +1313,37 @@ function handleDynamicClicks(e) {
         // #region ########## RENDER FUNCTIONS ##########
         // START: ADD THIS MISSING FUNCTION
         // NEW: Renders the goal-setting workshop panel
+
+// NEW: Renders the user-defined goals in the summary panel
+function renderGoalAlignedValue(goals) {
+    const container = document.getElementById('goal-value-section');
+    if (!container) return;
+
+    if (!goals || goals.length === 0) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = `
+        <h4 class="font-bold text-purple-800 mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+            </svg>
+            Goal-Aligned Value
+        </h4>
+        <div class="space-y-3">
+            ${goals.map(goal => `
+                <div class="text-sm">
+                    <p class="text-purple-700 font-semibold">${goal.text}</p>
+                    ${goal.kpi ? `<p class="text-gray-600 pl-2"><strong>KPI:</strong> ${goal.kpi}</p>` : ''}
+                </div>
+            `).join('')}
+        </div>
+    `;
+    container.classList.remove('hidden');
+}
+
 function renderGoalWorkshopPanel() {
     const ctx = selections.clientContext;
     const isOpen = openAccordions.has('goal-workshop');
@@ -1759,7 +1795,8 @@ function renderServiceCard(service) {
         // START: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
 function renderSummary() {
-    const { totals, breakdown, discounts, valueProps, roiProjections, forecast, timelineData } = calculateTotals(selections);
+    // --- UPDATED: Destructure the new 'goalAlignedValue' property ---
+    const { totals, breakdown, discounts, valueProps, roiProjections, forecast, timelineData, goalAlignedValue } = calculateTotals(selections);
     const summaryContent = document.getElementById('summary-content');
     const emptyMessage = document.getElementById('empty-summary-message');
     const overrideOneTimeInput = document.getElementById('override-one-time');
@@ -1850,10 +1887,13 @@ function renderSummary() {
         discountsList.classList.add('hidden');
     }
     
+    // --- UPDATED: Call all the rendering functions for the summary sections ---
+    renderGoalAlignedValue(goalAlignedValue);
     renderValuePropositions(valueProps);
     renderRoiProjections(roiProjections);
     renderRoiForecast(forecast);
 }
+
 // END: REPLACE THIS FUNCTION
         // END: REPLACE THIS FUNCTION
         function setSummaryTab(tabId) {
@@ -3932,6 +3972,9 @@ function calculateTotals(currentSelections, campaignOverride = null) {
     let roiProjections = [];
     let timelineData = [];
     let forecast = {};
+    // --- NEW: Process defined goals ---
+    let allDefinedGoals = (source.clientContext.goals || [])
+        .filter(g => g.text && g.text.trim() !== '');
 
     source.phases.forEach(phase => {
         let phaseOneTime = 0;
@@ -3951,7 +3994,6 @@ function calculateTotals(currentSelections, campaignOverride = null) {
             let multiplier = 1;
             let summaryDesc = [];
             
-            // Use the specific campaign context for this calculation
             const campaignPrice = getCampaignPrice(serviceId, campaignToUse);
             const globalAdjust = campaignToUse ? config.settings.campaignModifiers[campaignToUse]?.globalAdjust : null;
             let basePrice = campaignPrice ?? service.price;
@@ -4079,8 +4121,10 @@ function calculateTotals(currentSelections, campaignOverride = null) {
     totals.oneTime = Math.max(0, totals.oneTime);
     totals.monthly = Math.max(0, totals.monthly);
 
-    return { totals, phaseTotals: breakdown.phaseData, breakdown, discounts: allDiscounts, valueProps: allValueProps, roiProjections, timelineData, forecast };
+    // --- NEW: Add goals to the returned object ---
+    return { totals, phaseTotals: breakdown.phaseData, breakdown, discounts: allDiscounts, valueProps: allValueProps, roiProjections, timelineData, forecast, goalAlignedValue: allDefinedGoals };
 }
+
 // END: REPLACE THIS FUNCTION
         // END: REPLACE THIS FUNCTION
         function renderTimelineChart(timelineData) {
