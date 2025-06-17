@@ -4414,11 +4414,14 @@ async function init() {
     const campaignToUse = campaignOverride || activeCampaign;
 
     let totals = { oneTime: 0, monthly: 0, adSpend: 0 };
+    let preDiscountTotals = { oneTime: 0, monthly: 0 };
     let allDiscounts = [];
     let breakdown = { items: [], serviceMonthlyCosts: {}, phaseData: {} };
-    let allValueProps = []; // This now stores objects: { serviceName, propositions }
+    let allValueProps = [];
+    let roiProjections = [];
     let timelineData = [];
-    
+    let forecast = {};
+
     source.phases.forEach(phase => {
         let phaseOneTime = 0;
         let phaseMonthly = 0;
@@ -4427,23 +4430,20 @@ async function init() {
             const service = findService(serviceId);
             if (!service) continue;
 
-            // --- THIS IS THE RESTORED LOGIC ---
-            // Group value propositions by service
             if (service.valuePropositions && service.valuePropositions.length > 0) {
                 allValueProps.push({
                     serviceName: service.name,
                     propositions: service.valuePropositions
                 });
             }
-            // --- END RESTORED LOGIC ---
 
             if (service.timeline && service.timeline.durationWeeks > 0 && !service.timeline.hidden) {
                 timelineData.push({ name: service.name, order: service.timeline.order || 0, duration: service.timeline.durationWeeks || 0 });
             }
-            
-            // ... (The rest of the calculation logic remains the same) ...
+
             const selection = phase.services[serviceId];
             const isRetainerSelected = service.retainerOptions?.isEligible && selection.retainerSelected;
+
             if (isRetainerSelected) {
                 const retainerOpts = service.retainerOptions;
                 phaseMonthly += retainerOpts.monthlyCost;
@@ -4498,16 +4498,93 @@ async function init() {
             }
         }
         
-        // ... (rest of the function, including ad spend and phase totals)
+        for (const selectionId in phase.adChannels) {
+            const selection = phase.adChannels[selectionId];
+            const channel = findAdChannel(selection.id);
+            if (!channel) continue;
+            const managementFee = calculateAdFee(channel, selection.spend);
+            phaseOneTime += selection.setupFee;
+            phaseMonthly += managementFee;
+            totals.adSpend += selection.spend;
+            breakdown.items.push({ name: `${channel.name} Management`, desc: `For ${formatCurrency(selection.spend)} ad spend`, cost: selection.setupFee + managementFee, type: 'Ad Spend', phaseId: phase.id });
+        }
+        
         breakdown.phaseData[phase.id] = { name: phase.name, oneTime: phaseOneTime, monthly: phaseMonthly };
         totals.oneTime += phaseOneTime;
         totals.monthly += phaseMonthly;
     });
 
-    // ... (rest of the function, including team augmentation and discounts)
-    // ...
+    if (config.settings.teamAugmentationEnabled) {
+        for (const roleId in source.teamAugmentation) {
+            const role = (config.teamAugmentationRoles || []).find(r => r.id === roleId);
+            const selection = source.teamAugmentation[roleId];
+            if (role && selection?.hours > 0) {
+                const cost = role.costPerHr * selection.hours;
+                totals.monthly += cost;
+                breakdown.items.push({ name: `Team Aug: ${role.name}`, desc: `${selection.hours} hrs/mo`, cost, type: 'Monthly', phaseId: 'augmentation' });
+            }
+        }
+    }
     
-    return { totals, breakdown, discounts, valueProps: allValueProps, timelineData };
+    preDiscountTotals = { ...totals };
+
+    source.phases.forEach(phase => {
+        for (const serviceId in phase.services) {
+            const service = findService(serviceId);
+            const selection = phase.services[serviceId];
+            if (!service || service.model !== 'Monthly') continue;
+            const term = findRetainerTerm(selection.termMonths);
+            if (term?.discount > 0) {
+                const serviceCost = breakdown.serviceMonthlyCosts[serviceId] || 0;
+                const discountAmount = serviceCost * term.discount;
+                if (discountAmount > 0) {
+                    allDiscounts.push({ name: `Term Discount on ${service.name}`, amount: discountAmount });
+                    totals.monthly -= discountAmount;
+                }
+            }
+        }
+    });
+
+    const totalServiceCount = source.phases.reduce((acc, p) => acc + Object.keys(p.services).length, 0);
+    const applicableBundle = [...(config.settings.bundleDiscounts || [])].sort((a, b) => b.threshold - a.threshold).find(d => totalServiceCount >= d.threshold);
+    if (applicableBundle?.percentage > 0) {
+        const discountAmount = totals.monthly * applicableBundle.percentage;
+        if (discountAmount > 0) {
+            allDiscounts.push({ name: `Bundle Discount (${totalServiceCount} services)`, amount: discountAmount });
+            totals.monthly -= discountAmount;
+        }
+    }
+
+    if (source.appliedCoupon) {
+        const coupon = source.appliedCoupon;
+        let discountAmount = 0;
+        let discountableAmount = 0;
+        switch (coupon.applyTo) {
+            case 'oneTime': discountableAmount = preDiscountTotals.oneTime; break;
+            case 'monthly': discountableAmount = preDiscountTotals.monthly; break;
+            case 'service':
+                const targetItems = breakdown.items.filter(item => item.serviceId === coupon.targetId);
+                discountableAmount = targetItems.reduce((sum, item) => sum + item.cost, 0);
+                break;
+            case 'category':
+                const itemsInCategory = breakdown.items.filter(item => item.categoryId === coupon.targetId);
+                discountableAmount = itemsInCategory.reduce((sum, item) => sum + item.cost, 0);
+                break;
+        }
+        if (coupon.type === 'percent') discountAmount = discountableAmount * coupon.value;
+        else discountAmount = Math.min(discountableAmount, coupon.value);
+        if (discountAmount > 0) {
+            allDiscounts.push({ name: `Coupon: ${coupon.code}`, amount: discountAmount });
+            if (coupon.applyTo === 'oneTime' || coupon.applyTo === 'service' || coupon.applyTo === 'category') totals.oneTime -= discountAmount;
+            else totals.monthly -= discountAmount;
+        }
+    }
+
+    totals.oneTime = Math.max(0, totals.oneTime);
+    totals.monthly = Math.max(0, totals.monthly);
+
+    // This is the full, correct return object.
+    return { totals, phaseTotals: breakdown.phaseData, breakdown, discounts: allDiscounts, valueProps: allValueProps, roiProjections, timelineData, forecast };
 }
     // --- END: New logic ---
 
