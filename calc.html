@@ -851,7 +851,7 @@
 
 
 
-    <script>
+    <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, getDoc, setDoc, collection, query, orderBy, onSnapshot, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
     
@@ -888,10 +888,14 @@
 
             // This function will listen for real-time updates from Firebase
             function listenForQuotes() {
-    // Unsubscribe from any previous listener to avoid duplicates
-    if (quotesListener) {
-        quotesListener();
-    }
+    if (quotesListener) quotesListener();
+    const quotesQuery = query(collection(db, "submittedQuotes"), orderBy("timestamp", "desc"));
+    quotesListener = onSnapshot(quotesQuery, (snapshot) => {
+        const quotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderSubmittedQuotes(quotes);
+        updateQuoteCountBadge(quotes.length);
+    });
+}
     // Create a query using the modular syntax
     const quotesQuery = query(collection(db, "submittedQuotes"), orderBy("timestamp", "desc"));
     
@@ -1123,27 +1127,21 @@ async function init() {
     if (sharedDataParam) {
         try {
             const binaryString = atob(sharedDataParam.replace(/-/g, '+').replace(/_/g, '/'));
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
             }
             const decompressed = pako.inflate(bytes, { to: 'string' });
-            const sharedSelections = JSON.parse(decompressed);
-
-            if (loadSession(sharedSelections)) {
+            if (loadSession(JSON.parse(decompressed))) {
                 sessionLoadedFromUrl = true;
                 showToast("Shared session loaded successfully!", "success");
-                trackAnalytics('session_loaded', { source: 'URL' });
                 const cleanUrl = new URL(window.location);
                 cleanUrl.searchParams.delete('s');
                 window.history.replaceState({}, document.title, cleanUrl.href);
-            } else {
-                throw new Error("Invalid session data format from URL.");
             }
         } catch (e) {
             console.error("Failed to load from shared URL:", e);
-            showToast("Could not load the shared link. It may be invalid or corrupted.", "error");
+            showToast("Could not load the shared link.", "error");
         }
     }
 
@@ -1153,72 +1151,55 @@ async function init() {
 
     activeCampaign = urlParams.get('campaign');
 
-    // Await the configuration to be loaded from Firestore before continuing
     await loadConfig();
-
     setupEventListeners();
-    listenForQuotes(); // This continues to listen for quotes in real-time
-
+    listenForQuotes();
     renderAll();
 }
 
     async function loadConfig() {
-    // This now uses the modular 'doc' and 'getDoc' functions
-    const configRef = doc(db, 'app', 'config'); 
+    const configRef = doc(db, 'app', 'config');
     try {
         const docSnap = await getDoc(configRef);
         if (docSnap.exists()) {
             console.log("Configuration loaded from Firestore.");
-            config = {
-                ...JSON.parse(JSON.stringify(defaultConfig)), // Ensure all keys exist
-                ...docSnap.data()
-            };
+            config = { ...JSON.parse(JSON.stringify(defaultConfig)), ...docSnap.data() };
         } else {
-            console.log("No config found in Firestore. Using local default config and attempting initial save.");
+            console.log("No config in Firestore. Using defaults and attempting initial save.");
             config = JSON.parse(JSON.stringify(defaultConfig));
-            // Attempt to save the default config to establish it for future loads.
-            await saveConfig(false); 
+            await saveConfig(false);
         }
     } catch (error) {
-        console.error("Error fetching config from Firestore. Using default config.", error);
+        console.error("Error fetching config from Firestore. Using local defaults.", error);
         config = JSON.parse(JSON.stringify(defaultConfig));
-        showToast("Could not load cloud settings. Using local defaults.", "error");
+        showToast("Could not load cloud settings.", "error");
     }
 }
     async function saveConfig(showSuccessToast = true) {
-    // This now uses the modular 'doc' and 'setDoc' functions
     const configRef = doc(db, 'app', 'config');
     try {
-        const cleanConfig = JSON.parse(JSON.stringify(config));
-        await setDoc(configRef, cleanConfig, { merge: true });
-
+        await setDoc(configRef, JSON.parse(JSON.stringify(config)), { merge: true });
         if (showSuccessToast) {
-            trackAnalytics('config_saved');
             showToast('Configuration saved to cloud successfully!', 'success');
         }
     } catch (e) {
         console.error("Failed to save config to Firestore", e);
         showToast('Error saving configuration to cloud.', 'error');
-        return;
     }
-    renderAll();
 }
             async function resetConfig() {
-    if (confirm("Are you sure you want to reset all settings to their defaults? This will immediately save the default settings to the cloud, overwriting the current cloud configuration.")) {
+    if (confirm("This will overwrite the cloud configuration with defaults. Are you sure?")) {
         config = JSON.parse(JSON.stringify(defaultConfig));
         const newPhaseId = `phase-${Date.now()}`;
         selections = {
             phases: [{ id: newPhaseId, name: 'Phase 1: Campaign Selections', services: {}, adChannels: {} }],
             activePhaseId: newPhaseId,
-            teamAugmentation: {},
-            packagesToCompare: new Set(),
-            clientContext: defaultConfig.settings.clientContext,
-            overrides: { oneTime: null, monthly: null },
-            appliedCoupon: null
+            teamAugmentation: {}, packagesToCompare: new Set(), clientContext: defaultConfig.settings.clientContext,
+            overrides: { oneTime: null, monthly: null }, appliedCoupon: null
         };
         openAccordions = new Set();
-        // Explicitly save the reset configuration to Firestore.
-        await saveConfig(); 
+        await saveConfig();
+        renderAll();
     }
 }
             function resetAnalytics() {
@@ -2501,14 +2482,14 @@ async function init() {
     function renderAdminPanel() {
     const container = document.getElementById('content-admin');
     if (!isAdmin) {
-        container.innerHTML = `<p class="text-center text-gray-500 p-8">Admin panel is locked. Press Ctrl+Shift+A and enter password to unlock.</p>`;
+        container.innerHTML = `<p class="text-center text-gray-500 p-8">Admin panel is locked. Press Ctrl+Shift+A and enter password.</p>`;
         return;
     }
     container.innerHTML = `
     <div class="bg-white p-6 rounded-lg shadow-md space-y-8">
         <div>
             <h3 class="font-bold text-xl mb-4">Cloud Configuration Management</h3>
-            <p class="text-sm text-gray-500 mb-4">Use these buttons to manually synchronize your calculator's settings with the cloud. Remember to save to the cloud after making changes, and fetch from the cloud when you start a new session on a different device.</p>
+            <p class="text-sm text-gray-500 mb-4">Use these buttons to manually synchronize your calculator's settings with the cloud.</p>
             <div class="flex flex-wrap gap-4 items-center">
                 <button id="admin-fetch-cloud" class="btn btn-primary">Fetch from Cloud</button>
                 <button id="admin-save-cloud" class="btn btn-success">Save to Cloud</button>
@@ -2526,27 +2507,23 @@ async function init() {
         ${renderAdminDiscountsAndTiers()}
         ${renderAdminCategoryManagement()}
         ${renderAdminServiceManagement()}
-    </div>
-    `;
+    </div>`;
 
-    // Attach all event listeners for the admin panel
     document.getElementById('admin-fetch-cloud')?.addEventListener('click', async () => {
-        if(confirm("This will overwrite your current unsaved changes with the latest data from the cloud. Continue?")) {
+        if (confirm("This will overwrite your current unsaved changes. Continue?")) {
             await loadConfig();
-            renderAll(); // Re-render the entire UI with the fetched data
+            renderAll();
             showToast("Configuration fetched from cloud.", "success");
         }
     });
     document.getElementById('admin-save-cloud')?.addEventListener('click', async () => {
         await saveConfig();
     });
-    
     document.getElementById('admin-reset')?.addEventListener('click', resetConfig);
     document.getElementById('admin-export-json')?.addEventListener('click', exportConfig);
     document.getElementById('admin-import-json')?.addEventListener('change', importConfig);
     document.getElementById('admin-export-csv')?.addEventListener('click', exportServicesCSV);
     document.getElementById('admin-import-csv')?.addEventListener('change', importServicesCSV);
-
     const exportCampaignsBtn = document.getElementById('admin-export-campaigns-csv');
     if (exportCampaignsBtn) {
         exportCampaignsBtn.addEventListener('click', exportCampaignsCSV);
@@ -2705,9 +2682,15 @@ async function init() {
                 }
             }
             async function deleteQuote(quoteId) {
-    if (!confirm(`Are you sure you want to permanently delete this quote? This cannot be undone.`)) {
-        return;
+    if (!confirm(`Are you sure you want to permanently delete this quote?`)) return;
+    try {
+        await deleteDoc(doc(db, "submittedQuotes", quoteId));
+        showToast('Quote deleted.', 'info');
+    } catch (error) {
+        console.error("Error removing quote: ", error);
+        showToast("Could not delete quote.", "error");
     }
+}
     try {
         // Get a reference to the document using the modular syntax
         const quoteRef = doc(db, "submittedQuotes", quoteId);
@@ -5522,75 +5505,42 @@ async function init() {
     pdf.save(filename);
 }
             // MODIFIED: Saves all new client context fields
-            function handleQuoteRequest(e) {
+    async function handleQuoteRequest(e) {
     e.preventDefault();
     const form = e.target;
     const name = form.elements.name.value.trim();
-    const email = form.elements.email.value.trim();
-    if (!name || !email) {
-        showToast("Please enter at least your name and email.", "error");
-        return;
-    }
+    if (!name) { showToast("Please enter your name.", "error"); return; }
 
-    // Create a serializable copy to handle the Set -> Array conversion for packagesToCompare.
-    const selectionsToSave = {
-        ...selections,
-        packagesToCompare: Array.from(selections.packagesToCompare || [])
-    };
-
+    const selectionsToSave = { ...selections, packagesToCompare: Array.from(selections.packagesToCompare) };
     const rawSummary = calculateTotals(selectionsToSave);
     
-    // --- NEW: Calculate and add override discounts before saving ---
+    // Add override discounts to the summary before saving
     const allDiscounts = [...(rawSummary.discounts || [])];
-    const oneTimeOverride = selectionsToSave.overrides.oneTime;
-    if (typeof oneTimeOverride === 'number' && oneTimeOverride < rawSummary.totals.oneTime) {
-        const oneTimeDiscountAmount = rawSummary.totals.oneTime - oneTimeOverride;
-        allDiscounts.push({ name: 'Admin Price Adjustment (One-Time)', amount: oneTimeDiscountAmount });
+    if (typeof selectionsToSave.overrides.oneTime === 'number' && selectionsToSave.overrides.oneTime < rawSummary.totals.oneTime) {
+        allDiscounts.push({ name: 'Admin Price Adjustment (One-Time)', amount: rawSummary.totals.oneTime - selectionsToSave.overrides.oneTime });
     }
-
-    const monthlyOverride = selectionsToSave.overrides.monthly;
-    if (typeof monthlyOverride === 'number' && monthlyOverride < rawSummary.totals.monthly) {
-        const monthlyDiscountAmount = rawSummary.totals.monthly - monthlyOverride;
-        allDiscounts.push({ name: 'Admin Price Adjustment (Monthly)', amount: monthlyDiscountAmount });
+    if (typeof selectionsToSave.overrides.monthly === 'number' && selectionsToSave.overrides.monthly < rawSummary.totals.monthly) {
+        allDiscounts.push({ name: 'Admin Price Adjustment (Monthly)', amount: rawSummary.totals.monthly - selectionsToSave.overrides.monthly });
     }
-    // --- END: New logic ---
-
-    const finalOneTime = selectionsToSave.overrides.oneTime ?? rawSummary.totals.oneTime;
-    const finalMonthly = selectionsToSave.overrides.monthly ?? rawSummary.totals.monthly;
-    const formData = new FormData(form);
+    rawSummary.discounts = allDiscounts;
 
     const quoteData = {
-        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        contact: {
-            name: formData.get('name'),
-            email: formData.get('email'),
-            phone: formData.get('phone'),
-            businessName: formData.get('businessName'),
-        },
+        timestamp: serverTimestamp(),
+        contact: { name, email: form.elements.email.value, phone: form.elements.phone.value, businessName: form.elements.businessName.value },
         selections: selectionsToSave,
-        summary: {
-            ...rawSummary,
-            discounts: allDiscounts, // Use the complete, final list of discounts
-            totals: {
-                oneTime: finalOneTime,
-                monthly: finalMonthly,
-                adSpend: rawSummary.totals.adSpend,
-            }
-        },
+        summary: rawSummary,
         campaign: activeCampaign
     };
 
-    db.collection("submittedQuotes").add(quoteData)
-        .then(() => {
-            document.getElementById('quote-modal-overlay').style.display = 'none';
-            form.reset();
-            trackAnalytics('quote_submitted');
-            showToast("Thank you! Your quote has been submitted for review.", "success");
-        })
-        .catch((error) => {
-            console.error("Error writing document: ", error);
-            showToast("Could not submit quote. Please try again.", "error");
-        });
+    try {
+        await addDoc(collection(db, "submittedQuotes"), quoteData);
+        document.getElementById('quote-modal-overlay').style.display = 'none';
+        form.reset();
+        showToast("Thank you! Your quote has been submitted.", "success");
+    } catch (error) {
+        console.error("Error writing quote: ", error);
+        showToast("Could not submit quote.", "error");
+    }
 }
             function showToast(message, type = 'info') {
                 const container = document.getElementById('toast-container');
