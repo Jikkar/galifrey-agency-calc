@@ -2292,21 +2292,6 @@
                 renderRoiForecast(forecast);
             }
             // END: REPLACE THIS FUNCTION
-            // END: REPLACE THIS FUNCTION
-            function setSummaryTab(tabId) {
-                document.querySelectorAll('#summary-tabs .summary-tab').forEach(t => t.classList.remove('active'));
-                document.querySelector(`[data-tab='${tabId}']`).classList.add('active');
-                if (tabId === 'summary') {
-                    document.getElementById('summary-tab-content-summary').classList.remove('hidden');
-                    document.getElementById('summary-tab-content-timeline').classList.add('hidden');
-                } else {
-                    document.getElementById('summary-tab-content-summary').classList.add('hidden');
-                    document.getElementById('summary-tab-content-timeline').classList.remove('hidden');
-                    // FIX: Calculate fresh data and render the chart only when the tab is made visible.
-                    const { timelineData } = calculateTotals(selections);
-                    renderTimelineChart(timelineData);
-                }
-            }
             function renderRoiProjections(projections) {
                 const container = document.getElementById('roi-projection-section');
                 if (!projections || projections.length === 0) {
@@ -3310,15 +3295,23 @@
             // END: REPLACE THIS FUNCTION
             // END: ADD THESE NEW FUNCTIONS
             function switchTab(tabId) {
-                document.querySelectorAll('#main-tabs .tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('#main-content > div').forEach(c => c.classList.add('hidden'));
-                const tab = document.getElementById(`tab-${tabId}`);
-                const content = document.getElementById(`content-${tabId}`);
-                if (tab && content) {
-                    tab.classList.add('active');
-                    content.classList.remove('hidden');
-                }
-            }
+    document.querySelectorAll('#main-tabs .tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('#main-content > div').forEach(c => c.classList.add('hidden'));
+
+    const tab = document.getElementById(`tab-${tabId}`);
+    const content = document.getElementById(`content-${tabId}`);
+
+    if (tab && content) {
+        tab.classList.add('active');
+        content.classList.remove('hidden');
+    }
+
+    // If the user is switching to the timeline tab, render the chart.
+    if (tabId === 'timeline') {
+        const { timelineData } = calculateTotals(selections);
+        renderTimelineChart(timelineData);
+    }
+}
             function toggleAdminMode() {
                 if (isAdmin) {
                     isAdmin = false;
