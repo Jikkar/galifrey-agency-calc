@@ -2306,31 +2306,7 @@
                     container.classList.add('hidden');
                 }
             }
-            // START: ADD THIS NEW FUNCTION
-            function renderAdminTeamAugmentation() {
-                // Ensure the array exists in the config, defaulting to an empty array if not
-                const roles = config.teamAugmentationRoles || [];
-                return `
-                <div>
-                    <h3 class="font-bold text-xl mb-4">Team Augmentation Roles</h3>
-                    <div class="p-4 border rounded-lg bg-gray-50">
-                        <p class="text-sm text-gray-500 mb-3">Manage the team roles available for client augmentation. These will appear in the main "Team Augmentation Calculator" tab.</p>
-                        <div id="admin-team-roles-list" class="space-y-2">
-                            ${roles.map(role => `
-                                <div class="p-3 border rounded-md flex justify-between items-center bg-white">
-                                    <span>${role.name} <span class="text-xs text-gray-500">(${formatCurrency(role.costPerHr)}/hr)</span></span>
-                                    <div class="space-x-2">
-                                        <button data-action="admin-edit" data-type="team-augmentation-role" data-id="${role.id}" class="text-sm text-blue-600 hover:underline">Edit</button>
-                                        <button data-action="admin-delete" data-type="team-augmentation-role" data-id="${role.id}" class="text-sm text-red-600 hover:underline">Delete</button>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <button data-action="admin-add" data-type="team-augmentation-role" class="mt-4 bg-gray-200 py-2 px-4 rounded-lg text-sm hover:bg-gray-300">+ Add New Role</button>
-                    </div>
-                </div>
-            `;
-            }
+       
             // END: ADD THIS NEW FUNCTION
             // START: ADD THIS NEW FUNCTION
             function renderAdminTeamAugmentation() {
@@ -3599,28 +3575,6 @@
                     renderSummary();
                 } else {
                     showToast("Invalid channel ID selected.", "error");
-                }
-            }
-            function removeAdChannel(selectionId) {
-                const phase = selections.phases.find(p => p.id === selections.activePhaseId);
-                if (phase && phase.adChannels[selectionId]) {
-                    delete phase.adChannels[selectionId];
-                    renderBuilder();
-                    renderSummary();
-                }
-            }
-            function updateAdSpend(selectionId, spend) {
-                const phase = selections.phases.find(p => p.id === selections.activePhaseId);
-                if (phase && phase.adChannels[selectionId]) {
-                    phase.adChannels[selectionId].spend = isNaN(spend) ? 0 : spend;
-                    renderSummary();
-                }
-            }
-            function updateAdSetupFee(selectionId, fee) {
-                const phase = selections.phases.find(p => p.id === selections.activePhaseId);
-                if (phase && phase.adChannels[selectionId]) {
-                    phase.adChannels[selectionId].setupFee = isNaN(fee) ? 0 : fee;
-                    renderSummary();
                 }
             }
             function removeAdChannel(selectionId) {
