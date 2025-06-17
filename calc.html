@@ -411,7 +411,6 @@
     </div>
    </div>
    <!-- Sticky Summary Sidebar -->
-   <!-- Sticky Summary Sidebar -->
    <aside id="summary-sidebar" class="lg:w-1/3 lg:sticky top-8 self-start p-6 rounded-2xl">
     <div class="border-b border-gray-200 mb-4">
      <nav id="summary-tabs" class="flex -mb-px" aria-label="Tabs">
@@ -498,10 +497,6 @@
        </div>
       </div>
       <!-- ROI Sections -->
-      <!-- NEW: Placeholder for Goal-Aligned Value -->
-      <div id="goal-value-section" class="mt-6 p-4 bg-purple-50 rounded-lg hidden">
-          <!-- Goal-aligned value will be injected here by the new render function -->
-      </div>
       <div id="value-articulation-section" class="mt-6 p-4 bg-indigo-50 rounded-lg hidden">
         <h4 class="font-bold text-indigo-800 mb-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"></path></svg>
@@ -716,7 +711,7 @@
  
  <script>
   document.addEventListener('DOMContentLoaded', function() {
-        // ########## FIREBASE INITIALIZATION ##########
+    // ########## FIREBASE INITIALIZATION ##########
         const firebaseConfig = {
             apiKey: "AIzaSyCw4QA3yeLQHvOuCq6IO0qn4lIO2UzhlsU",
             authDomain: "agency-calc.firebaseapp.com",
@@ -727,43 +722,28 @@
             measurementId: "G-DVV8FWWXXB"
         };
 
-        // Defer initialization to the init() function to prevent script-halting errors.
-        let db = null;
-        let quotesListener = null;
-
-
         // Initialize Firebase
         const app = firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         let quotesListener = null; // To hold our real-time listener
 
         // This function will listen for real-time updates from Firebase
-                function listenForQuotes() {
+        function listenForQuotes() {
             // Unsubscribe from any previous listener to avoid duplicates
             if (quotesListener) {
                 quotesListener();
             }
 
-            // REMOVED: .orderBy("timestamp", "desc")
-            // This was causing an error if the corresponding Firestore index was not created.
-            // Sorting will now be handled in the browser after the data is received.
-            const quotesCollection = db.collection("submittedQuotes");
-            
+            const quotesCollection = db.collection("submittedQuotes").orderBy("timestamp", "desc");
             quotesListener = quotesCollection.onSnapshot((snapshot) => {
                 const quotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                // ADDED: Sort the quotes manually in JavaScript after receiving them.
-                // This is a more robust way to handle ordering.
-                quotes.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-
-                renderSubmittedQuotes(quotes); 
+                renderSubmittedQuotes(quotes); // Re-render the list with fresh data
                 updateQuoteCountBadge(quotes.length);
             }, (error) => {
                 console.error("Error fetching quotes: ", error);
                 showToast("Could not connect to the quotes database.", "error");
             });
         }
-
         // ##############################################
         // #region ########## DEFAULT CONFIGURATION ##########
         // START: REPLACE THIS ENTIRE OBJECT
@@ -951,12 +931,6 @@ let selections = {
         monthlyTraffic: '',
         conversionRate: '',
         avgSaleValue: '',
-        // --- NEW: Interactive Goals ---
-        goals: [
-            { text: '', kpi: '' },
-            { text: '', kpi: '' },
-            { text: '', kpi: '' }
-        ],
         // --- UPDATED: 'competitors' is now an array of objects, and 'socialUrls' is new ---
         competitors: [
             { url: '', notes: '' },
@@ -972,7 +946,6 @@ let selections = {
     overrides: { oneTime: null, monthly: null },
     appliedCoupon: null
 };
-
         let isAdmin = false;
         let activeCampaign = null; 
         let openAccordions = new Set();
@@ -988,19 +961,25 @@ function init() {
     // Priority 1: Load from a shared URL parameter.
     if (sharedDataParam) {
         try {
+            // DECODING PROCESS - Decodes the URL-safe Base64 string back to a Uint8Array
             const binaryString = atob(sharedDataParam.replace(/-/g, '+').replace(/_/g, '/'));
             const len = binaryString.length;
             const bytes = new Uint8Array(len);
             for (let i = 0; i < len; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
             }
+
+            // Decompress the data
             const decompressed = pako.inflate(bytes, { to: 'string' });
             const sharedSelections = JSON.parse(decompressed);
             
+            // Use the pure loadSession function to update the state.
             if (loadSession(sharedSelections)) {
                 sessionLoadedFromUrl = true;
                 showToast("Shared session loaded successfully!", "success");
                 trackAnalytics('session_loaded', { source: 'URL' });
+
+                // Clean the URL to prevent reloading the same shared data on refresh.
                 try {
                     const cleanUrl = new URL(window.location);
                     cleanUrl.searchParams.delete('s');
@@ -1029,43 +1008,11 @@ function init() {
     activeCampaign = urlParams.get('campaign');
     loadConfig();
     setupEventListeners();
+    listenForQuotes(); // Firebase listener
 
-    // --- ROBUST FIREBASE INITIALIZATION ---
-    // This block now handles the entire connection process.
-    try {
-        // Check if the global firebase object exists (script loaded)
-        if (typeof firebase !== 'undefined') {
-            const app = firebase.initializeApp(firebaseConfig);
-            db = firebase.firestore(); // Assign to the globally-scoped db variable
-            listenForQuotes(); // Start the listener only on successful init
-        } else {
-            // This error is thrown if the firebase script itself failed to load.
-            throw new Error("Firebase library not loaded. Check network or script tags.");
-        }
-    } catch (e) {
-        console.error("Firebase initialization failed:", e);
-        showToast("Could not connect to database services. Quote submission is disabled.", "error");
-        db = null; // Ensure db is null on any failure
-    }
-
-    // This will now always run, ensuring the UI is displayed.
+    // A single, final render call to draw the UI with either the shared data or the default state.
     renderAll();
-
-    // After rendering, check if DB is available and gracefully disable features if not.
-    if (!db) {
-        const requestQuoteBtn = document.getElementById('request-quote-btn');
-        if (requestQuoteBtn) {
-            requestQuoteBtn.disabled = true;
-            requestQuoteBtn.textContent = 'Quote Submission Unavailable';
-            requestQuoteBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        }
-        // Hide admin tabs that require a database connection.
-        document.getElementById('tab-admin').classList.add('hidden');
-        document.getElementById('tab-quotes').classList.add('hidden');
-    }
 }
-
-
 
         function loadConfig() {
             const savedConfig = localStorage.getItem('galifreyCalcConfig');
@@ -1353,67 +1300,6 @@ function handleDynamicClicks(e) {
         // #endregion
         // #region ########## RENDER FUNCTIONS ##########
         // START: ADD THIS MISSING FUNCTION
-        // NEW: Renders the goal-setting workshop panel
-
-// NEW: Renders the user-defined goals in the summary panel
-function renderGoalAlignedValue(goals) {
-    const container = document.getElementById('goal-value-section');
-    if (!container) return;
-
-    if (!goals || goals.length === 0) {
-        container.classList.add('hidden');
-        container.innerHTML = '';
-        return;
-    }
-
-    container.innerHTML = `
-        <h4 class="font-bold text-purple-800 mb-3">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
-            </svg>
-            Goal-Aligned Value
-        </h4>
-        <div class="space-y-3">
-            ${goals.map(goal => `
-                <div class="text-sm">
-                    <p class="text-purple-700 font-semibold">${goal.text}</p>
-                    ${goal.kpi ? `<p class="text-gray-600 pl-2"><strong>KPI:</strong> ${goal.kpi}</p>` : ''}
-                </div>
-            `).join('')}
-        </div>
-    `;
-    container.classList.remove('hidden');
-}
-
-function renderGoalWorkshopPanel() {
-    const ctx = selections.clientContext;
-    const isOpen = openAccordions.has('goal-workshop');
-    return `
-        <div class="bg-white rounded-lg shadow-sm">
-            <button data-action="toggle-accordion" data-id="goal-workshop" class="w-full flex justify-between items-center p-4 text-left font-bold text-lg">
-                <span>Strategic Goal & KPI Workshop</span>
-                <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
-            <div class="accordion-content ${isOpen ? 'open' : ''}">
-                <div class="p-6 border-t space-y-6">
-                    <p class="text-sm text-gray-600">Define up to three specific goals for this campaign. This helps us align our strategy with your objectives.</p>
-                    
-                    ${ctx.goals.map((goal, index) => `
-                    <div class="space-y-3 p-4 border rounded-lg bg-gray-50">
-                        <label class="block text-sm font-medium text-gray-800">Goal ${index + 1}</label>
-                        <textarea data-input-action="update-client-context" data-id="goals" data-index="${index}" data-field="text" class="w-full p-2 border rounded-md h-20" placeholder="e.g., Increase qualified leads from organic search...">${goal.text || ''}</textarea>
-                        
-                        <label class="block text-sm font-medium text-gray-800">Measurable KPI</label>
-                        <input type="text" data-input-action="update-client-context" data-id="goals" data-index="${index}" data-field="kpi" value="${goal.kpi || ''}" placeholder="e.g., ...by 20% in 6 months." class="w-full p-2 border rounded-md">
-                    </div>
-                    `).join('')}
-
-                </div>
-            </div>
-        </div>
-    `;
-}
-
         function renderAll() {
             renderPackages();
             renderBuilder();
@@ -1430,21 +1316,14 @@ function renderGoalWorkshopPanel() {
 function renderPackages() {
     const container = document.getElementById('content-packages');
     if (!container) return;
-
+    
     const campaignModifier = activeCampaign ? config.settings.campaignModifiers[activeCampaign] : null;
     const globalAdjust = campaignModifier?.globalAdjust;
 
     const processedPackages = config.packages.map(pkg => {
-        // Start with the base display price from the config
-        let finalDisplayPrice = pkg.displayPrice;
+        let finalDisplayPrice = getCampaignPackagePrice(pkg.id) ?? pkg.displayPrice;
 
-        // Check for a campaign-specific package price override first
-        const campaignPackagePrice = getCampaignPackagePrice(pkg.id);
-        if (campaignPackagePrice !== null) {
-            finalDisplayPrice = campaignPackagePrice;
-        } 
-        // If no specific override, apply the global campaign adjustment
-        else if (globalAdjust?.value) {
+        if (getCampaignPackagePrice(pkg.id) === null && globalAdjust?.value) {
             if (globalAdjust.type === 'percent') {
                 finalDisplayPrice *= (1 + globalAdjust.value);
             } else {
@@ -1548,7 +1427,6 @@ function renderBuilder() {
         ${renderClientContextSection()}
         
         <div class="mt-6 space-y-4">
-            ${renderGoalWorkshopPanel()}
             ${renderRoiForecasterPanel()}
             ${renderCompetitorSnapshotPanel()}
         </div>
@@ -1581,7 +1459,6 @@ function renderBuilder() {
     `;
     attachStarRatingListeners();
 }
-
 // END: REPLACE THIS FUNCTION
         // MODIFIED: Greatly expanded client context section
 function renderClientContextSection() {
@@ -1843,8 +1720,7 @@ function renderServiceCard(service) {
         // START: REPLACE THIS FUNCTION
         // START: REPLACE THIS FUNCTION
 function renderSummary() {
-    // --- UPDATED: Destructure the new 'goalAlignedValue' property ---
-    const { totals, breakdown, discounts, valueProps, roiProjections, forecast, timelineData, goalAlignedValue } = calculateTotals(selections);
+    const { totals, breakdown, discounts, valueProps, roiProjections, forecast, timelineData } = calculateTotals(selections);
     const summaryContent = document.getElementById('summary-content');
     const emptyMessage = document.getElementById('empty-summary-message');
     const overrideOneTimeInput = document.getElementById('override-one-time');
@@ -1935,14 +1811,10 @@ function renderSummary() {
         discountsList.classList.add('hidden');
     }
     
-    // --- UPDATED: Call all the rendering functions for the summary sections ---
-    renderGoalAlignedValue(goalAlignedValue);
-    renderValuePropositions(valueProps, goalAlignedValue);
+    renderValuePropositions(valueProps);
     renderRoiProjections(roiProjections);
     renderRoiForecast(forecast);
 }
-
-
 // END: REPLACE THIS FUNCTION
         // END: REPLACE THIS FUNCTION
         function setSummaryTab(tabId) {
@@ -3099,17 +2971,11 @@ function toggleService(serviceId) {
         }
         // START: REPLACE THIS FUNCTION
 function updateClientContext(field, value, target) {
-    if (field === 'goals') {
-        const index = parseInt(target.dataset.index, 10);
-        const subField = target.dataset.field; // 'text' or 'kpi'
-        selections.clientContext.goals[index][subField] = value;
-        if (value.trim().length > 10) {
-             trackAnalytics('goal_defined', { goalIndex: index, field: subField });
-        }
-    } else if (field === 'competitors') {
+    if (field === 'competitors') {
         const index = parseInt(target.dataset.index, 10);
         const subField = target.dataset.field; // 'url' or 'notes'
         selections.clientContext.competitors[index][subField] = value;
+        
         if (subField === 'url' && value.trim() !== '') {
             trackAnalytics('competitor_url_entered', { url: value });
         }
@@ -3128,18 +2994,19 @@ function updateClientContext(field, value, target) {
         selections.clientContext[field] = value;
     }
 
-    // --- THIS IS THE FIX ---
-    // Instead of conditional rendering, we will call renderAll() to ensure
-    // the entire UI (packages, builder, summary) is always in sync with the data.
-    renderAll();
-
-    // Track analytics for important fields after the UI has been updated.
-    if (['monthlyTraffic', 'conversionRate', 'avgSaleValue'].includes(field) && value.trim() !== '') {
-        trackAnalytics('roi_data_entered', { field: field, value: value });
+    if (field === 'businessStage') {
+        renderPackages();
+    }
+    if (field === 'businessGoal') {
+        renderBuilder();
+    }
+    if (['monthlyTraffic', 'conversionRate', 'avgSaleValue'].includes(field)) {
+        renderSummary();
+        if (value.trim() !== '') {
+            trackAnalytics('roi_data_entered', { field: field, value: value });
+        }
     }
 }
-
-
 
 // END: REPLACE THIS FUNCTION
         // START: ADD THIS NEW FUNCTION
@@ -3160,7 +3027,7 @@ function updateClientContext(field, value, target) {
         }
 
         // END: ADD THIS NEW FUNCTION
-function clearBuilder() {
+        function clearBuilder() {
     if (confirm("Are you sure you want to clear all selections? This will reset the builder, any selected packages, and the summary to a blank state.")) {
         // By re-initializing the entire 'selections' object, we ensure a complete and clean reset.
         const newPhaseId = `phase-${Date.now()}`;
@@ -3170,31 +3037,35 @@ function clearBuilder() {
             teamAugmentation: {},
             packagesToCompare: new Set(),
             clientContext: {
-                businessStage: '', businessGoal: '', industry: '', targetAudience: '',
-                geographicTarget: '', website: '',
+                businessStage: '',
+                businessGoal: '',
+                industry: '',
+                targetAudience: '',
+                geographicTarget: '',
+                website: '',
                 marketingHistory: [],
-                previousProvider: '', previousServices: '', previousBudget: '', reasonForSwitching: '',
-                durationWithProvider: '', satisfaction: 0, futureGoals: '', referralSource: '',
+                previousProvider: '',
+                previousServices: '',
+                previousBudget: '',
+                reasonForSwitching: '',
+                durationWithProvider: '',
+                satisfaction: 0,
+                futureGoals: '',
+                referralSource: '',
                 avgLeadValue: '',
                 avgClv: '',
                 monthlyTraffic: '',
                 conversionRate: '',
                 avgSaleValue: '',
-                // --- Reset the new goals array ---
-                goals: [
-                    { text: '', kpi: '' },
-                    { text: '', kpi: '' },
-                    { text: '', kpi: '' }
-                ],
                 competitors: [
                     { url: '', notes: '' },
                     { url: '', notes: '' },
                     { url: '', notes: '' }
                 ],
                 socialUrls: [
-                    { url: '', },
-                    { url: '', },
-                    { url: '', }
+                    { url: '' },
+                    { url: '' },
+                    { url: '' }
                 ]
             },
             overrides: { oneTime: null, monthly: null },
@@ -3211,7 +3082,6 @@ function clearBuilder() {
         renderAll(); 
     }
 }
-
                 function addAdChannel() {
             const select = document.getElementById('add-ad-channel-select');
             const channelId = select.value;
@@ -4014,9 +3884,6 @@ function calculateTotals(currentSelections, campaignOverride = null) {
     let roiProjections = [];
     let timelineData = [];
     let forecast = {};
-    // --- NEW: Process defined goals ---
-    let allDefinedGoals = (source.clientContext.goals || [])
-        .filter(g => g.text && g.text.trim() !== '');
 
     source.phases.forEach(phase => {
         let phaseOneTime = 0;
@@ -4036,6 +3903,7 @@ function calculateTotals(currentSelections, campaignOverride = null) {
             let multiplier = 1;
             let summaryDesc = [];
             
+            // Use the specific campaign context for this calculation
             const campaignPrice = getCampaignPrice(serviceId, campaignToUse);
             const globalAdjust = campaignToUse ? config.settings.campaignModifiers[campaignToUse]?.globalAdjust : null;
             let basePrice = campaignPrice ?? service.price;
@@ -4163,10 +4031,8 @@ function calculateTotals(currentSelections, campaignOverride = null) {
     totals.oneTime = Math.max(0, totals.oneTime);
     totals.monthly = Math.max(0, totals.monthly);
 
-    // --- NEW: Add goals to the returned object ---
-    return { totals, phaseTotals: breakdown.phaseData, breakdown, discounts: allDiscounts, valueProps: allValueProps, roiProjections, timelineData, forecast, goalAlignedValue: allDefinedGoals };
+    return { totals, phaseTotals: breakdown.phaseData, breakdown, discounts: allDiscounts, valueProps: allValueProps, roiProjections, timelineData, forecast };
 }
-
 // END: REPLACE THIS FUNCTION
         // END: REPLACE THIS FUNCTION
         function renderTimelineChart(timelineData) {
