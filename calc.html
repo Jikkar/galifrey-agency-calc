@@ -501,6 +501,9 @@
                 <button id="tab-augmentation" data-tab="augmentation" class="tab">
                     Team Augmentation
                 </button>
+                <button id="tab-timeline" data-tab="timeline" class="tab">
+                    Visual Timeline
+                </button>
                 <button id="tab-admin" data-tab="admin" class="tab hidden">
                     Admin Panel
                 </button>
@@ -526,6 +529,16 @@
                 </div>
                 <div id="content-quotes" data-content="quotes" class="hidden">
                 </div>
+                <div id="content-timeline" data-content="timeline" class="hidden">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold mb-4">Project Timeline</h2>
+                        <div id="timeline-chart-container" style="height: 500px;">
+                            <canvas id="timeline-chart-canvas"></canvas>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2 text-center">This is an estimated timeline based on typical
+                            project pacing.</p>
+                    </div>
+                </div>
             </div>
             <!-- Sticky Summary Sidebar -->
             <aside id="summary-sidebar" class="lg:w-1/3 lg:sticky top-8 self-start p-6 rounded-2xl">
@@ -535,13 +548,9 @@
                             class="summary-tab active whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm">
                             Campaign Summary
                         </button>
-                        <button data-action="set-summary-tab" data-tab="timeline"
-                            class="summary-tab whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm">
-                            Visual Timeline
-                        </button>
                     </nav>
                 </div>
-                <div id="summary-tab-content-summary">
+                    <div id="summary-tab-content-summary">
                     <div class="text-center py-4" id="empty-summary-message">
                         <p class="text-gray-500">
                             Your selections will appear here.
@@ -663,18 +672,6 @@
                         </button>
                     </div>
                 </div>
-        </div>
-        <div id="summary-tab-content-timeline" class="hidden">
-            <h3 class="text-xl font-bold mb-4">
-                Project Timeline
-            </h3>
-            <div id="timeline-chart-container" style="height: 400px;">
-                <canvas id="timeline-chart-canvas">
-                </canvas>
-            </div>
-            <p class="text-xs text-gray-500 mt-2">
-                This is an estimated timeline based on typical project pacing.
-            </p>
         </div>
         </aside>
     </div>
