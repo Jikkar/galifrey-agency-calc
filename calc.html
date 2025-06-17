@@ -502,7 +502,7 @@
                     Team Augmentation
                 </button>
                 <button id="tab-timeline" data-tab="timeline" class="tab">
-                    Visual Timeline
+                    Visual Timeline &amp; ROI
                 </button>
                 <button id="tab-admin" data-tab="admin" class="tab hidden">
                     Admin Panel
@@ -530,13 +530,21 @@
                 <div id="content-quotes" data-content="quotes" class="hidden">
                 </div>
                 <div id="content-timeline" data-content="timeline" class="hidden">
-                    <div class="bg-white p-6 rounded-lg shadow-md">
-                        <h2 class="text-2xl font-bold mb-4">Project Timeline</h2>
-                        <div id="timeline-chart-container" style="height: 500px;">
-                            <canvas id="timeline-chart-canvas"></canvas>
+                    <div class="space-y-6">
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h2 class="text-2xl font-bold mb-4">Project Timeline</h2>
+                            <div id="timeline-chart-container" style="height: 500px;">
+                                <canvas id="timeline-chart-canvas"></canvas>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2 text-center">This is an estimated timeline based on
+                                typical project pacing.</p>
                         </div>
-                        <p class="text-xs text-gray-500 mt-2 text-center">This is an estimated timeline based on typical
-                            project pacing.</p>
+
+                        <div id="strategic-value-panel" class="bg-white p-6 rounded-lg shadow-md">
+                        </div>
+
+                        <div id="roi-kpi-panel" class="bg-white p-6 rounded-lg shadow-md">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -550,7 +558,7 @@
                         </button>
                     </nav>
                 </div>
-                    <div id="summary-tab-content-summary">
+                <div id="summary-tab-content-summary">
                     <div class="text-center py-4" id="empty-summary-message">
                         <p class="text-gray-500">
                             Your selections will appear here.
@@ -2291,6 +2299,129 @@
                 renderRoiProjections(roiProjections);
                 renderRoiForecast(forecast);
             }
+
+            function renderStrategicValuePanel() {
+                const container = document.getElementById('strategic-value-panel');
+                if (!container) return;
+
+                const { structuredValueProps } = calculateTotals(selections);
+
+                let html = `<h3 class="font-bold text-xl mb-4 text-indigo-800">Strategic Value</h3>`;
+
+                if (structuredValueProps && structuredValueProps.length > 0) {
+                    html += `<div class="space-y-4">`;
+                    structuredValueProps.forEach(item => {
+                        html += `
+                <div>
+                    <h4 class="font-semibold text-gray-700">${item.serviceName}</h4>
+                    <ul class="list-disc list-inside text-sm text-gray-600 pl-2">
+                        ${item.propositions.map(p => `<li>${p}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+                    });
+                    html += `</div>`;
+                } else {
+                    html += `<p class="text-sm text-gray-500">Select services in the builder tab to see their strategic value propositions.</p>`;
+                }
+
+                container.innerHTML = html;
+            }
+
+            function renderRoiKpiPanel() {
+    const container = document.getElementById('roi-kpi-panel');
+    if (!container) return;
+
+    const { forecast, roiProjections } = calculateTotals(selections);
+    let html = `<h3 class="font-bold text-xl mb-4 text-green-800">ROI &amp; Projected KPIs</h3>`;
+    let contentAdded = false;
+
+    // --- NEW: Aggregate ROI metrics from selected services ---
+    const aggregatedImpacts = {};
+    selections.phases.forEach(phase => {
+        for (const serviceId in phase.services) {
+            const service = findService(serviceId);
+            if (service && service.roiMetrics && service.roiMetrics.metricName) {
+                const metric = service.roiMetrics.metricName;
+                if (!aggregatedImpacts[metric]) {
+                    aggregatedImpacts[metric] = {
+                        min: 0,
+                        max: 0,
+                        unit: service.roiMetrics.metricUnit || ''
+                    };
+                }
+                aggregatedImpacts[metric].min += service.roiMetrics.minImpact || 0;
+                aggregatedImpacts[metric].max += service.roiMetrics.maxImpact || 0;
+            }
+        }
+    });
+
+    const aggregatedKeys = Object.keys(aggregatedImpacts);
+    if (aggregatedKeys.length > 0) {
+        contentAdded = true;
+        html += `<div class="space-y-3">`;
+        html += `<h4 class="font-semibold text-gray-700">Aggregated Service Impact:</h4>`;
+        aggregatedKeys.forEach(key => {
+            const impact = aggregatedImpacts[key];
+            const displayValue = impact.min === impact.max ?
+                `${impact.max}${impact.unit}` :
+                `${impact.min}${impact.unit} - ${impact.max}${impact.unit}`;
+
+            html += `
+                <div class="flex justify-between text-sm">
+                    <span>${key}:</span>
+                    <strong class="text-gray-900">${displayValue}</strong>
+                </div>
+            `;
+        });
+        html += `</div>`;
+    }
+    // --- End of new section ---
+
+    // --- ROI Forecast Section (from user inputs) ---
+    if (forecast && forecast.hasInputs) {
+        contentAdded = true;
+        const formatRange = (min, max, isCurrency = false) => {
+            const minFormatted = isCurrency ? formatCurrency(min) : min.toFixed(1);
+            const maxFormatted = isCurrency ? formatCurrency(max) : max.toFixed(1);
+            return min.toFixed(1) === max.toFixed(1) ? `<strong>${maxFormatted}</strong>` : `<strong>${minFormatted} - ${maxFormatted}</strong>`;
+        };
+        html += `<div class="border-t pt-4 mt-4">`;
+        html += `
+            <h4 class="font-semibold text-gray-700 mb-2">Overall Business Forecast:</h4>
+            <div class="text-sm space-y-2 text-gray-700">
+                <div class="flex justify-between"><span>Est. Additional Leads/Month:</span> <span>${formatRange(forecast.newLeads.min, forecast.newLeads.max)}</span></div>
+                <div class="flex justify-between"><span>Est. Additional Revenue/Month:</span> <span>${formatRange(forecast.newRevenue.min, forecast.newRevenue.max, true)}</span></div>
+                <div class="flex justify-between border-t pt-2 mt-2 font-semibold text-blue-700">
+                    <span>Projected Total Revenue/Month:</span>
+                    <span>${formatRange(forecast.totalRevenue.min, forecast.totalRevenue.max, true)}</span>
+                </div>
+            </div>
+            <p class="text-xs text-gray-400 mt-3">Based on inputs from the "ROI & Goal Forecaster" in the builder tab.</p>
+        `;
+        html += `</div>`;
+    }
+
+    // --- General KPI Section (from service definitions) ---
+    if (roiProjections && roiProjections.length > 0) {
+        contentAdded = true;
+        html += `
+            <div class="border-t pt-4 mt-4">
+                <ul class="list-disc list-inside text-sm text-green-700 space-y-1">
+                    ${roiProjections.map(proj => `<li>${proj}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    if (!contentAdded) {
+        html += `<p class="text-sm text-gray-500">Select services and enter your metrics in the "ROI & Goal Forecaster" to see projections here.</p>`;
+    }
+
+    container.innerHTML = html;
+}
+
+
             // END: REPLACE THIS FUNCTION
             function renderRoiProjections(projections) {
                 const container = document.getElementById('roi-projection-section');
@@ -3295,23 +3426,25 @@
             // END: REPLACE THIS FUNCTION
             // END: ADD THESE NEW FUNCTIONS
             function switchTab(tabId) {
-    document.querySelectorAll('#main-tabs .tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('#main-content > div').forEach(c => c.classList.add('hidden'));
+                document.querySelectorAll('#main-tabs .tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('#main-content > div').forEach(c => c.classList.add('hidden'));
 
-    const tab = document.getElementById(`tab-${tabId}`);
-    const content = document.getElementById(`content-${tabId}`);
+                const tab = document.getElementById(`tab-${tabId}`);
+                const content = document.getElementById(`content-${tabId}`);
 
-    if (tab && content) {
-        tab.classList.add('active');
-        content.classList.remove('hidden');
-    }
+                if (tab && content) {
+                    tab.classList.add('active');
+                    content.classList.remove('hidden');
+                }
 
-    // If the user is switching to the timeline tab, render the chart.
-    if (tabId === 'timeline') {
-        const { timelineData } = calculateTotals(selections);
-        renderTimelineChart(timelineData);
-    }
-}
+                // If the user is switching to the timeline tab, render the chart and the new panels.
+                if (tabId === 'timeline') {
+                    const { timelineData } = calculateTotals(selections);
+                    renderTimelineChart(timelineData);
+                    renderStrategicValuePanel(); // <-- Updated
+                    renderRoiKpiPanel();         // <-- Updated
+                }
+            }
             function toggleAdminMode() {
                 if (isAdmin) {
                     isAdmin = false;
