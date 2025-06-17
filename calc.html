@@ -931,6 +931,12 @@ let selections = {
         monthlyTraffic: '',
         conversionRate: '',
         avgSaleValue: '',
+        // --- NEW: Interactive Goals ---
+        goals: [
+            { text: '', kpi: '' },
+            { text: '', kpi: '' },
+            { text: '', kpi: '' }
+        ],
         // --- UPDATED: 'competitors' is now an array of objects, and 'socialUrls' is new ---
         competitors: [
             { url: '', notes: '' },
@@ -946,6 +952,7 @@ let selections = {
     overrides: { oneTime: null, monthly: null },
     appliedCoupon: null
 };
+
         let isAdmin = false;
         let activeCampaign = null; 
         let openAccordions = new Set();
@@ -1300,6 +1307,36 @@ function handleDynamicClicks(e) {
         // #endregion
         // #region ########## RENDER FUNCTIONS ##########
         // START: ADD THIS MISSING FUNCTION
+        // NEW: Renders the goal-setting workshop panel
+function renderGoalWorkshopPanel() {
+    const ctx = selections.clientContext;
+    const isOpen = openAccordions.has('goal-workshop');
+    return `
+        <div class="bg-white rounded-lg shadow-sm">
+            <button data-action="toggle-accordion" data-id="goal-workshop" class="w-full flex justify-between items-center p-4 text-left font-bold text-lg">
+                <span>Strategic Goal & KPI Workshop</span>
+                <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div class="accordion-content ${isOpen ? 'open' : ''}">
+                <div class="p-6 border-t space-y-6">
+                    <p class="text-sm text-gray-600">Define up to three specific goals for this campaign. This helps us align our strategy with your objectives.</p>
+                    
+                    ${ctx.goals.map((goal, index) => `
+                    <div class="space-y-3 p-4 border rounded-lg bg-gray-50">
+                        <label class="block text-sm font-medium text-gray-800">Goal ${index + 1}</label>
+                        <textarea data-input-action="update-client-context" data-id="goals" data-index="${index}" data-field="text" class="w-full p-2 border rounded-md h-20" placeholder="e.g., Increase qualified leads from organic search...">${goal.text || ''}</textarea>
+                        
+                        <label class="block text-sm font-medium text-gray-800">Measurable KPI</label>
+                        <input type="text" data-input-action="update-client-context" data-id="goals" data-index="${index}" data-field="kpi" value="${goal.kpi || ''}" placeholder="e.g., ...by 20% in 6 months." class="w-full p-2 border rounded-md">
+                    </div>
+                    `).join('')}
+
+                </div>
+            </div>
+        </div>
+    `;
+}
+
         function renderAll() {
             renderPackages();
             renderBuilder();
@@ -1427,6 +1464,7 @@ function renderBuilder() {
         ${renderClientContextSection()}
         
         <div class="mt-6 space-y-4">
+            ${renderGoalWorkshopPanel()}
             ${renderRoiForecasterPanel()}
             ${renderCompetitorSnapshotPanel()}
         </div>
@@ -1459,6 +1497,7 @@ function renderBuilder() {
     `;
     attachStarRatingListeners();
 }
+
 // END: REPLACE THIS FUNCTION
         // MODIFIED: Greatly expanded client context section
 function renderClientContextSection() {
@@ -2971,11 +3010,19 @@ function toggleService(serviceId) {
         }
         // START: REPLACE THIS FUNCTION
 function updateClientContext(field, value, target) {
-    if (field === 'competitors') {
+    if (field === 'goals') {
+        const index = parseInt(target.dataset.index, 10);
+        const subField = target.dataset.field; // 'text' or 'kpi'
+        selections.clientContext.goals[index][subField] = value;
+
+        if (value.trim().length > 10) {
+             trackAnalytics('goal_defined', { goalIndex: index, field: subField });
+        }
+    } else if (field === 'competitors') {
         const index = parseInt(target.dataset.index, 10);
         const subField = target.dataset.field; // 'url' or 'notes'
         selections.clientContext.competitors[index][subField] = value;
-        
+
         if (subField === 'url' && value.trim() !== '') {
             trackAnalytics('competitor_url_entered', { url: value });
         }
@@ -2997,9 +3044,12 @@ function updateClientContext(field, value, target) {
     if (field === 'businessStage') {
         renderPackages();
     }
-    if (field === 'businessGoal') {
+
+    if (field === 'businessGoal' || field === 'goals') {
         renderBuilder();
+        renderSummary(); 
     }
+    
     if (['monthlyTraffic', 'conversionRate', 'avgSaleValue'].includes(field)) {
         renderSummary();
         if (value.trim() !== '') {
@@ -3007,6 +3057,7 @@ function updateClientContext(field, value, target) {
         }
     }
 }
+
 
 // END: REPLACE THIS FUNCTION
         // START: ADD THIS NEW FUNCTION
@@ -3027,7 +3078,7 @@ function updateClientContext(field, value, target) {
         }
 
         // END: ADD THIS NEW FUNCTION
-        function clearBuilder() {
+function clearBuilder() {
     if (confirm("Are you sure you want to clear all selections? This will reset the builder, any selected packages, and the summary to a blank state.")) {
         // By re-initializing the entire 'selections' object, we ensure a complete and clean reset.
         const newPhaseId = `phase-${Date.now()}`;
@@ -3037,35 +3088,31 @@ function updateClientContext(field, value, target) {
             teamAugmentation: {},
             packagesToCompare: new Set(),
             clientContext: {
-                businessStage: '',
-                businessGoal: '',
-                industry: '',
-                targetAudience: '',
-                geographicTarget: '',
-                website: '',
+                businessStage: '', businessGoal: '', industry: '', targetAudience: '',
+                geographicTarget: '', website: '',
                 marketingHistory: [],
-                previousProvider: '',
-                previousServices: '',
-                previousBudget: '',
-                reasonForSwitching: '',
-                durationWithProvider: '',
-                satisfaction: 0,
-                futureGoals: '',
-                referralSource: '',
+                previousProvider: '', previousServices: '', previousBudget: '', reasonForSwitching: '',
+                durationWithProvider: '', satisfaction: 0, futureGoals: '', referralSource: '',
                 avgLeadValue: '',
                 avgClv: '',
                 monthlyTraffic: '',
                 conversionRate: '',
                 avgSaleValue: '',
+                // --- Reset the new goals array ---
+                goals: [
+                    { text: '', kpi: '' },
+                    { text: '', kpi: '' },
+                    { text: '', kpi: '' }
+                ],
                 competitors: [
                     { url: '', notes: '' },
                     { url: '', notes: '' },
                     { url: '', notes: '' }
                 ],
                 socialUrls: [
-                    { url: '' },
-                    { url: '' },
-                    { url: '' }
+                    { url: '', },
+                    { url: '', },
+                    { url: '', }
                 ]
             },
             overrides: { oneTime: null, monthly: null },
@@ -3082,6 +3129,7 @@ function updateClientContext(field, value, target) {
         renderAll(); 
     }
 }
+
                 function addAdChannel() {
             const select = document.getElementById('add-ad-channel-select');
             const channelId = select.value;
