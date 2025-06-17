@@ -637,23 +637,6 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- ROI Sections -->
-                        <div id="value-articulation-section" class="mt-6 p-4 bg-indigo-50 rounded-lg hidden">
-                            <h4 class="font-bold text-indigo-800 mb-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1"
-                                    viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd"
-                                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
-                                        clip-rule="evenodd"></path>
-                                </svg>
-                                Your Strategic Value
-                            </h4>
-                            <div id="value-propositions-container" class="space-y-3"></div>
-                            <!-- Value propositions will be injected here -->
-                        </div>
-                        <button id="toggle-value-propositions-btn"
-                            class="hidden text-sm text-indigo-600 hover:underline mt-3 focus:outline-none">Show
-                            More</button>
                     </div>
                     <div id="roi-projection-section" class="mt-4 p-4 bg-green-50 rounded-lg hidden">
                     </div>
@@ -2295,7 +2278,6 @@
                 }
 
                 // Render the remaining summary sections.
-                renderValuePropositions(structuredValueProps);
                 renderRoiProjections(roiProjections);
                 renderRoiForecast(forecast);
             }
@@ -2329,65 +2311,65 @@
             }
 
             function renderRoiKpiPanel() {
-    const container = document.getElementById('roi-kpi-panel');
-    if (!container) return;
+                const container = document.getElementById('roi-kpi-panel');
+                if (!container) return;
 
-    const { forecast, roiProjections } = calculateTotals(selections);
-    let html = `<h3 class="font-bold text-xl mb-4 text-green-800">ROI &amp; Projected KPIs</h3>`;
-    let contentAdded = false;
+                const { forecast, roiProjections } = calculateTotals(selections);
+                let html = `<h3 class="font-bold text-xl mb-4 text-green-800">ROI &amp; Projected KPIs</h3>`;
+                let contentAdded = false;
 
-    // --- NEW: Aggregate ROI metrics from selected services ---
-    const aggregatedImpacts = {};
-    selections.phases.forEach(phase => {
-        for (const serviceId in phase.services) {
-            const service = findService(serviceId);
-            if (service && service.roiMetrics && service.roiMetrics.metricName) {
-                const metric = service.roiMetrics.metricName;
-                if (!aggregatedImpacts[metric]) {
-                    aggregatedImpacts[metric] = {
-                        min: 0,
-                        max: 0,
-                        unit: service.roiMetrics.metricUnit || ''
-                    };
-                }
-                aggregatedImpacts[metric].min += service.roiMetrics.minImpact || 0;
-                aggregatedImpacts[metric].max += service.roiMetrics.maxImpact || 0;
-            }
-        }
-    });
+                // --- NEW: Aggregate ROI metrics from selected services ---
+                const aggregatedImpacts = {};
+                selections.phases.forEach(phase => {
+                    for (const serviceId in phase.services) {
+                        const service = findService(serviceId);
+                        if (service && service.roiMetrics && service.roiMetrics.metricName) {
+                            const metric = service.roiMetrics.metricName;
+                            if (!aggregatedImpacts[metric]) {
+                                aggregatedImpacts[metric] = {
+                                    min: 0,
+                                    max: 0,
+                                    unit: service.roiMetrics.metricUnit || ''
+                                };
+                            }
+                            aggregatedImpacts[metric].min += service.roiMetrics.minImpact || 0;
+                            aggregatedImpacts[metric].max += service.roiMetrics.maxImpact || 0;
+                        }
+                    }
+                });
 
-    const aggregatedKeys = Object.keys(aggregatedImpacts);
-    if (aggregatedKeys.length > 0) {
-        contentAdded = true;
-        html += `<div class="space-y-3">`;
-        html += `<h4 class="font-semibold text-gray-700">Aggregated Service Impact:</h4>`;
-        aggregatedKeys.forEach(key => {
-            const impact = aggregatedImpacts[key];
-            const displayValue = impact.min === impact.max ?
-                `${impact.max}${impact.unit}` :
-                `${impact.min}${impact.unit} - ${impact.max}${impact.unit}`;
+                const aggregatedKeys = Object.keys(aggregatedImpacts);
+                if (aggregatedKeys.length > 0) {
+                    contentAdded = true;
+                    html += `<div class="space-y-3">`;
+                    html += `<h4 class="font-semibold text-gray-700">Aggregated Service Impact:</h4>`;
+                    aggregatedKeys.forEach(key => {
+                        const impact = aggregatedImpacts[key];
+                        const displayValue = impact.min === impact.max ?
+                            `${impact.max}${impact.unit}` :
+                            `${impact.min}${impact.unit} - ${impact.max}${impact.unit}`;
 
-            html += `
+                        html += `
                 <div class="flex justify-between text-sm">
                     <span>${key}:</span>
                     <strong class="text-gray-900">${displayValue}</strong>
                 </div>
             `;
-        });
-        html += `</div>`;
-    }
-    // --- End of new section ---
+                    });
+                    html += `</div>`;
+                }
+                // --- End of new section ---
 
-    // --- ROI Forecast Section (from user inputs) ---
-    if (forecast && forecast.hasInputs) {
-        contentAdded = true;
-        const formatRange = (min, max, isCurrency = false) => {
-            const minFormatted = isCurrency ? formatCurrency(min) : min.toFixed(1);
-            const maxFormatted = isCurrency ? formatCurrency(max) : max.toFixed(1);
-            return min.toFixed(1) === max.toFixed(1) ? `<strong>${maxFormatted}</strong>` : `<strong>${minFormatted} - ${maxFormatted}</strong>`;
-        };
-        html += `<div class="border-t pt-4 mt-4">`;
-        html += `
+                // --- ROI Forecast Section (from user inputs) ---
+                if (forecast && forecast.hasInputs) {
+                    contentAdded = true;
+                    const formatRange = (min, max, isCurrency = false) => {
+                        const minFormatted = isCurrency ? formatCurrency(min) : min.toFixed(1);
+                        const maxFormatted = isCurrency ? formatCurrency(max) : max.toFixed(1);
+                        return min.toFixed(1) === max.toFixed(1) ? `<strong>${maxFormatted}</strong>` : `<strong>${minFormatted} - ${maxFormatted}</strong>`;
+                    };
+                    html += `<div class="border-t pt-4 mt-4">`;
+                    html += `
             <h4 class="font-semibold text-gray-700 mb-2">Overall Business Forecast:</h4>
             <div class="text-sm space-y-2 text-gray-700">
                 <div class="flex justify-between"><span>Est. Additional Leads/Month:</span> <span>${formatRange(forecast.newLeads.min, forecast.newLeads.max)}</span></div>
@@ -2399,27 +2381,27 @@
             </div>
             <p class="text-xs text-gray-400 mt-3">Based on inputs from the "ROI & Goal Forecaster" in the builder tab.</p>
         `;
-        html += `</div>`;
-    }
+                    html += `</div>`;
+                }
 
-    // --- General KPI Section (from service definitions) ---
-    if (roiProjections && roiProjections.length > 0) {
-        contentAdded = true;
-        html += `
+                // --- General KPI Section (from service definitions) ---
+                if (roiProjections && roiProjections.length > 0) {
+                    contentAdded = true;
+                    html += `
             <div class="border-t pt-4 mt-4">
                 <ul class="list-disc list-inside text-sm text-green-700 space-y-1">
                     ${roiProjections.map(proj => `<li>${proj}</li>`).join('')}
                 </ul>
             </div>
         `;
-    }
+                }
 
-    if (!contentAdded) {
-        html += `<p class="text-sm text-gray-500">Select services and enter your metrics in the "ROI & Goal Forecaster" to see projections here.</p>`;
-    }
+                if (!contentAdded) {
+                    html += `<p class="text-sm text-gray-500">Select services and enter your metrics in the "ROI & Goal Forecaster" to see projections here.</p>`;
+                }
 
-    container.innerHTML = html;
-}
+                container.innerHTML = html;
+            }
 
 
             // END: REPLACE THIS FUNCTION
@@ -2478,73 +2460,7 @@
         </div>
     `;
                 container.classList.remove('hidden');
-            }
-            // END: ADD THIS NEW FUNCTION
-            function renderValuePropositions(structuredValueProps) {
-                const container = document.getElementById('value-articulation-section');
-                const propositionsContainer = document.getElementById('value-propositions-container');
-                const toggleBtn = document.getElementById('toggle-value-propositions-btn');
-
-                if (!container || !propositionsContainer || !toggleBtn) {
-                    return;
-                }
-                // Clear previous content
-                propositionsContainer.innerHTML = '';
-
-                const uniqueServiceProps = [];
-                if (structuredValueProps && structuredValueProps.length > 0) {
-                    const seenServiceIds = new Set();
-                    structuredValueProps.forEach(item => {
-                        if (!seenServiceIds.has(item.serviceId) && item.propositions && item.propositions.length > 0) {
-                            uniqueServiceProps.push(item);
-                            seenServiceIds.add(item.serviceId);
-                        }
-                    });
-                }
-
-                if (config.settings.valueArticulationEnabled && uniqueServiceProps.length > 0) {
-                    let html = '';
-                    uniqueServiceProps.forEach((serviceProps, index) => {
-                        html += `
-                            <div class="value-proposition-group ${index > 0 ? 'vp-hidden' : ''}" data-service-id="${serviceProps.serviceId}">
-                                <h5 class="font-semibold text-indigo-700 text-sm mt-2 mb-1">${serviceProps.serviceName}</h5>
-                                <ul class="list-disc list-inside text-sm text-indigo-700 space-y-1">
-                                    ${serviceProps.propositions.slice(0, 3).map(vp => `<li>${vp}</li>`).join('')}
-                                </ul>
-                            </div>
-                        `;
-                    });
-
-                    propositionsContainer.innerHTML = html;
-                    container.classList.remove('hidden');
-
-                    if (uniqueServiceProps.length > 1) {
-                        toggleBtn.classList.remove('hidden');
-                        toggleBtn.textContent = 'Show More';
-                        toggleBtn.dataset.expanded = 'false';
-
-                        // Clone and replace to remove old listeners
-                        const newToggleBtn = toggleBtn.cloneNode(true);
-                        toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
-
-                        newToggleBtn.addEventListener('click', () => {
-                            const isExpanded = newToggleBtn.dataset.expanded === 'true';
-                            document.querySelectorAll('#value-propositions-container .value-proposition-group').forEach((group, index) => {
-                                if (index > 0) { // Skip the first group
-                                    group.classList.toggle('vp-hidden', isExpanded);
-                                }
-                            });
-                            newToggleBtn.dataset.expanded = (!isExpanded).toString();
-                            newToggleBtn.textContent = isExpanded ? 'Show More' : 'Show Less';
-                        });
-                    } else {
-                        toggleBtn.classList.add('hidden');
-                    }
-                } else {
-                    container.classList.add('hidden');
-                    toggleBtn.classList.add('hidden');
-                }
-            }
+            }           
 
             // END: ADD THIS NEW FUNCTION
             // START: ADD THIS NEW FUNCTION
