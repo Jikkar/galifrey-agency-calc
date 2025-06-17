@@ -852,7 +852,10 @@
 
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, query, orderBy, onSnapshot, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+    
+        document.addEventListener('firebase-ready', function () {
             // ########## FIREBASE INITIALIZATION ##########
             const firebaseConfig = {
                 apiKey: "AIzaSyCw4QA3yeLQHvOuCq6IO0qn4lIO2UzhlsU",
@@ -865,9 +868,23 @@
             };
 
             // Initialize Firebase
-            const app = firebase.initializeApp(firebaseConfig);
-            const db = firebase.firestore();
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
             let quotesListener = null; // To hold our real-time listener
+            
+            window.db = db;
+            window.doc = doc;
+            window.getDoc = getDoc;
+            window.setDoc = setDoc;
+            window.collection = collection;
+            window.query = query;
+            window.orderBy = orderBy;
+            window.onSnapshot = onSnapshot;
+            window.addDoc = addDoc;
+            window.deleteDoc = deleteDoc;
+    
+            // Dispatch an event to signal that Firebase is ready
+            document.dispatchEvent(new CustomEvent('firebase-ready'));
 
             // This function will listen for real-time updates from Firebase
             function listenForQuotes() {
@@ -1144,19 +1161,21 @@ async function init() {
 }
 
     async function loadConfig() {
-    const configRef = db.collection('app').doc('config');
+    // This now uses the modular 'doc' and 'getDoc' functions
+    const configRef = doc(db, 'app', 'config'); 
     try {
-        const doc = await configRef.get();
-        if (doc.exists) {
+        const docSnap = await getDoc(configRef);
+        if (docSnap.exists()) {
             console.log("Configuration loaded from Firestore.");
             config = {
                 ...JSON.parse(JSON.stringify(defaultConfig)), // Ensure all keys exist
-                ...doc.data()
+                ...docSnap.data()
             };
         } else {
-            console.log("No config found in Firestore. Using local default config.");
+            console.log("No config found in Firestore. Using local default config and attempting initial save.");
             config = JSON.parse(JSON.stringify(defaultConfig));
-            // We no longer auto-save here, we let the user do it explicitly.
+            // Attempt to save the default config to establish it for future loads.
+            await saveConfig(false); 
         }
     } catch (error) {
         console.error("Error fetching config from Firestore. Using default config.", error);
@@ -1164,11 +1183,12 @@ async function init() {
         showToast("Could not load cloud settings. Using local defaults.", "error");
     }
 }
-            async function saveConfig(showSuccessToast = true) {
-    const configRef = db.collection('app').doc('config');
+    async function saveConfig(showSuccessToast = true) {
+    // This now uses the modular 'doc' and 'setDoc' functions
+    const configRef = doc(db, 'app', 'config');
     try {
         const cleanConfig = JSON.parse(JSON.stringify(config));
-        await configRef.set(cleanConfig, { merge: true });
+        await setDoc(configRef, cleanConfig, { merge: true });
 
         if (showSuccessToast) {
             trackAnalytics('config_saved');
