@@ -1231,36 +1231,58 @@
                 }
             }
             function setupEventListeners() {
-                // General click handler for the whole app
-                document.body.addEventListener('click', handleDynamicClicks);
-                // General change handler for checkboxes and selects
-                document.body.addEventListener('change', handleDynamicChanges);
-                // General input handler for text fields and number inputs
-                document.body.addEventListener('input', handleDynamicInputs);
+    // General dynamic click handler for the whole app
+    document.body.addEventListener('click', handleDynamicClicks);
 
-                // Specific listeners for elements that exist on page load
-                document.getElementById('main-tabs').addEventListener('click', (e) => {
-                    if (e.target.matches('.tab')) {
-                        switchTab(e.target.dataset.tab);
-                    }
-                });
+    // General dynamic change handler for checkboxes and selects
+    document.body.addEventListener('change', handleDynamicChanges);
 
-                document.addEventListener('keydown', e => {
-                    if (e.ctrlKey && e.shiftKey && e.key === 'A') {
-                        toggleAdminMode();
-                    }
-                });
+    // General dynamic input handler for text fields and number inputs
+    document.body.addEventListener('input', handleDynamicInputs);
 
-                const quoteForm = document.getElementById('quote-form');
-                if (quoteForm) {
-                    quoteForm.addEventListener('submit', handleQuoteRequest);
-                }
+    // Listener for the main navigation tabs
+    document.getElementById('main-tabs').addEventListener('click', (e) => {
+        if (e.target.matches('.tab')) {
+            switchTab(e.target.dataset.tab);
+        }
+    });
 
-                const editForm = document.getElementById('edit-form');
-                if (editForm) {
-                    editForm.addEventListener('submit', handleAdminSaveEdit);
-                }
-            }
+    // Listener for the admin unlock shortcut
+    document.addEventListener('keydown', e => {
+        if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+            toggleAdminMode();
+        }
+    });
+
+    // Listener for the main quote submission form
+    const quoteForm = document.getElementById('quote-form');
+    if (quoteForm) {
+        quoteForm.addEventListener('submit', handleQuoteRequest);
+    }
+
+    // Listener for the main admin edit form
+    const editForm = document.getElementById('edit-form');
+    if (editForm) {
+        editForm.addEventListener('submit', handleAdminSaveEdit);
+    }
+
+    // --- NEW: Add listeners for the Modifier Options modal buttons ---
+    const addModOptBtn = document.getElementById('add-modifier-option-btn');
+    if (addModOptBtn) {
+        addModOptBtn.addEventListener('click', addModifierOptionRow);
+    }
+
+    const cancelModOptBtn = document.getElementById('cancel-modifier-options-btn');
+    if (cancelModOptBtn) {
+        cancelModOptBtn.addEventListener('click', closeModifierOptionsModal);
+    }
+
+    const saveModOptBtn = document.getElementById('save-modifier-options-btn');
+    if (saveModOptBtn) {
+        saveModOptBtn.addEventListener('click', saveModifierOptions);
+    }
+    // --- END FIX ---
+}
             // START: ADD THIS MISSING FUNCTION
             function handleDynamicClicks(e) {
                 // Select the closest element that has either a data-action or one of the specific button IDs.
@@ -2502,40 +2524,53 @@
             }
             // END: ADD THESE NEW FUNCTIONS
             function renderAdminPanel() {
-                const container = document.getElementById('content-admin');
-                if (!isAdmin) {
-                    container.innerHTML = `<p class="text-center text-gray-500 p-8">Admin panel is locked. Press Ctrl+Shift+A and enter password to unlock.</p>`;
-                    return;
-                }
-                container.innerHTML = `
-                <div class="bg-white p-6 rounded-lg shadow-md space-y-8">
-                    <div>
-                        <h3 class="font-bold text-xl mb-4">Configuration Management</h3>
-                        <div class="flex flex-wrap gap-4 items-center">
-                            <button id="admin-save" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Save All Changes to Live Config</button>
-                            <button id="admin-reset" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">Reset to Defaults</button>
-                        </div>
-                    </div>
-                    ${renderAdminDataManagement()}
-                    ${renderAdminVersioning()}
-                    ${renderAdminAnalytics()}
-                    ${renderAdminCampaignModifiers()}
-                    ${renderAdminMarketingDiscounts()}
-                    ${renderAdminPdfSettings()}
-                    ${renderAdminPackageManagement()}
-                    ${renderAdminTeamAugmentation()}
-                    ${renderAdminDiscountsAndTiers()}
-                    ${renderAdminCategoryManagement()}
-                    ${renderAdminServiceManagement()}
-                </div>
-            `;
-                document.getElementById('admin-save')?.addEventListener('click', saveConfig);
-                document.getElementById('admin-reset')?.addEventListener('click', resetConfig);
-                document.getElementById('admin-export-json')?.addEventListener('click', exportConfig);
-                document.getElementById('admin-import-json')?.addEventListener('change', importConfig);
-                document.getElementById('admin-export-csv')?.addEventListener('click', exportServicesCSV);
-                document.getElementById('admin-import-csv')?.addEventListener('change', importServicesCSV);
-            }
+    const container = document.getElementById('content-admin');
+    if (!isAdmin) {
+        container.innerHTML = `<p class="text-center text-gray-500 p-8">Admin panel is locked. Press Ctrl+Shift+A and enter password to unlock.</p>`;
+        return;
+    }
+    container.innerHTML = `
+    <div class="bg-white p-6 rounded-lg shadow-md space-y-8">
+        <div>
+            <h3 class="font-bold text-xl mb-4">Configuration Management</h3>
+            <div class="flex flex-wrap gap-4 items-center">
+                <button id="admin-save" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Save All Changes to Live Config</button>
+                <button id="admin-reset" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">Reset to Defaults</button>
+            </div>
+        </div>
+        ${renderAdminDataManagement()}
+        ${renderAdminVersioning()}
+        ${renderAdminAnalytics()}
+        ${renderAdminCampaignModifiers()}
+        ${renderAdminMarketingDiscounts()}
+        ${renderAdminPdfSettings()}
+        ${renderAdminPackageManagement()}
+        ${renderAdminTeamAugmentation()}
+        ${renderAdminDiscountsAndTiers()}
+        ${renderAdminCategoryManagement()}
+        ${renderAdminServiceManagement()}
+    </div>
+    `;
+
+    // Attach all event listeners for the admin panel
+    document.getElementById('admin-save')?.addEventListener('click', saveConfig);
+    document.getElementById('admin-reset')?.addEventListener('click', resetConfig);
+    document.getElementById('admin-export-json')?.addEventListener('click', exportConfig);
+    document.getElementById('admin-import-json')?.addEventListener('change', importConfig);
+    document.getElementById('admin-export-csv')?.addEventListener('click', exportServicesCSV);
+    document.getElementById('admin-import-csv')?.addEventListener('change', importServicesCSV);
+
+    // --- NEW: Attach listeners for campaign CSV actions ---
+    const exportCampaignsBtn = document.getElementById('admin-export-campaigns-csv');
+    if (exportCampaignsBtn) {
+        exportCampaignsBtn.addEventListener('click', exportCampaignsCSV);
+    }
+    const importCampaignsBtn = document.getElementById('admin-import-campaigns-csv');
+    if (importCampaignsBtn) {
+        importCampaignsBtn.addEventListener('change', importCampaignsCSV);
+    }
+    // --- END: New listeners ---
+}
             // END: REPLACE THIS FUNCTION
             // END: REPLACE THIS FUNCTION
             // #endregion
@@ -2822,31 +2857,42 @@
             }
             // MODIFIED: Renamed and updated for new global adjustment feature
             function renderAdminCampaignModifiers() {
-                const modifiers = config.settings.campaignModifiers || {};
-                return `
-                <div>
-                    <h3 class="font-bold text-xl mb-4">Regional/Campaign Modifiers</h3>
-                    <div class="p-4 border rounded-lg bg-gray-50">
-                        <p class="text-sm text-gray-500 mb-3">Create pricing campaigns that can be activated with a URL parameter (e.g., <code>?campaign=campaign-name</code>). You can set a global price adjustment and/or override individual service prices.</p>
-                         <div class="flex items-center gap-2 mb-4">
-                             <input type="text" id="new-modifier-name" placeholder="Enter new campaign name (e.g., end-of-year-sale)" class="flex-grow p-2 border rounded-md">
-                             <button data-action="add-campaign-modifier" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">Add Campaign</button>
-                        </div>
-                        <div id="campaign-modifiers-list" class="space-y-2">
-                            ${Object.keys(modifiers).length > 0 ? Object.keys(modifiers).map(modName => `
-                                <div class="p-3 border rounded-md flex justify-between items-center bg-white">
-                                    <span class="font-medium">${modName}</span>
-                                    <div class="space-x-2">
-                                        <button data-action="edit-campaign-modifier" data-id="${modName}" class="text-sm text-blue-600 hover:underline">Edit Prices</button>
-                                        <button data-action="delete-campaign-modifier" data-id="${modName}" class="text-sm text-red-600 hover:underline">Delete</button>
-                                    </div>
-                                </div>
-                            `).join('') : '<p class="text-gray-500">No campaigns configured.</p>'}
+    const modifiers = config.settings.campaignModifiers || {};
+    return `
+    <div>
+        <h3 class="font-bold text-xl mb-4">Regional/Campaign Modifiers</h3>
+        <div class="p-4 border rounded-lg bg-gray-50">
+            <p class="text-sm text-gray-500 mb-3">Create pricing campaigns that can be activated with a URL parameter (e.g., <code>?campaign=campaign-name</code>). You can set a global price adjustment and/or override individual service prices.</p>
+            
+            <!-- NEW: Import/Export Buttons -->
+            <div class="flex flex-wrap gap-4 items-center mb-4 border-b pb-4">
+                <button id="admin-export-campaigns-csv" class="btn btn-secondary text-sm">Export Campaigns (CSV)</button>
+                <label class="btn btn-secondary text-sm">
+                    Import Campaigns (CSV)
+                    <input type="file" id="admin-import-campaigns-csv" class="hidden" accept=".csv">
+                </label>
+            </div>
+            <!-- END: New Buttons -->
+
+            <div class="flex items-center gap-2 mb-4">
+                 <input type="text" id="new-modifier-name" placeholder="Enter new campaign name (e.g., end-of-year-sale)" class="flex-grow p-2 border rounded-md">
+                 <button data-action="add-campaign-modifier" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">Add Campaign</button>
+            </div>
+            <div id="campaign-modifiers-list" class="space-y-2">
+                ${Object.keys(modifiers).length > 0 ? Object.keys(modifiers).map(modName => `
+                    <div class="p-3 border rounded-md flex justify-between items-center bg-white">
+                        <span class="font-medium">${modName}</span>
+                        <div class="space-x-2">
+                            <button data-action="edit-campaign-modifier" data-id="${modName}" class="text-sm text-blue-600 hover:underline">Edit Prices</button>
+                            <button data-action="delete-campaign-modifier" data-id="${modName}" class="text-sm text-red-600 hover:underline">Delete</button>
                         </div>
                     </div>
-                </div>
-            `;
-            }
+                `).join('') : '<p class="text-gray-500">No campaigns configured.</p>'}
+            </div>
+        </div>
+    </div>
+`;
+}
             // NEW: Admin section for creating/managing marketing discounts
             function renderAdminMarketingDiscounts() {
                 const discounts = config.settings.marketingDiscounts || [];
@@ -5038,6 +5084,60 @@
                 downloadFile('galifrey-full-backup.json', content);
                 trackAnalytics('config_exported_json');
             }
+            function exportCampaignsCSV() {
+    try {
+        const campaigns = config.settings.campaignModifiers || {};
+        const dataToExport = [];
+
+        for (const campaignName in campaigns) {
+            const campaign = campaigns[campaignName];
+
+            // Add row for global adjustment
+            if (campaign.globalAdjust) {
+                dataToExport.push({
+                    campaign_name: campaignName,
+                    override_type: 'global',
+                    target_id: campaign.globalAdjust.type, // 'percent' or 'fixed'
+                    value: campaign.globalAdjust.value
+                });
+            }
+
+            // Add rows for service-specific overrides
+            for (const serviceId in campaign.services) {
+                dataToExport.push({
+                    campaign_name: campaignName,
+                    override_type: 'service',
+                    target_id: serviceId,
+                    value: campaign.services[serviceId]
+                });
+            }
+
+            // Add rows for package-specific overrides
+            for (const packageId in campaign.packages) {
+                dataToExport.push({
+                    campaign_name: campaignName,
+                    override_type: 'package',
+                    target_id: packageId,
+                    value: campaign.packages[packageId]
+                });
+            }
+        }
+
+        if (dataToExport.length === 0) {
+            showToast("No campaign data to export.", "info");
+            return;
+        }
+
+        const csv = Papa.unparse(dataToExport);
+        downloadFile('galifrey-campaigns-export.csv', csv);
+        showToast("Campaigns exported to CSV.", "success");
+        trackAnalytics('campaigns_exported_csv');
+
+    } catch (e) {
+        showToast("Error exporting campaign CSV.", "error");
+        console.error("Campaign CSV Export Error:", e);
+    }
+}
             function importConfig(event) {
                 const file = event.target.files[0];
                 if (file) {
@@ -5058,6 +5158,70 @@
                 }
                 event.target.value = '';
             }
+            function importCampaignsCSV(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function (results) {
+            if (results.errors.length > 0) {
+                showToast(`Errors found in CSV file. See console.`, 'error');
+                console.error("Campaign CSV Parsing Errors:", results.errors);
+                return;
+            }
+
+            if (!confirm(`Found ${results.data.length} campaign rules. This will overwrite any existing campaigns with the same name. Continue?`)) {
+                event.target.value = ''; // Reset file input
+                return;
+            }
+
+            const newCampaigns = {};
+            let processedCount = 0;
+
+            results.data.forEach(row => {
+                const { campaign_name, override_type, target_id, value } = row;
+                if (!campaign_name || !override_type) return;
+
+                // Ensure campaign object exists
+                if (!newCampaigns[campaign_name]) {
+                    newCampaigns[campaign_name] = { globalAdjust: null, services: {}, packages: {} };
+                }
+
+                const val = parseFloat(value);
+                if (isNaN(val)) return;
+
+                switch (override_type) {
+                    case 'global':
+                        newCampaigns[campaign_name].globalAdjust = {
+                            type: target_id, // 'percent' or 'fixed'
+                            value: val
+                        };
+                        break;
+                    case 'service':
+                        newCampaigns[campaign_name].services[target_id] = val;
+                        break;
+                    case 'package':
+                        newCampaigns[campaign_name].packages[target_id] = val;
+                        break;
+                }
+                processedCount++;
+            });
+            
+            // Replace the old campaign modifiers with the newly constructed ones
+            config.settings.campaignModifiers = newCampaigns;
+
+            showToast(`${processedCount} campaign rules imported successfully. Click "Save All Changes" to finalize.`, "success");
+            renderAdminPanel();
+        },
+        error: function (error) {
+            showToast("Failed to read the CSV file.", "error");
+            console.error("Campaign CSV Reading Error:", error);
+        }
+    });
+    event.target.value = ''; // Reset file input
+}
             function exportServicesCSV() {
                 try {
                     const dataToExport = config.services.map(service => ({
