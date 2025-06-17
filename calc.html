@@ -929,6 +929,7 @@
                     campaignModifiers: {},
                     marketingDiscounts: [],
                     valueArticulationEnabled: true,
+                    teamAugmentationEnabled: false,
                 },
                 teamAugmentationRoles: [
                     { id: 'role-seo', name: 'SEO Specialist', description: 'Dedicated expert for on-page, off-page, and technical SEO execution.', costPerHr: 95, minHrsPerMonth: 20, fullTimeSalaryComparison: 75000 },
@@ -1157,27 +1158,34 @@
             }
 
             function loadConfig() {
-                const savedConfig = localStorage.getItem('galifreyCalcConfig');
-                try {
-                    config = savedConfig ? JSON.parse(savedConfig) : JSON.parse(JSON.stringify(defaultConfig));
-                    if (!config.settings) config.settings = defaultConfig.settings;
-                    if (!config.settings.clientContext) config.settings.clientContext = defaultConfig.settings.clientContext;
-                    if (!config.settings.campaignModifiers) config.settings.campaignModifiers = {};
-                    if (!config.settings.marketingDiscounts) config.settings.marketingDiscounts = [];
-                    if (!config.settings.retainerTerms) config.settings.retainerTerms = defaultConfig.settings.retainerTerms;
-                    if (!config.settings.bundleDiscounts) config.settings.bundleDiscounts = defaultConfig.settings.bundleDiscounts;
-                    if (!config.settings.pdfSettings) config.settings.pdfSettings = defaultConfig.settings.pdfSettings;
-                    if (!config.packages) config.packages = [];
-                    config.services.forEach(s => {
-                        if (!s.modifiers) s.modifiers = [];
-                        if (!s.valuePropositions) s.valuePropositions = [];
-                    });
-                } catch (e) {
-                    console.error("Failed to parse config from localStorage, reverting to default.", e);
-                    config = JSON.parse(JSON.stringify(defaultConfig));
-                    showToast('Error loading configuration. Reverted to defaults.', 'error');
-                }
-            }
+    const savedConfig = localStorage.getItem('galifreyCalcConfig');
+    try {
+        config = savedConfig ? JSON.parse(savedConfig) : JSON.parse(JSON.stringify(defaultConfig));
+        // --- Add default checks for all settings to prevent errors on older configs ---
+        if (!config.settings) config.settings = defaultConfig.settings;
+        if (!config.settings.clientContext) config.settings.clientContext = defaultConfig.settings.clientContext;
+        if (!config.settings.campaignModifiers) config.settings.campaignModifiers = {};
+        if (!config.settings.marketingDiscounts) config.settings.marketingDiscounts = [];
+        if (!config.settings.retainerTerms) config.settings.retainerTerms = defaultConfig.settings.retainerTerms;
+        if (!config.settings.bundleDiscounts) config.settings.bundleDiscounts = defaultConfig.settings.bundleDiscounts;
+        if (!config.settings.pdfSettings) config.settings.pdfSettings = defaultConfig.settings.pdfSettings;
+        if (!config.packages) config.packages = [];
+        config.services.forEach(s => {
+            if (!s.modifiers) s.modifiers = [];
+            if (!s.valuePropositions) s.valuePropositions = [];
+        });
+
+        // --- NEW: Check and default the Team Augmentation toggle ---
+        if (typeof config.settings.teamAugmentationEnabled === 'undefined') {
+            config.settings.teamAugmentationEnabled = false;
+        }
+
+    } catch (e) {
+        console.error("Failed to parse config from localStorage, reverting to default.", e);
+        config = JSON.parse(JSON.stringify(defaultConfig));
+        showToast('Error loading configuration. Reverted to defaults.', 'error');
+    }
+}
             function saveConfig() {
                 try {
                     localStorage.setItem('galifreyCalcConfig', JSON.stringify(config));
@@ -1569,15 +1577,29 @@
             // #region ########## RENDER FUNCTIONS ##########
             // START: ADD THIS MISSING FUNCTION
             function renderAll() {
-                renderPackages();
-                renderBuilder();
-                renderAugmentationCalculator();
-                renderSummary();
-                if (isAdmin) {
-                    renderAdminPanel();
-                    // renderSubmittedQuotes() is called by the real-time Firebase listener
-                }
+    // --- NEW: Toggle Team Augmentation tab visibility ---
+    const teamAugTab = document.getElementById('tab-augmentation');
+    if (teamAugTab) {
+        if (config.settings.teamAugmentationEnabled) {
+            teamAugTab.classList.remove('hidden');
+        } else {
+            teamAugTab.classList.add('hidden');
+            // If the tab was active and is now disabled, switch to the main tab.
+            if (teamAugTab.classList.contains('active')) {
+                switchTab('packages');
             }
+        }
+    }
+    // --- END: New logic ---
+
+    renderPackages();
+    renderBuilder();
+    renderAugmentationCalculator();
+    renderSummary();
+    if (isAdmin) {
+        renderAdminPanel();
+    }
+}
             // END: ADD THIS MISSING FUNCTION
             // START: REPLACE THIS FUNCTION
             // START: REPLACE THIS FUNCTION
@@ -2867,20 +2889,30 @@
                 return desc;
             }
             function renderAdminPdfSettings() {
-                const s = config.settings;
-                return `
-         <div>
-            <h3 class="font-bold text-xl mb-4">General Settings</h3>
-            <div class="p-4 border rounded-lg bg-gray-50 space-y-4">
-                <div><h4 class="font-semibold text-lg">PDF Export Customization</h4><p class="text-xs text-gray-500">These settings are used when clicking "Export Full Summary to PDF" or exporting a submitted quote.</p></div>
-                <div><label class="block text-sm font-medium">Logo URL</label><input type="text" value="${s.pdfSettings.logoUrl}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.logoUrl" class="w-full p-2 border rounded-md"></div>
-                <div><label class="block text-sm font-medium">Header Text</label><input type="text" value="${s.pdfSettings.headerText}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.headerText" class="w-full p-2 border rounded-md"></div>
-                <div><label class="block text-sm font-medium">Introductory Paragraph</label><textarea data-change-action="update-admin-setting" data-path="settings.pdfSettings.introParagraph" class="w-full p-2 border rounded-md h-24">${s.pdfSettings.introParagraph}</textarea></div>
-                <div><label class="block text-sm font-medium">Footer Text</label><input type="text" value="${s.pdfSettings.footerText}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.footerText" class="w-full p-2 border rounded-md"></div>
-            </div>
+    const s = config.settings;
+    return `
+     <div>
+        <h3 class="font-bold text-xl mb-4">General Settings</h3>
+        <div class="p-4 border rounded-lg bg-gray-50 space-y-4">
+            <div><h4 class="font-semibold text-lg">PDF Export Customization</h4><p class="text-xs text-gray-500">These settings are used when clicking "Export Full Summary to PDF" or exporting a submitted quote.</p></div>
+            <div><label class="block text-sm font-medium">Logo URL</label><input type="text" value="${s.pdfSettings.logoUrl}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.logoUrl" class="w-full p-2 border rounded-md"></div>
+            <div><label class="block text-sm font-medium">Header Text</label><input type="text" value="${s.pdfSettings.headerText}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.headerText" class="w-full p-2 border rounded-md"></div>
+            <div><label class="block text-sm font-medium">Introductory Paragraph</label><textarea data-change-action="update-admin-setting" data-path="settings.pdfSettings.introParagraph" class="w-full p-2 border rounded-md h-24">${s.pdfSettings.introParagraph}</textarea></div>
+            <div><label class="block text-sm font-medium">Footer Text</label><input type="text" value="${s.pdfSettings.footerText}" data-change-action="update-admin-setting" data-path="settings.pdfSettings.footerText" class="w-full p-2 border rounded-md"></div>
         </div>
+
+        <!-- NEW FEATURE TOGGLE SECTION -->
+        <div class="p-4 border rounded-lg bg-gray-50 space-y-4 mt-6">
+             <h4 class="font-semibold text-lg">Feature Toggles</h4>
+             <div class="flex items-center">
+                 <input type="checkbox" id="toggle-team-aug" data-change-action="update-admin-setting" data-path="settings.teamAugmentationEnabled" ${s.teamAugmentationEnabled ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                 <label for="toggle-team-aug" class="ml-3 block text-sm font-medium text-gray-700">Enable Team Augmentation Calculator Tab</label>
+             </div>
+        </div>
+        <!-- END NEW SECTION -->
+    </div>
     `;
-            }
+}
             function renderAdminPackageManagement() {
                 return `
                 <div>
@@ -4373,53 +4405,29 @@
             const selection = phase.services[serviceId];
             if (!service) continue;
 
-            // Check if the service has the retainer option selected
             const isRetainerSelected = service.retainerOptions?.isEligible && selection.retainerSelected;
 
             if (isRetainerSelected) {
-                // --- NEW RETAINER LOGIC ---
                 const retainerOpts = service.retainerOptions;
-
-                // Add the fixed monthly cost of the retainer
                 phaseMonthly += retainerOpts.monthlyCost;
-
-                // Add cost for any estimated overage hours
                 const overageCost = (selection.overageHours || 0) * retainerOpts.overageRate;
                 phaseMonthly += overageCost;
-
-                // Add specific line items to the breakdown for clarity
-                breakdown.items.push({
-                    name: `${service.name} Retainer`,
-                    desc: `${retainerOpts.includedHours} hrs/mo included`,
-                    cost: retainerOpts.monthlyCost,
-                    type: 'Monthly',
-                    phaseId: phase.id
-                });
+                breakdown.items.push({ name: `${service.name} Retainer`, desc: `${retainerOpts.includedHours} hrs/mo included`, cost: retainerOpts.monthlyCost, type: 'Monthly', phaseId: phase.id });
                 if (overageCost > 0) {
-                    breakdown.items.push({
-                        name: `${service.name} Overage`,
-                        desc: `${selection.overageHours} hrs @ ${formatCurrency(retainerOpts.overageRate)}/hr`,
-                        cost: overageCost,
-                        type: 'Monthly',
-                        phaseId: phase.id
-                    });
+                    breakdown.items.push({ name: `${service.name} Overage`, desc: `${selection.overageHours} hrs @ ${formatCurrency(retainerOpts.overageRate)}/hr`, cost: overageCost, type: 'Monthly', phaseId: phase.id });
                 }
             } else {
-                // --- EXISTING PRICING LOGIC (Fallback) ---
                 if (service.valuePropositions) allValueProps.push(...service.valuePropositions);
                 if (service.timeline && service.timeline.durationWeeks > 0 && !service.timeline.hidden) {
                     timelineData.push({ name: service.name, order: service.timeline.order || 0, duration: service.timeline.durationWeeks || 0 });
                 }
-
                 let serviceOneTime = service.setupFee || 0;
                 let serviceMonthly = 0;
                 let multiplier = 1;
                 let summaryDesc = [];
-
                 const campaignPrice = getCampaignPrice(serviceId, campaignToUse);
                 const globalAdjust = campaignToUse ? config.settings.campaignModifiers[campaignToUse]?.globalAdjust : null;
                 let basePrice = campaignPrice ?? service.price;
-
                 if (campaignPrice === null && globalAdjust?.value) {
                     if (globalAdjust.type === 'percent') {
                         basePrice *= (1 + globalAdjust.value);
@@ -4429,7 +4437,6 @@
                         else if (serviceOneTime > 0) serviceOneTime += globalAdjust.value;
                     }
                 }
-
                 if (service.modifiers && selection.mods) {
                     for (const modId in selection.mods) {
                         const mod = service.modifiers.find(m => m.id === modId);
@@ -4444,15 +4451,12 @@
                         }
                     }
                 }
-
                 basePrice *= multiplier;
-
                 if (service.model === 'Project' || service.model === 'Unit' || service.model === 'Hourly') {
                     serviceOneTime += basePrice * (selection.quantity || 1);
                 } else if (service.model === 'Monthly') {
                     serviceMonthly += basePrice * (selection.quantity || 1);
                 }
-
                 const itemDesc = summaryDesc.length > 0 ? summaryDesc.join(', ') : 'Standard';
                 breakdown.items.push({ name: service.name, desc: itemDesc, cost: serviceOneTime + serviceMonthly, type: service.model, phaseId: phase.id, categoryId: service.categoryId, serviceId: serviceId });
                 if (serviceMonthly > 0) breakdown.serviceMonthlyCosts[serviceId] = (breakdown.serviceMonthlyCosts[serviceId] || 0) + serviceMonthly;
@@ -4461,7 +4465,6 @@
             }
         }
 
-        // Ad Spend calculation
         for (const selectionId in phase.adChannels) {
             const selection = phase.adChannels[selectionId];
             const channel = findAdChannel(selection.id);
@@ -4478,20 +4481,22 @@
         totals.monthly += phaseMonthly;
     });
 
-    // Team Augmentation calculation
-    for (const roleId in source.teamAugmentation) {
-        const role = (config.teamAugmentationRoles || []).find(r => r.id === roleId);
-        const selection = source.teamAugmentation[roleId];
-        if (role && selection?.hours > 0) {
-            const cost = role.costPerHr * selection.hours;
-            totals.monthly += cost;
-            breakdown.items.push({ name: `Team Aug: ${role.name}`, desc: `${selection.hours} hrs/mo`, cost, type: 'Monthly', phaseId: 'augmentation' });
+    // --- NEW: Conditionally calculate Team Augmentation costs ---
+    if (config.settings.teamAugmentationEnabled) {
+        for (const roleId in source.teamAugmentation) {
+            const role = (config.teamAugmentationRoles || []).find(r => r.id === roleId);
+            const selection = source.teamAugmentation[roleId];
+            if (role && selection?.hours > 0) {
+                const cost = role.costPerHr * selection.hours;
+                totals.monthly += cost;
+                breakdown.items.push({ name: `Team Aug: ${role.name}`, desc: `${selection.hours} hrs/mo`, cost, type: 'Monthly', phaseId: 'augmentation' });
+            }
         }
     }
+    // --- END: New logic ---
 
     preDiscountTotals = { ...totals };
 
-    // All discount logic
     source.phases.forEach(phase => {
         for (const serviceId in phase.services) {
             const service = findService(serviceId);
