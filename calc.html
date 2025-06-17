@@ -1101,53 +1101,129 @@
             let tempModifiers = [];
             let timelineChart = null; // For the new timeline chart instance
             const { jsPDF } = window.jspdf;
+            
+            /**
+ * Fetches the user's geolocation and applies a campaign modifier if a match is found.
+ * This function checks for modifiers in order of most to least specific:
+ * 1. city-state (e.g., 'dallas-texas')
+ * 2. city (e.g., 'dallas')
+ * 3. state (e.g., 'texas')
+ */
+async function applyGeoCampaign() {
+    console.log("Checking for geolocation-based campaign...");
+    try {
+        // Fetch location data from a free, no-key-required API
+        const response = await fetch('https://ipapi.co/json/');
+        if (!response.ok) {
+            throw new Error(`Geolocation fetch failed: ${response.status}`);
+        }
+        const geoData = await response.json();
+        console.log("Geolocation data received:", geoData);
+
+        // Sanitize city and region names (e.g., "New York" -> "new-york")
+        const city = geoData.city?.toLowerCase().replace(/\s+/g, '-');
+        const region = geoData.region?.toLowerCase().replace(/\s+/g, '-'); // e.g., 'texas'
+
+        if (!region && !city) {
+            console.log("Could not determine region or city from geodata.");
+            return; // Exit if no useful location data is available
+        }
+
+        // Create an array of potential modifier names, from most specific to least
+        const potentialModifiers = [
+            `${city}-${region}`, // 1. 'dallas-texas'
+            city,               // 2. 'dallas'
+            region              // 3. 'texas'
+        ].filter(Boolean); // .filter(Boolean) removes any null/empty values
+
+        console.log("Checking for potential campaign modifiers:", potentialModifiers);
+
+        // Find the first (most specific) modifier that exists in your configuration
+        const foundModifier = potentialModifiers.find(modName =>
+            config.settings.campaignModifiers && config.settings.campaignModifiers.hasOwnProperty(modName)
+        );
+
+        if (foundModifier) {
+            activeCampaign = foundModifier; // Set the globally used activeCampaign variable
+            showToast(`Region-specific pricing applied: ${foundModifier}`, "info");
+            console.log(`Geolocation campaign applied: ${activeCampaign}`);
+
+            // Display a banner to inform the user.
+            const banner = document.getElementById('campaign-modifier-banner');
+            const displayName = foundModifier.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            banner.textContent = `Welcome! Region-specific pricing for ${displayName} has been applied.`;
+            banner.classList.remove('hidden');
+
+        } else {
+            console.log("No matching geolocation campaign modifier found in config.");
+        }
+
+    } catch (error) {
+        console.error("Could not apply geolocation campaign:", error);
+        // Fail silently so we don't show an error to a normal user.
+    }
+}
 
             async function init() {
-                const urlParams = new URLSearchParams(window.location.search);
-                const sharedDataParam = urlParams.get('s');
-                let sessionLoadedFromUrl = false;
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedDataParam = urlParams.get('s');
+    let sessionLoadedFromUrl = false;
 
-                if (sharedDataParam) {
-                    try {
-                        const binaryString = atob(sharedDataParam.replace(/-/g, '+').replace(/_/g, '/'));
-                        const len = binaryString.length;
-                        const bytes = new Uint8Array(len);
-                        for (let i = 0; i < len; i++) {
-                            bytes[i] = binaryString.charCodeAt(i);
-                        }
-                        const decompressed = pako.inflate(bytes, { to: 'string' });
-                        const sharedSelections = JSON.parse(decompressed);
-
-                        if (loadSession(sharedSelections)) {
-                            sessionLoadedFromUrl = true;
-                            showToast("Shared session loaded successfully!", "success");
-                            trackAnalytics('session_loaded', { source: 'URL' });
-                            const cleanUrl = new URL(window.location);
-                            cleanUrl.searchParams.delete('s');
-                            window.history.replaceState({}, document.title, cleanUrl.href);
-                        } else {
-                            throw new Error("Invalid session data format from URL.");
-                        }
-                    } catch (e) {
-                        console.error("Failed to load from shared URL:", e);
-                        showToast("Could not load the shared link. It may be invalid or corrupted.", "error");
-                    }
-                }
-
-                if (!sessionLoadedFromUrl && localStorage.getItem('galifreyCalcSession')) {
-                    document.getElementById('load-session-banner').classList.remove('hidden');
-                }
-
-                activeCampaign = urlParams.get('campaign');
-
-                // Await the configuration to be loaded from Firestore before continuing
-                await loadConfig();
-
-                setupEventListeners();
-                listenForQuotes(); // This continues to listen for quotes in real-time
-
-                renderAll();
+    if (sharedDataParam) {
+        try {
+            const binaryString = atob(sharedDataParam.replace(/-/g, '+').replace(/_/g, '/'));
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
             }
+            const decompressed = pako.inflate(bytes, { to: 'string' });
+            const sharedSelections = JSON.parse(decompressed);
+
+            if (loadSession(sharedSelections)) {
+                sessionLoadedFromUrl = true;
+                showToast("Shared session loaded successfully!", "success");
+                trackAnalytics('session_loaded', { source: 'URL' });
+                const cleanUrl = new URL(window.location);
+                cleanUrl.searchParams.delete('s');
+                window.history.replaceState({}, document.title, cleanUrl.href);
+            } else {
+                throw new Error("Invalid session data format from URL.");
+            }
+        } catch (e) {
+            console.error("Failed to load from shared URL:", e);
+            showToast("Could not load the shared link. It may be invalid or corrupted.", "error");
+        }
+    }
+
+    if (!sessionLoadedFromUrl && localStorage.getItem('galifreyCalcSession')) {
+        document.getElementById('load-session-banner').classList.remove('hidden');
+    }
+
+    // --- MODIFICATION START ---
+    // Await the configuration FIRST, so it's available for the geo-check.
+    await loadConfig();
+
+    // Explicit campaign in URL takes the highest priority
+    const campaignFromUrl = urlParams.get('campaign');
+    if (campaignFromUrl) {
+        activeCampaign = campaignFromUrl;
+        console.log(`Campaign set from URL parameter: ${activeCampaign}`);
+    } else {
+        // If no campaign in URL, try to set one by geolocation.
+        // We 'await' this to ensure it completes before we render the page.
+        await applyGeoCampaign();
+    }
+    // --- MODIFICATION END ---
+
+    setupEventListeners();
+    // The listenForQuotes() is now called inside toggleAdminMode() to avoid unnecessary reads for regular users.
+    if (isAdmin) {
+        listenForQuotes();
+    }
+
+    renderAll();
+}
 
             async function loadConfig() {
                 const configRef = db.collection('app').doc('config');
