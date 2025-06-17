@@ -1670,66 +1670,69 @@ async function init() {
             // END: REPLACE THIS FUNCTION
             // START: REPLACE THIS FUNCTION
             function renderBuilder() {
-                const container = document.getElementById('content-builder');
-                if (selections.activePhaseId === null && selections.phases.length > 0) {
-                    selections.activePhaseId = selections.phases[0].id;
-                }
-                container.innerHTML = `
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-2xl font-bold">Build Your Campaign</h2>
-            <button data-action="clear-builder" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors text-sm">Clear All Selections</button>
+    const container = document.getElementById('content-builder');
+    if (selections.activePhaseId === null && selections.phases.length > 0) {
+        selections.activePhaseId = selections.phases[0].id;
+    }
+    container.innerHTML = `
+    <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
+        <h2 class="text-2xl font-bold">Build Your Campaign</h2>
+        <div class="flex gap-2">
+            <button data-action="admin-clear-session" class="btn btn-secondary text-sm">Clear Saved Session</button>
+            <button data-action="clear-builder" class="btn bg-red-500 text-white hover:bg-red-600 text-sm">Clear All Selections</button>
         </div>
-        <div class="mb-6 border-b border-gray-200">
-            <div class="flex items-center space-x-4">
-                <nav class="flex -mb-px" aria-label="Phases">
-                    ${selections.phases.map(phase => `
-                        <div class="flex items-center group">
-                            <button data-action="set-active-phase" data-id="${phase.id}" class="phase-tab text-sm font-medium border-b-2 py-2 px-4 ${selections.activePhaseId === phase.id ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}">
-                                ${phase.name}
-                            </button>
-                            ${selections.phases.length > 1 ? `<button data-action="delete-phase" data-id="${phase.id}" class="hidden group-hover:block text-red-400 hover:text-red-600 p-1 ml-1">&times;</button>` : ''}
-                        </div>
-                    `).join('')}
-                </nav>
-                <button data-action="add-phase" class="bg-gray-200 text-gray-600 hover:bg-gray-300 text-sm font-bold py-1 px-3 rounded-md">+ Add Phase</button>
-            </div>
+    </div>
+    <div class="mb-6 border-b border-gray-200">
+        <div class="flex items-center space-x-4">
+            <nav class="flex -mb-px" aria-label="Phases">
+                ${selections.phases.map(phase => `
+                    <div class="flex items-center group">
+                        <button data-action="set-active-phase" data-id="${phase.id}" class="phase-tab text-sm font-medium border-b-2 py-2 px-4 ${selections.activePhaseId === phase.id ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}">
+                            ${phase.name}
+                        </button>
+                        ${selections.phases.length > 1 ? `<button data-action="delete-phase" data-id="${phase.id}" class="hidden group-hover:block text-red-400 hover:text-red-600 p-1 ml-1">&times;</button>` : ''}
+                    </div>
+                `).join('')}
+            </nav>
+            <button data-action="add-phase" class="bg-gray-200 text-gray-600 hover:bg-gray-300 text-sm font-bold py-1 px-3 rounded-md">+ Add Phase</button>
         </div>
-        
-        ${renderClientContextSection()}
-        
-        <div class="mt-6 space-y-4">
-            ${renderRoiForecasterPanel()}
-            ${renderCompetitorSnapshotPanel()}
-        </div>
+    </div>
+    
+    ${renderClientContextSection()}
+    
+    <div class="mt-6 space-y-4">
+        ${renderRoiForecasterPanel()}
+        ${renderCompetitorSnapshotPanel()}
+    </div>
 
-        <div class="space-y-4 mt-6">
-            ${config.departments.map(dep => {
-                    const isOpen = openAccordions.has(dep.id);
-                    return `
-                <div class="bg-white rounded-lg shadow-sm">
-                    <button data-action="toggle-accordion" data-id="${dep.id}" class="w-full flex justify-between items-center p-4 text-left font-bold text-lg">
-                        <span>${dep.name}</span>
-                        <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div class="accordion-content ${isOpen ? 'open' : ''}">
-                        <div class="p-4 border-t space-y-4">
-                            ${config.categories.filter(cat => cat.departmentId === dep.id).map(cat => `
-                                <div class="pl-4">
-                                    <h4 class="font-semibold text-md mb-2 text-gray-700">${cat.name}</h4>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        ${config.services.filter(s => s.categoryId === cat.id).map(s => renderServiceCard(s)).join('')}
-                                    </div>
+    <div class="space-y-4 mt-6">
+        ${config.departments.map(dep => {
+                const isOpen = openAccordions.has(dep.id);
+                return `
+            <div class="bg-white rounded-lg shadow-sm">
+                <button data-action="toggle-accordion" data-id="${dep.id}" class="w-full flex justify-between items-center p-4 text-left font-bold text-lg">
+                    <span>${dep.name}</span>
+                    <svg class="w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="accordion-content ${isOpen ? 'open' : ''}">
+                    <div class="p-4 border-t space-y-4">
+                        ${config.categories.filter(cat => cat.departmentId === dep.id).map(cat => `
+                            <div class="pl-4">
+                                <h4 class="font-semibold text-md mb-2 text-gray-700">${cat.name}</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    ${config.services.filter(s => s.categoryId === cat.id).map(s => renderServiceCard(s)).join('')}
                                 </div>
-                            `).join('')}
-                        </div>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
-            `}).join('')}
-             ${renderAdSpendSection()}
-        </div>
-    `;
-                attachStarRatingListeners();
-            }
+            </div>
+        `}).join('')}
+         ${renderAdSpendSection()}
+    </div>
+`;
+    attachStarRatingListeners();
+}
             // END: REPLACE THIS FUNCTION
             // MODIFIED: Greatly expanded client context section
             function renderClientContextSection() {
@@ -2464,6 +2467,7 @@ async function init() {
         container.innerHTML = `<p class="text-center text-gray-500 p-8">Admin panel is locked. Press Ctrl+Shift+A and enter password to unlock.</p>`;
         return;
     }
+    // The HTML for the Cloud Sync buttons is now directly part of this function.
     container.innerHTML = `
     <div class="bg-white p-6 rounded-lg shadow-md space-y-8">
         <div>
