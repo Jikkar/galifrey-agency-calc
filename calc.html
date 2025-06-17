@@ -2973,39 +2973,76 @@
                 }
             }
             // START: REPLACE THIS FUNCTION
+            /**
+ * Handles the selection of a predefined service package.
+ *
+ * This corrected function addresses an issue where the summary would not update
+ * if a service listed in a package was not found in the main configuration.
+ *
+ * FIX:
+ * - It now tracks any service IDs from the package that cannot be found in the main `config.services` array.
+ * - After processing the package, it displays an error toast notification listing any missing service IDs.
+ * This makes it clear to the administrator why a package might not be adding all its services, which
+ * was the likely root cause of the summary not updating.
+ * - It proceeds to add all services that *were* successfully found, ensuring the summary updates correctly
+ * for the valid parts of the package.
+ *
+ * @param {string} packageId - The ID of the package to be selected.
+ */
             function selectPackage(packageId) {
                 const pkg = findPackage(packageId);
-                if (!pkg) return;
+                if (!pkg) {
+                    console.error(`Package with ID "${packageId}" not found.`);
+                    return;
+                }
+
                 const phase = selections.phases.find(p => p.id === selections.activePhaseId);
                 if (!phase) {
                     showToast("Cannot select package: No active phase.", "error");
                     return;
                 }
 
-                phase.services = {}; // Clear existing services in the active phase
+                // Clear existing services in the active phase before adding the new package's services.
+                phase.services = {};
 
+                const missingServices = [];
+
+                // Iterate through the services defined in the selected package.
                 pkg.services.forEach(s => {
                     const service = findService(s.id);
-                    if (!service) return;
+                    if (!service) {
+                        // If the service ID from the package doesn't exist in the main service list,
+                        // add it to the missingServices array to notify the user later.
+                        missingServices.push(s.id);
+                        return; // Skip this service and continue to the next one.
+                    }
 
+                    // If the service is found, create its default configuration and add it to the
+                    // selections for the current phase.
                     const defaultMods = createDefaultModsForService(service);
                     const packageMods = s.mods || {};
                     const finalMods = { ...defaultMods, ...packageMods };
 
-                    // Carry over the locked status from the package config
                     phase.services[s.id] = {
                         quantity: s.quantity || 1,
                         mods: finalMods,
                         termMonths: config.settings.retainerTerms[0]?.months || 1,
-                        locked: s.locked || false
+                        locked: s.locked || false // Carry over the locked status from the package config.
                     };
                 });
 
+                // After processing the package, check if any services were missing.
+                if (missingServices.length > 0) {
+                    // Inform the user about the services that could not be found. This is crucial for debugging.
+                    showToast(`Package Warning: Could not find services: ${missingServices.join(', ')}. Please check your config.`, "error");
+                }
+
                 trackAnalytics('package_selected', { packageId });
-                renderAll();
-                switchTab('builder');
-                showToast(`${pkg.name} package added to builder.`, 'info');
+                renderAll(); // Re-render the entire UI, which will update the summary with the new selections.
+                switchTab('builder'); // Switch to the builder tab to show the newly added services.
+                showToast(`${pkg.name} package added to the builder.`, 'info');
             }
+
             // END: REPLACE THIS FUNCTION
             // START: REPLACE THIS FUNCTION
             function toggleService(serviceId) {
