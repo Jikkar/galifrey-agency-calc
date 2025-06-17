@@ -1389,14 +1389,21 @@ function renderGoalWorkshopPanel() {
 function renderPackages() {
     const container = document.getElementById('content-packages');
     if (!container) return;
-    
+
     const campaignModifier = activeCampaign ? config.settings.campaignModifiers[activeCampaign] : null;
     const globalAdjust = campaignModifier?.globalAdjust;
 
     const processedPackages = config.packages.map(pkg => {
-        let finalDisplayPrice = getCampaignPackagePrice(pkg.id) ?? pkg.displayPrice;
+        // Start with the base display price from the config
+        let finalDisplayPrice = pkg.displayPrice;
 
-        if (getCampaignPackagePrice(pkg.id) === null && globalAdjust?.value) {
+        // Check for a campaign-specific package price override first
+        const campaignPackagePrice = getCampaignPackagePrice(pkg.id);
+        if (campaignPackagePrice !== null) {
+            finalDisplayPrice = campaignPackagePrice;
+        } 
+        // If no specific override, apply the global campaign adjustment
+        else if (globalAdjust?.value) {
             if (globalAdjust.type === 'percent') {
                 finalDisplayPrice *= (1 + globalAdjust.value);
             } else {
@@ -3055,7 +3062,6 @@ function updateClientContext(field, value, target) {
         const index = parseInt(target.dataset.index, 10);
         const subField = target.dataset.field; // 'text' or 'kpi'
         selections.clientContext.goals[index][subField] = value;
-
         if (value.trim().length > 10) {
              trackAnalytics('goal_defined', { goalIndex: index, field: subField });
         }
@@ -3063,7 +3069,6 @@ function updateClientContext(field, value, target) {
         const index = parseInt(target.dataset.index, 10);
         const subField = target.dataset.field; // 'url' or 'notes'
         selections.clientContext.competitors[index][subField] = value;
-
         if (subField === 'url' && value.trim() !== '') {
             trackAnalytics('competitor_url_entered', { url: value });
         }
@@ -3082,22 +3087,17 @@ function updateClientContext(field, value, target) {
         selections.clientContext[field] = value;
     }
 
-    if (field === 'businessStage') {
-        renderPackages();
-    }
+    // --- THIS IS THE FIX ---
+    // Instead of conditional rendering, we will call renderAll() to ensure
+    // the entire UI (packages, builder, summary) is always in sync with the data.
+    renderAll();
 
-    if (field === 'businessGoal' || field === 'goals') {
-        renderBuilder();
-        renderSummary(); 
-    }
-    
-    if (['monthlyTraffic', 'conversionRate', 'avgSaleValue'].includes(field)) {
-        renderSummary();
-        if (value.trim() !== '') {
-            trackAnalytics('roi_data_entered', { field: field, value: value });
-        }
+    // Track analytics for important fields after the UI has been updated.
+    if (['monthlyTraffic', 'conversionRate', 'avgSaleValue'].includes(field) && value.trim() !== '') {
+        trackAnalytics('roi_data_entered', { field: field, value: value });
     }
 }
+
 
 
 // END: REPLACE THIS FUNCTION
