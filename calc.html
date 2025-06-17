@@ -733,22 +733,32 @@
         let quotesListener = null; // To hold our real-time listener
 
         // This function will listen for real-time updates from Firebase
-        function listenForQuotes() {
+                function listenForQuotes() {
             // Unsubscribe from any previous listener to avoid duplicates
             if (quotesListener) {
                 quotesListener();
             }
 
-            const quotesCollection = db.collection("submittedQuotes").orderBy("timestamp", "desc");
+            // REMOVED: .orderBy("timestamp", "desc")
+            // This was causing an error if the corresponding Firestore index was not created.
+            // Sorting will now be handled in the browser after the data is received.
+            const quotesCollection = db.collection("submittedQuotes");
+            
             quotesListener = quotesCollection.onSnapshot((snapshot) => {
                 const quotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderSubmittedQuotes(quotes); // Re-render the list with fresh data
+                
+                // ADDED: Sort the quotes manually in JavaScript after receiving them.
+                // This is a more robust way to handle ordering.
+                quotes.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+                renderSubmittedQuotes(quotes); 
                 updateQuoteCountBadge(quotes.length);
             }, (error) => {
                 console.error("Error fetching quotes: ", error);
                 showToast("Could not connect to the quotes database.", "error");
             });
         }
+
         // ##############################################
         // #region ########## DEFAULT CONFIGURATION ##########
         // START: REPLACE THIS ENTIRE OBJECT
@@ -1020,11 +1030,23 @@ function init() {
     activeCampaign = urlParams.get('campaign');
     loadConfig();
     setupEventListeners();
-    listenForQuotes(); // Firebase listener
 
-    // A single, final render call to draw the UI with either the shared data or the default state.
+    // --- THIS IS THE FIX ---
+    // Wrap the Firebase listener in a try...catch block. This ensures that
+    // if Firebase has a connection or permission error, it won't stop the
+    // rest of the calculator from rendering.
+    try {
+        listenForQuotes(); // Firebase listener
+    } catch (e) {
+        console.error("Failed to initialize Firebase listener:", e);
+        showToast("Could not initialize submitted quotes listener.", "error");
+    }
+    // --- END FIX ---
+
+    // This final render call will now be reached even if the listener fails.
     renderAll();
 }
+
 
         function loadConfig() {
             const savedConfig = localStorage.getItem('galifreyCalcConfig');
