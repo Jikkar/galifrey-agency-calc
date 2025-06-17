@@ -888,21 +888,23 @@
 
             // This function will listen for real-time updates from Firebase
             function listenForQuotes() {
-                // Unsubscribe from any previous listener to avoid duplicates
-                if (quotesListener) {
-                    quotesListener();
-                }
-
-                const quotesCollection = db.collection("submittedQuotes").orderBy("timestamp", "desc");
-                quotesListener = quotesCollection.onSnapshot((snapshot) => {
-                    const quotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    renderSubmittedQuotes(quotes); // Re-render the list with fresh data
-                    updateQuoteCountBadge(quotes.length);
-                }, (error) => {
-                    console.error("Error fetching quotes: ", error);
-                    showToast("Could not connect to the quotes database.", "error");
-                });
-            }
+    // Unsubscribe from any previous listener to avoid duplicates
+    if (quotesListener) {
+        quotesListener();
+    }
+    // Create a query using the modular syntax
+    const quotesQuery = query(collection(db, "submittedQuotes"), orderBy("timestamp", "desc"));
+    
+    // Attach the listener
+    quotesListener = onSnapshot(quotesQuery, (snapshot) => {
+        const quotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderSubmittedQuotes(quotes); // Re-render the list with fresh data
+        updateQuoteCountBadge(quotes.length);
+    }, (error) => {
+        console.error("Error fetching quotes: ", error);
+        showToast("Could not connect to the quotes database.", "error");
+    });
+}
             // ##############################################
             // #region ########## DEFAULT CONFIGURATION ##########
             // START: REPLACE THIS ENTIRE OBJECT
@@ -1202,7 +1204,7 @@ async function init() {
     renderAll();
 }
             async function resetConfig() {
-    if (confirm("Are you sure you want to reset all settings to their defaults? This will overwrite the cloud configuration.")) {
+    if (confirm("Are you sure you want to reset all settings to their defaults? This will immediately save the default settings to the cloud, overwriting the current cloud configuration.")) {
         config = JSON.parse(JSON.stringify(defaultConfig));
         const newPhaseId = `phase-${Date.now()}`;
         selections = {
@@ -1215,7 +1217,8 @@ async function init() {
             appliedCoupon: null
         };
         openAccordions = new Set();
-        await saveConfig(); // Save the clean config to Firestore and re-render
+        // Explicitly save the reset configuration to Firestore.
+        await saveConfig(); 
     }
 }
             function resetAnalytics() {
@@ -2504,10 +2507,12 @@ async function init() {
     container.innerHTML = `
     <div class="bg-white p-6 rounded-lg shadow-md space-y-8">
         <div>
-            <h3 class="font-bold text-xl mb-4">Configuration Management</h3>
+            <h3 class="font-bold text-xl mb-4">Cloud Configuration Management</h3>
+            <p class="text-sm text-gray-500 mb-4">Use these buttons to manually synchronize your calculator's settings with the cloud. Remember to save to the cloud after making changes, and fetch from the cloud when you start a new session on a different device.</p>
             <div class="flex flex-wrap gap-4 items-center">
-                <button id="admin-save" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Save All Changes to Cloud</button>
-                <button id="admin-reset" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">Reset to Defaults</button>
+                <button id="admin-fetch-cloud" class="btn btn-primary">Fetch from Cloud</button>
+                <button id="admin-save-cloud" class="btn btn-success">Save to Cloud</button>
+                <button id="admin-reset" class="btn bg-red-600 text-white hover:bg-red-700">Reset to Defaults</button>
             </div>
         </div>
         ${renderAdminDataManagement()}
@@ -2525,14 +2530,23 @@ async function init() {
     `;
 
     // Attach all event listeners for the admin panel
-    document.getElementById('admin-save')?.addEventListener('click', async () => {
+    document.getElementById('admin-fetch-cloud')?.addEventListener('click', async () => {
+        if(confirm("This will overwrite your current unsaved changes with the latest data from the cloud. Continue?")) {
+            await loadConfig();
+            renderAll(); // Re-render the entire UI with the fetched data
+            showToast("Configuration fetched from cloud.", "success");
+        }
+    });
+    document.getElementById('admin-save-cloud')?.addEventListener('click', async () => {
         await saveConfig();
     });
+    
     document.getElementById('admin-reset')?.addEventListener('click', resetConfig);
     document.getElementById('admin-export-json')?.addEventListener('click', exportConfig);
     document.getElementById('admin-import-json')?.addEventListener('change', importConfig);
     document.getElementById('admin-export-csv')?.addEventListener('click', exportServicesCSV);
     document.getElementById('admin-import-csv')?.addEventListener('change', importServicesCSV);
+
     const exportCampaignsBtn = document.getElementById('admin-export-campaigns-csv');
     if (exportCampaignsBtn) {
         exportCampaignsBtn.addEventListener('click', exportCampaignsCSV);
@@ -2690,20 +2704,22 @@ async function init() {
                     badge.classList.add('hidden');
                 }
             }
-            function deleteQuote(quoteId) {
-                if (!confirm(`Are you sure you want to permanently delete this quote? This cannot be undone.`)) {
-                    return;
-                }
-                db.collection("submittedQuotes").doc(quoteId).delete()
-                    .then(() => {
-                        showToast('Quote deleted successfully.', 'info');
-                        // The real-time listener will automatically update the UI.
-                    })
-                    .catch((error) => {
-                        console.error("Error removing document: ", error);
-                        showToast("Could not delete quote. Please try again.", "error");
-                    });
-            }
+            async function deleteQuote(quoteId) {
+    if (!confirm(`Are you sure you want to permanently delete this quote? This cannot be undone.`)) {
+        return;
+    }
+    try {
+        // Get a reference to the document using the modular syntax
+        const quoteRef = doc(db, "submittedQuotes", quoteId);
+        // Delete the document
+        await deleteDoc(quoteRef);
+        showToast('Quote deleted successfully.', 'info');
+        // The real-time listener will automatically update the UI.
+    } catch (error) {
+        console.error("Error removing document: ", error);
+        showToast("Could not delete quote. Please try again.", "error");
+    }
+}
             // #endregion
             function renderAdminDataManagement() {
                 return `
