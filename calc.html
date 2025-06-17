@@ -1254,8 +1254,9 @@
                 }
             }
             // START: ADD THIS MISSING FUNCTION
-            function handleDynamicClicks(e) {
-    const target = e.target.closest('[data-action]');
+function handleDynamicClicks(e) {
+    // Select the closest element that has either a data-action or one of the specific button IDs.
+    const target = e.target.closest('[data-action], #request-quote-btn, #export-pdf-btn');
     if (!target) return;
 
     // Prevents this general listener from acting on buttons inside the alternatives modal,
@@ -1264,8 +1265,19 @@
         return;
     }
 
-    const action = target.dataset.action;
+    let action = target.dataset.action;
     const id = target.dataset.id;
+
+    // *** THIS IS THE FIX ***
+    // If the data-action attribute is missing, determine the action from the element's ID.
+    if (!action) {
+        if (target.id === 'request-quote-btn') {
+            action = 'request-quote';
+        } else if (target.id === 'export-pdf-btn') {
+            action = 'export-pdf';
+        }
+    }
+
 
     switch (action) {
         // --- Session & Sharing ---
@@ -1317,7 +1329,7 @@
         case 'close-modal':
             closeEditModal();
             break;
-        case 'request-quote': // <<< FIX: This case was missing
+        case 'request-quote':
             document.getElementById('quote-modal-overlay').style.display = 'flex';
             break;
         case 'close-quote-modal':
@@ -1329,7 +1341,7 @@
         case 'close-alternatives-modal':
             document.getElementById('alternatives-modal-overlay').style.display = 'none';
             break;
-        case 'export-pdf': // <<< FIX: This case was missing
+        case 'export-pdf':
             exportSummaryPDF(selections, `Galifrey-Proposal-Summary.pdf`);
             break;
 
