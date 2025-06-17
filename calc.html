@@ -1096,7 +1096,7 @@
             let timelineChart = null; // For the new timeline chart instance
             const { jsPDF } = window.jspdf;
 
-            async function init() {
+async function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const sharedDataParam = urlParams.get('s');
     let sessionLoadedFromUrl = false;
@@ -1134,7 +1134,7 @@
 
     activeCampaign = urlParams.get('campaign');
 
-    // --- AWAIT the configuration to be loaded from Firestore before continuing ---
+    // Await the configuration to be loaded from Firestore before continuing
     await loadConfig();
 
     setupEventListeners();
@@ -1149,15 +1149,14 @@
         const doc = await configRef.get();
         if (doc.exists) {
             console.log("Configuration loaded from Firestore.");
-            // Merge Firestore config with defaults to ensure all keys exist after an update
             config = {
-                ...JSON.parse(JSON.stringify(defaultConfig)),
+                ...JSON.parse(JSON.stringify(defaultConfig)), // Ensure all keys exist
                 ...doc.data()
             };
         } else {
-            console.log("No config found in Firestore. Initializing with default config and saving.");
+            console.log("No config found in Firestore. Using local default config.");
             config = JSON.parse(JSON.stringify(defaultConfig));
-            await saveConfig(false); // Pass false to prevent a success toast on the very first run
+            // We no longer auto-save here, we let the user do it explicitly.
         }
     } catch (error) {
         console.error("Error fetching config from Firestore. Using default config.", error);
@@ -1168,7 +1167,6 @@
             async function saveConfig(showSuccessToast = true) {
     const configRef = db.collection('app').doc('config');
     try {
-        // Create a clean, serializable copy of the config object for Firestore.
         const cleanConfig = JSON.parse(JSON.stringify(config));
         await configRef.set(cleanConfig, { merge: true });
 
@@ -1179,27 +1177,25 @@
     } catch (e) {
         console.error("Failed to save config to Firestore", e);
         showToast('Error saving configuration to cloud.', 'error');
-        return; // Stop if saving fails
+        return;
     }
-    // Re-render the entire UI after a successful save to reflect any changes.
     renderAll();
 }
             async function resetConfig() {
     if (confirm("Are you sure you want to reset all settings to their defaults? This will overwrite the cloud configuration.")) {
         config = JSON.parse(JSON.stringify(defaultConfig));
-        // Also reset the user's selections to a clean state
         const newPhaseId = `phase-${Date.now()}`;
         selections = {
             phases: [{ id: newPhaseId, name: 'Phase 1: Campaign Selections', services: {}, adChannels: {} }],
             activePhaseId: newPhaseId,
             teamAugmentation: {},
             packagesToCompare: new Set(),
-            clientContext: defaultConfig.settings.clientContext, // Reset to default structure
+            clientContext: defaultConfig.settings.clientContext,
             overrides: { oneTime: null, monthly: null },
             appliedCoupon: null
         };
         openAccordions = new Set();
-        await saveConfig(); // This will save the clean config to Firestore and re-render
+        await saveConfig(); // Save the clean config to Firestore and re-render
     }
 }
             function resetAnalytics() {
@@ -2509,18 +2505,14 @@
     `;
 
     // Attach all event listeners for the admin panel
-    
-    // This listener correctly handles the async save operation.
     document.getElementById('admin-save')?.addEventListener('click', async () => {
         await saveConfig();
     });
-
     document.getElementById('admin-reset')?.addEventListener('click', resetConfig);
     document.getElementById('admin-export-json')?.addEventListener('click', exportConfig);
     document.getElementById('admin-import-json')?.addEventListener('change', importConfig);
     document.getElementById('admin-export-csv')?.addEventListener('click', exportServicesCSV);
     document.getElementById('admin-import-csv')?.addEventListener('change', importServicesCSV);
-
     const exportCampaignsBtn = document.getElementById('admin-export-campaigns-csv');
     if (exportCampaignsBtn) {
         exportCampaignsBtn.addEventListener('click', exportCampaignsCSV);
