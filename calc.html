@@ -2079,101 +2079,115 @@
             // START: REPLACE THIS FUNCTION
             // START: REPLACE THIS FUNCTION
             function renderSummary() {
-                const { totals, breakdown, discounts, valueProps, roiProjections, forecast, timelineData } = calculateTotals(selections);
-                const summaryContent = document.getElementById('summary-content');
-                const emptyMessage = document.getElementById('empty-summary-message');
-                const overrideOneTimeInput = document.getElementById('override-one-time');
-                const overrideMonthlyInput = document.getElementById('override-monthly');
+    // 1. Get all calculated data. 'totals' here represents the cost BEFORE any manual admin overrides.
+    const { totals, breakdown, discounts, valueProps, roiProjections, forecast, timelineData } = calculateTotals(selections);
 
-                // Check if there are any selections to display.
-                const totalSelectedItems = breakdown.items.length + Object.values(selections.teamAugmentation).filter(role => role.hours > 0).length;
+    const summaryContent = document.getElementById('summary-content');
+    const emptyMessage = document.getElementById('empty-summary-message');
+    const overrideOneTimeInput = document.getElementById('override-one-time');
+    const overrideMonthlyInput = document.getElementById('override-monthly');
 
-                if (totalSelectedItems > 0) {
-                    summaryContent.classList.remove('hidden');
-                    emptyMessage.classList.add('hidden');
-                } else {
-                    summaryContent.classList.add('hidden');
-                    emptyMessage.classList.remove('hidden');
-                    // If there's nothing to show, stop further rendering.
-                    return;
-                }
+    // Check if there's anything to show.
+    const totalSelectedItems = breakdown.items.length + Object.values(selections.teamAugmentation).filter(role => role.hours > 0).length;
 
-                // Update totals display
-                document.getElementById('total-one-time').textContent = formatCurrency(selections.overrides.oneTime ?? totals.oneTime);
-                document.getElementById('total-monthly').textContent = formatCurrency(selections.overrides.monthly ?? totals.monthly);
-                document.getElementById('total-ad-spend').textContent = formatCurrency(totals.adSpend);
+    if (totalSelectedItems > 0) {
+        summaryContent.classList.remove('hidden');
+        emptyMessage.classList.add('hidden');
+    } else {
+        summaryContent.classList.add('hidden');
+        emptyMessage.classList.remove('hidden');
+        return;
+    }
 
-                overrideOneTimeInput.value = selections.overrides.oneTime ?? '';
-                overrideMonthlyInput.value = selections.overrides.monthly ?? '';
+    // 2. Determine the final display totals, using the admin overrides if they exist.
+    const finalOneTime = selections.overrides.oneTime ?? totals.oneTime;
+    const finalMonthly = selections.overrides.monthly ?? totals.monthly;
 
-                const adSpendContainer = document.getElementById('ad-spend-total-container');
-                const grandTotalContainer = document.getElementById('grand-total-container');
+    // 3. Update the main total display with the final (potentially overridden) values.
+    document.getElementById('total-one-time').textContent = formatCurrency(finalOneTime);
+    document.getElementById('total-monthly').textContent = formatCurrency(finalMonthly);
+    document.getElementById('total-ad-spend').textContent = formatCurrency(totals.adSpend);
 
-                if (totals.adSpend > 0) {
-                    adSpendContainer.classList.remove('hidden');
-                    grandTotalContainer.classList.remove('hidden');
-                } else {
-                    adSpendContainer.classList.add('hidden');
-                    grandTotalContainer.classList.add('hidden');
-                }
+    // Ensure admin override inputs show the current override value.
+    overrideOneTimeInput.value = selections.overrides.oneTime ?? '';
+    overrideMonthlyInput.value = selections.overrides.monthly ?? '';
 
-                document.getElementById('total-upfront').textContent = formatCurrency((selections.overrides.oneTime ?? totals.oneTime));
-                const finalMonthlyInvestment = (selections.overrides.monthly ?? totals.monthly) + totals.adSpend;
-                document.getElementById('total-investment').textContent = formatCurrency(finalMonthlyInvestment);
+    // Handle visibility of ad spend and grand total sections.
+    const adSpendContainer = document.getElementById('ad-spend-total-container');
+    const grandTotalContainer = document.getElementById('grand-total-container');
 
-                // Render detailed breakdown
-                const detailedSummary = document.getElementById('detailed-summary');
-                let summaryHtml = '';
+    if (totals.adSpend > 0) {
+        adSpendContainer.classList.remove('hidden');
+        grandTotalContainer.classList.remove('hidden');
+    } else {
+        adSpendContainer.classList.add('hidden');
+        grandTotalContainer.classList.add('hidden');
+    }
 
-                selections.phases.forEach(phase => {
-                    const itemsInPhase = breakdown.items.filter(item => item.phaseId === phase.id);
-                    if (itemsInPhase.length > 0) {
-                        summaryHtml += `<div class="mb-3"><div class="font-bold text-indigo-700 text-sm border-b pb-1 mb-1">${phase.name}</div>`;
-                        itemsInPhase.forEach(item => {
-                            summaryHtml += `
+    // Display the final grand totals.
+    document.getElementById('total-upfront').textContent = formatCurrency(finalOneTime);
+    const finalMonthlyInvestment = finalMonthly + totals.adSpend;
+    document.getElementById('total-investment').textContent = formatCurrency(finalMonthlyInvestment);
+
+    // Render the detailed item-by-item breakdown.
+    const detailedSummary = document.getElementById('detailed-summary');
+    let summaryHtml = '';
+    selections.phases.forEach(phase => {
+        const itemsInPhase = breakdown.items.filter(item => item.phaseId === phase.id);
+        if (itemsInPhase.length > 0) {
+            summaryHtml += `<div class="mb-3"><div class="font-bold text-indigo-700 text-sm border-b pb-1 mb-1">${phase.name}</div>`;
+            itemsInPhase.forEach(item => {
+                summaryHtml += `
                     <div class="flex justify-between items-center text-sm py-1">
                         <span class="text-gray-800">${item.name} <em class="text-gray-500 text-xs">(${item.desc})</em></span>
                         <span class="font-semibold">${formatCurrency(item.cost)}</span>
                     </div>`;
-                        });
-                        summaryHtml += `</div>`;
-                    }
-                });
+            });
+            summaryHtml += `</div>`;
+        }
+    });
+    detailedSummary.innerHTML = summaryHtml;
 
-                const augmentationItems = breakdown.items.filter(item => item.phaseId === 'augmentation');
-                if (augmentationItems.length > 0) {
-                    summaryHtml += `<div class="mb-3"><div class="font-bold text-indigo-700 text-sm border-b pb-1 mb-1">Team Augmentation</div>`;
-                    augmentationItems.forEach(item => {
-                        summaryHtml += `
-                <div class="flex justify-between items-center text-sm py-1">
-                    <span class="text-gray-800">${item.name} <em class="text-gray-500 text-xs">(${item.desc})</em></span>
-                    <span class="font-semibold">${formatCurrency(item.cost)}</span>
-                </div>`;
-                    });
-                    summaryHtml += `</div>`;
-                }
 
-                detailedSummary.innerHTML = summaryHtml;
+    // 4. --- NEW OVERRIDE DISCOUNT LOGIC ---
+    // Start with the automatically calculated discounts (bundle, term, coupon).
+    const allDiscounts = [...(discounts || [])];
 
-                // Render discounts
-                const discountsList = document.getElementById('discounts-list');
-                if (discounts && discounts.length > 0) {
-                    discountsList.innerHTML = discounts.map(d => `
+    // Check for a one-time override discount.
+    const oneTimeOverride = selections.overrides.oneTime;
+    if (typeof oneTimeOverride === 'number' && oneTimeOverride < totals.oneTime) {
+        const oneTimeDiscountAmount = totals.oneTime - oneTimeOverride;
+        allDiscounts.push({ name: 'Admin Price Adjustment (One-Time)', amount: oneTimeDiscountAmount });
+    }
+
+    // Check for a monthly override discount.
+    const monthlyOverride = selections.overrides.monthly;
+    if (typeof monthlyOverride === 'number' && monthlyOverride < totals.monthly) {
+        const monthlyDiscountAmount = totals.monthly - monthlyOverride;
+        allDiscounts.push({ name: 'Admin Price Adjustment (Monthly)', amount: monthlyDiscountAmount });
+    }
+    // --- END OF NEW LOGIC ---
+
+    // 5. Render the complete list of discounts, now including any manual adjustments.
+    const discountsList = document.getElementById('discounts-list');
+    if (allDiscounts.length > 0) {
+        discountsList.innerHTML = allDiscounts.map(d => `
             <div class="flex justify-between items-center text-sm text-green-600">
                 <span>${d.name}</span>
                 <span>-${formatCurrency(d.amount)}</span>
             </div>
         `).join('');
-                    discountsList.classList.remove('hidden');
-                } else {
-                    discountsList.innerHTML = '';
-                    discountsList.classList.add('hidden');
-                }
+        discountsList.classList.remove('hidden');
+    } else {
+        discountsList.innerHTML = '';
+        discountsList.classList.add('hidden');
+    }
 
-                renderValuePropositions(valueProps);
-                renderRoiProjections(roiProjections);
-                renderRoiForecast(forecast);
-            }
+    // Render the remaining summary sections.
+    renderValuePropositions(valueProps);
+    renderRoiProjections(roiProjections);
+    renderRoiForecast(forecast);
+}
             // END: REPLACE THIS FUNCTION
             // END: REPLACE THIS FUNCTION
             function setSummaryTab(tabId) {
