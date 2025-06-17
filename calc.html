@@ -2461,14 +2461,14 @@ async function init() {
     function renderAdminPanel() {
     const container = document.getElementById('content-admin');
     if (!isAdmin) {
-        container.innerHTML = `<p class="text-center text-gray-500 p-8">Admin panel is locked. Press Ctrl+Shift+A and enter password.</p>`;
+        container.innerHTML = `<p class="text-center text-gray-500 p-8">Admin panel is locked. Press Ctrl+Shift+A and enter password to unlock.</p>`;
         return;
     }
     container.innerHTML = `
     <div class="bg-white p-6 rounded-lg shadow-md space-y-8">
         <div>
             <h3 class="font-bold text-xl mb-4">Cloud Configuration Management</h3>
-            <p class="text-sm text-gray-500 mb-4">Use these buttons to manually synchronize your calculator's settings with the cloud.</p>
+            <p class="text-sm text-gray-500 mb-4">Use these buttons to manually synchronize your calculator's settings with the cloud. Remember to save to the cloud after making changes, and fetch from the cloud when you start a new session on a different device.</p>
             <div class="flex flex-wrap gap-4 items-center">
                 <button id="admin-fetch-cloud" class="btn btn-primary">Fetch from Cloud</button>
                 <button id="admin-save-cloud" class="btn btn-success">Save to Cloud</button>
@@ -2486,23 +2486,27 @@ async function init() {
         ${renderAdminDiscountsAndTiers()}
         ${renderAdminCategoryManagement()}
         ${renderAdminServiceManagement()}
-    </div>`;
+    </div>
+    `;
 
+    // Attach all event listeners for the admin panel
     document.getElementById('admin-fetch-cloud')?.addEventListener('click', async () => {
-        if (confirm("This will overwrite your current unsaved changes. Continue?")) {
+        if(confirm("This will overwrite your current unsaved changes with the latest data from the cloud. Continue?")) {
             await loadConfig();
-            renderAll();
+            renderAll(); // Re-render the entire UI with the fetched data
             showToast("Configuration fetched from cloud.", "success");
         }
     });
     document.getElementById('admin-save-cloud')?.addEventListener('click', async () => {
         await saveConfig();
     });
+    
     document.getElementById('admin-reset')?.addEventListener('click', resetConfig);
     document.getElementById('admin-export-json')?.addEventListener('click', exportConfig);
     document.getElementById('admin-import-json')?.addEventListener('change', importConfig);
     document.getElementById('admin-export-csv')?.addEventListener('click', exportServicesCSV);
     document.getElementById('admin-import-csv')?.addEventListener('change', importServicesCSV);
+
     const exportCampaignsBtn = document.getElementById('admin-export-campaigns-csv');
     if (exportCampaignsBtn) {
         exportCampaignsBtn.addEventListener('click', exportCampaignsCSV);
