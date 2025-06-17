@@ -2503,7 +2503,7 @@
     `;
             }
             // END: ADD THESE NEW FUNCTIONS
-            function renderAdminPanel() {
+    function renderAdminPanel() {
     const container = document.getElementById('content-admin');
     if (!isAdmin) {
         container.innerHTML = `<p class="text-center text-gray-500 p-8">Admin panel is locked. Press Ctrl+Shift+A and enter password to unlock.</p>`;
@@ -2514,7 +2514,7 @@
         <div>
             <h3 class="font-bold text-xl mb-4">Configuration Management</h3>
             <div class="flex flex-wrap gap-4 items-center">
-                <button id="admin-save" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Save All Changes to Live Config</button>
+                <button id="admin-save" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Save All Changes to Cloud</button>
                 <button id="admin-reset" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">Reset to Defaults</button>
             </div>
         </div>
@@ -2533,14 +2533,18 @@
     `;
 
     // Attach all event listeners for the admin panel
-    document.getElementById('admin-save')?.addEventListener('click', async () => await saveConfig());
+    
+    // This listener correctly handles the async save operation.
+    document.getElementById('admin-save')?.addEventListener('click', async () => {
+        await saveConfig();
+    });
+
     document.getElementById('admin-reset')?.addEventListener('click', resetConfig);
     document.getElementById('admin-export-json')?.addEventListener('click', exportConfig);
     document.getElementById('admin-import-json')?.addEventListener('change', importConfig);
     document.getElementById('admin-export-csv')?.addEventListener('click', exportServicesCSV);
     document.getElementById('admin-import-csv')?.addEventListener('change', importServicesCSV);
 
-    // --- NEW: Attach listeners for campaign CSV actions ---
     const exportCampaignsBtn = document.getElementById('admin-export-campaigns-csv');
     if (exportCampaignsBtn) {
         exportCampaignsBtn.addEventListener('click', exportCampaignsCSV);
@@ -2549,7 +2553,6 @@
     if (importCampaignsBtn) {
         importCampaignsBtn.addEventListener('change', importCampaignsCSV);
     }
-    // --- END: New listeners ---
 }
             // END: REPLACE THIS FUNCTION
             // END: REPLACE THIS FUNCTION
