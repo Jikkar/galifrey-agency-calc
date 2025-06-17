@@ -19,445 +19,362 @@
     <!-- The new fonts are imported directly in the CSS with @import -->
     <style>
         /* --- EPIC UI/UX STYLE UPLIFT (V2 - OPTIMIZED) --- */
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap');
-
-        :root {
-            --bg-primary: #f8f9fc;
-            --bg-secondary: #ffffff;
-            --bg-tertiary: #f0f2f5;
-            --text-primary: #111827;
-            --text-secondary: #4b5563;
-            --text-tertiary: #9ca3af;
-            --brand-primary: #4f46e5;
-            --brand-secondary: #7c3aed;
-            --brand-gradient: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
-            --accent-success: #16a34a;
-            --accent-error: #dc2626;
-            --accent-warning: #f59e0b;
-            --border-primary: #e5e7eb;
-            --border-focus: #a5b4fc;
-            --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
-            --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.07);
-            --shadow-lg: 0 20px 25px -5px rgba(79, 70, 229, 0.1), 0 8px 10px -6px rgba(79, 70, 229, 0.1);
-            --radius-sm: 0.5rem;
-            --radius-md: 0.75rem;
-            --radius-lg: 1rem;
-            --radius-xl: 1.5rem;
-        }
-
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-
-        .admin-view {
-            background-color: #fff1f2;
-        }
-
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--bg-primary);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #d1d5db;
-            border-radius: 10px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-tertiary);
-        }
-
-        /* Main App Container */
-        #app {
-            max-width: 1600px;
-            padding: 1rem;
-        }
-
-        @media (min-width: 768px) {
-            #app {
-                padding: 2rem;
-            }
-        }
-
-        @media (min-width: 1024px) {
-            #app {
-                padding: 3rem;
-            }
-        }
-
-
-        /* Header */
-        header h1 {
-            font-family: 'Space Grotesk', sans-serif;
-            font-weight: 700;
-            font-size: 2.25rem;
-            /* Equivalent to text-4xl */
-            background: var(--brand-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            line-height: 1.2;
-            letter-spacing: -0.02em;
-            padding-bottom: 0.1em;
-        }
-
-        @media (min-width: 768px) {
-            header h1 {
-                font-size: 3rem;
-            }
-
-            /* text-5xl */
-        }
-
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap');
+
+:root {
+    --bg-primary: #f8f9fc;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f0f2f5;
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-tertiary: #9ca3af;
+    --brand-primary: #4f46e5;
+    --brand-secondary: #7c3aed;
+    --brand-gradient: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
+    --accent-success: #16a34a;
+    --accent-error: #dc2626;
+    --accent-warning: #f59e0b;
+    --border-primary: #e5e7eb;
+    --border-focus: #a5b4fc;
+    --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+    --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.07);
+    --shadow-lg: 0 20px 25px -5px rgba(79, 70, 229, 0.1), 0 8px 10px -6px rgba(79, 70, 229, 0.1);
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+}
+
+body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.admin-view {
+    background-color: #fff1f2;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+}
+
+/* Main App Container */
+#app {
+    max-width: 1600px;
+    padding: 1rem;
+}
+@media (min-width: 768px) { #app { padding: 2rem; } }
+@media (min-width: 1024px) { #app { padding: 3rem; } }
+
+
+/* Header */
+header h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 2.25rem; /* Equivalent to text-4xl */
+    background: var(--brand-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    padding-bottom: 0.1em;
+}
+@media (min-width: 768px) { header h1 { font-size: 3rem; } /* text-5xl */ }
+
+
+header p {
+    color: var(--text-secondary);
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 1.125rem; /* text-lg */
+}
+
+/* Tabs */
+#main-tabs {
+    border-bottom: 2px solid var(--border-primary);
+}
+.tab {
+    padding: 1rem;
+    font-weight: 700;
+    border-bottom: 4px solid transparent;
+    margin-bottom: -2px; /* Pulls the border up to the main line */
+    transition: color 0.3s ease, border-color 0.3s ease;
+}
+.tab.active {
+    color: var(--brand-primary);
+    border-image: var(--brand-gradient) 1;
+}
+.tab:not(.active):hover {
+    color: var(--text-primary);
+}
+
+/* Package & Service Cards */
+.package-card, .service-card {
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    border: 2px solid transparent;
+    overflow: visible; /* Allows badge to sit on top */
+    padding: 1.75rem;
+}
+.package-card:hover, .service-card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-lg);
+}
+.service-card.selected {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 4px var(--border-focus);
+    transform: translateY(-8px);
+}
+
+/* Accordions */
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.7s cubic-bezier(0.16, 1, 0.3, 1), padding 0.5s ease;
+    padding: 0 1.5rem;
+}
+.accordion-content.open {
+    max-height: 5000px; /* Large value to accommodate any content */
+    padding: 1.5rem;
+}
+
+/* Summary Sidebar */
+#summary-sidebar {
+    background: linear-gradient(180deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,1) 30%), var(--bg-secondary);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-primary);
+    backdrop-filter: blur(10px);
+    padding: 2rem;
+}
+#summary-sidebar h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    line-height: 1.3;
+}
+#totals-section #total-investment {
+    color: var(--brand-primary);
+    font-weight: 800;
+}
+#totals-section > div {
+    padding: 0.75rem 0;
+}
+
+/* Buttons */
+.btn {
+    padding: 0.8rem 1.75rem;
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    text-align: center;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: var(--shadow-sm);
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    line-height: 1.2;
+}
+.btn:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+}
+.btn:active {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+.btn-primary {
+    background: var(--brand-gradient);
+    color: white;
+}
+.btn-success {
+    background-color: var(--accent-success);
+    color: white;
+}
+.btn-success:hover {
+    background-color: #15803d;
+}
+.btn-secondary {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+}
+.btn-secondary:hover {
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+}
+
+#request-quote-btn {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+
+#apply-coupon-btn {
+    background-color: var(--text-secondary);
+    color: white;
+    border-radius: var(--radius-md); /* Match other buttons */
+}
+#apply-coupon-btn:hover {
+    background-color: var(--text-primary);
+}
+
+
+/* Forms */
+input[type='text'], input[type='number'], input[type='email'], input[type='tel'], input[type='url'], input[type='date'], textarea, select {
+    background-color: var(--bg-tertiary);
+    border: 2px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    width: 100%;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-primary);
+}
+input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px var(--border-focus);
+    background-color: var(--bg-secondary);
+}
+
+/* Modals */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    padding: 1rem;
+}
+
+.modal-overlay[style*="display: flex"] {
+    opacity: 1;
+}
+
+.modal-content {
+    background-color: var(--bg-secondary);
+    padding: 2rem;
+    border-radius: var(--radius-xl);
+    width: 90%;
+    max-width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay[style*="display: flex"] .modal-content {
+    transform: scale(1);
+}
+
+.modal-content h3, .modal-content h4 {
+    line-height: 1.3;
+}
+
+/* Badges */
+.recommendation-badge {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--brand-gradient);
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.35rem 1rem;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    z-index: 5;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    white-space: nowrap;
+}
+
+.recommendation-badge svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Star Rating */
+.star-rating {
+    display: inline-flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+}
+.star-rating input[type="radio"] { display: none; }
+.star-rating label {
+    font-size: 2rem;
+    color: #ddd;
+    cursor: pointer;
+    transition: color 0.2s, transform 0.2s;
+}
+.star-rating label:hover,
+.star-rating label:hover ~ label {
+    transform: scale(1.1);
+    color: var(--accent-warning);
+}
+.star-rating input[type="radio"]:checked ~ label {
+    color: var(--accent-warning);
+}
+
+
+/* Quote Panel in Admin */
+.quote-card-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out;
+}
+.quote-card-content.open {
+    max-height: 2000px;
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+}
+
+/* Toast Notifications */
+#toast-container .bg-blue-500 { background: var(--brand-gradient); }
+#toast-container .bg-green-500 { background-color: var(--accent-success); }
+#toast-container .bg-red-500 { background-color: var(--accent-error); }
+
+/* Specificity overrides for Tailwind classes that might remain */
+.text-indigo-600 { color: var(--brand-primary) !important; }
+.bg-indigo-600 { background-color: var(--brand-primary) !important; }
+.hover\:bg-indigo-700:hover { background-color: var(--brand-secondary) !important; }
+.bg-green-600 { background-color: var(--accent-success) !important; }
+.hover\:bg-green-700:hover { background-color: #15803D !important; }
 
-        header p {
-            color: var(--text-secondary);
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
-            font-size: 1.125rem;
-            /* text-lg */
-        }
-
-        /* Tabs */
-        #main-tabs {
-            border-bottom: 2px solid var(--border-primary);
-        }
-
-        .tab {
-            padding: 1rem;
-            font-weight: 700;
-            border-bottom: 4px solid transparent;
-            margin-bottom: -2px;
-            /* Pulls the border up to the main line */
-            transition: color 0.3s ease, border-color 0.3s ease;
-        }
-
-        .tab.active {
-            color: var(--brand-primary);
-            border-image: var(--brand-gradient) 1;
-        }
-
-        .tab:not(.active):hover {
-            color: var(--text-primary);
-        }
-
-        /* Package & Service Cards */
-        .package-card,
-        .service-card {
-            background-color: var(--bg-secondary);
-            border-radius: var(--radius-xl);
-            box-shadow: var(--shadow-md);
-            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-            border: 2px solid transparent;
-            overflow: visible;
-            /* Allows badge to sit on top */
-            padding: 1.75rem;
-        }
-
-        .package-card:hover,
-        .service-card:hover {
-            transform: translateY(-8px);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .service-card.selected {
-            border-color: var(--brand-primary);
-            box-shadow: 0 0 0 4px var(--border-focus);
-            transform: translateY(-8px);
-        }
-
-        /* Accordions */
-        .accordion-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.7s cubic-bezier(0.16, 1, 0.3, 1), padding 0.5s ease;
-            padding: 0 1.5rem;
-        }
-
-        .accordion-content.open {
-            max-height: 5000px;
-            /* Large value to accommodate any content */
-            padding: 1.5rem;
-        }
-
-        /* Summary Sidebar */
-        #summary-sidebar {
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 1) 30%), var(--bg-secondary);
-            border-radius: var(--radius-xl);
-            box-shadow: var(--shadow-lg);
-            border: 1px solid var(--border-primary);
-            backdrop-filter: blur(10px);
-            padding: 2rem;
-        }
-
-        #summary-sidebar h2 {
-            font-family: 'Space Grotesk', sans-serif;
-            font-weight: 700;
-            line-height: 1.3;
-        }
-
-        #totals-section #total-investment {
-            color: var(--brand-primary);
-            font-weight: 800;
-        }
-
-        #totals-section>div {
-            padding: 0.75rem 0;
-        }
-
-        /* Buttons */
-        .btn {
-            padding: 0.8rem 1.75rem;
-            border-radius: var(--radius-md);
-            font-weight: 700;
-            text-align: center;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            box-shadow: var(--shadow-sm);
-            border: none;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            line-height: 1.2;
-        }
-
-        .btn:hover {
-            transform: translateY(-3px);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .btn:active {
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-sm);
-        }
-
-        .btn-primary {
-            background: var(--brand-gradient);
-            color: white;
-        }
-
-        .btn-success {
-            background-color: var(--accent-success);
-            color: white;
-        }
-
-        .btn-success:hover {
-            background-color: #15803d;
-        }
-
-        .btn-secondary {
-            background-color: var(--bg-tertiary);
-            color: var(--text-primary);
-            border: 1px solid var(--border-primary);
-        }
-
-        .btn-secondary:hover {
-            background-color: #e5e7eb;
-            border-color: #d1d5db;
-        }
-
-        #request-quote-btn {
-            padding-top: 1rem;
-            padding-bottom: 1rem;
-        }
-
-        #apply-coupon-btn {
-            background-color: var(--text-secondary);
-            color: white;
-            border-radius: var(--radius-md);
-            /* Match other buttons */
-        }
-
-        #apply-coupon-btn:hover {
-            background-color: var(--text-primary);
-        }
-
-
-        /* Forms */
-        input[type='text'],
-        input[type='number'],
-        input[type='email'],
-        input[type='tel'],
-        input[type='url'],
-        input[type='date'],
-        textarea,
-        select {
-            background-color: var(--bg-tertiary);
-            border: 2px solid var(--border-primary);
-            border-radius: var(--radius-sm);
-            padding: 0.75rem 1rem;
-            transition: border-color 0.3s, box-shadow 0.3s;
-            width: 100%;
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            color: var(--text-primary);
-        }
-
-        input:focus,
-        textarea:focus,
-        select:focus {
-            outline: none;
-            border-color: var(--brand-primary);
-            box-shadow: 0 0 0 3px var(--border-focus);
-            background-color: var(--bg-secondary);
-        }
-
-        /* Modals */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(30, 41, 59, 0.6);
-            backdrop-filter: blur(8px);
-            z-index: 100;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            padding: 1rem;
-        }
-
-        .modal-overlay[style*="display: flex"] {
-            opacity: 1;
-        }
-
-        .modal-content {
-            background-color: var(--bg-secondary);
-            padding: 2rem;
-            border-radius: var(--radius-xl);
-            width: 90%;
-            max-width: 700px;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: var(--shadow-lg);
-            transform: scale(0.95);
-            transition: transform 0.3s ease;
-        }
-
-        .modal-overlay[style*="display: flex"] .modal-content {
-            transform: scale(1);
-        }
-
-        .modal-content h3,
-        .modal-content h4 {
-            line-height: 1.3;
-        }
-
-        /* Badges */
-        .recommendation-badge {
-            position: absolute;
-            top: -16px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--brand-gradient);
-            color: white;
-            font-size: 0.8rem;
-            font-weight: 700;
-            padding: 0.35rem 1rem;
-            border-radius: 9999px;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            z-index: 5;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-            white-space: nowrap;
-        }
-
-        .recommendation-badge svg {
-            width: 1rem;
-            height: 1rem;
-        }
-
-        /* Star Rating */
-        .star-rating {
-            display: inline-flex;
-            flex-direction: row-reverse;
-            justify-content: flex-end;
-        }
-
-        .star-rating input[type="radio"] {
-            display: none;
-        }
-
-        .star-rating label {
-            font-size: 2rem;
-            color: #ddd;
-            cursor: pointer;
-            transition: color 0.2s, transform 0.2s;
-        }
-
-        .star-rating label:hover,
-        .star-rating label:hover~label {
-            transform: scale(1.1);
-            color: var(--accent-warning);
-        }
-
-        .star-rating input[type="radio"]:checked~label {
-            color: var(--accent-warning);
-        }
-
-
-        /* Quote Panel in Admin */
-        .quote-card-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.5s ease-in-out;
-        }
-
-        .quote-card-content.open {
-            max-height: 2000px;
-            padding-top: 1.5rem;
-            padding-bottom: 1.5rem;
-        }
-
-        /* Toast Notifications */
-        #toast-container .bg-blue-500 {
-            background: var(--brand-gradient);
-        }
-
-        #toast-container .bg-green-500 {
-            background-color: var(--accent-success);
-        }
-
-        #toast-container .bg-red-500 {
-            background-color: var(--accent-error);
-        }
-
-        /* Specificity overrides for Tailwind classes that might remain */
-        .text-indigo-600 {
-            color: var(--brand-primary) !important;
-        }
-
-        .bg-indigo-600 {
-            background-color: var(--brand-primary) !important;
-        }
-
-        .hover\:bg-indigo-700:hover {
-            background-color: var(--brand-secondary) !important;
-        }
-
-        .bg-green-600 {
-            background-color: var(--accent-success) !important;
-        }
-
-        .hover\:bg-green-700:hover {
-            background-color: #15803D !important;
-        }
+
     </style>
 </head>
 
@@ -2128,131 +2045,118 @@
             // START: REPLACE THIS FUNCTION
             // START: REPLACE THIS FUNCTION
             function renderSummary() {
-                // 1. Get all calculated data. 'totals' here represents the cost BEFORE any manual admin overrides.
-                const { totals, breakdown, discounts, valueProps, roiProjections, forecast, timelineData } = calculateTotals(selections);
+    // 1. Get all calculated data.
+    const { totals, breakdown, discounts, valueProps, roiProjections, forecast, timelineData } = calculateTotals(selections);
 
-                const summaryContent = document.getElementById('summary-content');
-                const emptyMessage = document.getElementById('empty-summary-message');
-                const overrideOneTimeInput = document.getElementById('override-one-time');
-                const overrideMonthlyInput = document.getElementById('override-monthly');
+    const summaryContent = document.getElementById('summary-content');
+    const emptyMessage = document.getElementById('empty-summary-message');
+    const overrideOneTimeInput = document.getElementById('override-one-time');
+    const overrideMonthlyInput = document.getElementById('override-monthly');
 
-                // Check if there's anything to show.
-                const totalSelectedItems = breakdown.items.length + Object.values(selections.teamAugmentation).filter(role => role.hours > 0).length;
+    // --- NEW: Conditional Timeline Tab Logic ---
+    const timelineTab = document.querySelector('[data-tab="timeline"]');
+    if (timelineTab) {
+        const hasTimelineData = timelineData && timelineData.length > 0;
+        timelineTab.style.display = hasTimelineData ? 'inline-block' : 'none';
 
-                if (totalSelectedItems > 0) {
-                    summaryContent.classList.remove('hidden');
-                    emptyMessage.classList.add('hidden');
-                } else {
-                    summaryContent.classList.add('hidden');
-                    emptyMessage.classList.remove('hidden');
-                    return;
-                }
+        // If the timeline tab was active but is now hidden, switch back to the main summary tab.
+        if (!hasTimelineData && timelineTab.classList.contains('active')) {
+            setSummaryTab('summary');
+        }
+    }
+    // --- END: New Logic ---
 
-                // 2. Determine the final display totals, using the admin overrides if they exist.
-                const finalOneTime = selections.overrides.oneTime ?? totals.oneTime;
-                const finalMonthly = selections.overrides.monthly ?? totals.monthly;
+    // Check if there's anything to show.
+    const totalSelectedItems = breakdown.items.length + Object.values(selections.teamAugmentation).filter(role => role.hours > 0).length;
 
-                // 3. Update the main total display with the final (potentially overridden) values.
-                document.getElementById('total-one-time').textContent = formatCurrency(finalOneTime);
-                document.getElementById('total-monthly').textContent = formatCurrency(finalMonthly);
-                document.getElementById('total-ad-spend').textContent = formatCurrency(totals.adSpend);
+    if (totalSelectedItems > 0) {
+        summaryContent.classList.remove('hidden');
+        emptyMessage.classList.add('hidden');
+    } else {
+        summaryContent.classList.add('hidden');
+        emptyMessage.classList.remove('hidden');
+        // Reset the value props expanded state if the summary is cleared
+        isValuePropsExpanded = false;
+        return;
+    }
 
-                // Ensure admin override inputs show the current override value.
-                overrideOneTimeInput.value = selections.overrides.oneTime ?? '';
-                overrideMonthlyInput.value = selections.overrides.monthly ?? '';
+    // Determine the final display totals, using the admin overrides if they exist.
+    const finalOneTime = selections.overrides.oneTime ?? totals.oneTime;
+    const finalMonthly = selections.overrides.monthly ?? totals.monthly;
 
-                // Handle visibility of ad spend and grand total sections.
-                const adSpendContainer = document.getElementById('ad-spend-total-container');
-                const grandTotalContainer = document.getElementById('grand-total-container');
+    // Update the main total display with the final (potentially overridden) values.
+    document.getElementById('total-one-time').textContent = formatCurrency(finalOneTime);
+    document.getElementById('total-monthly').textContent = formatCurrency(finalMonthly);
+    document.getElementById('total-ad-spend').textContent = formatCurrency(totals.adSpend);
 
-                if (totals.adSpend > 0) {
-                    adSpendContainer.classList.remove('hidden');
-                    grandTotalContainer.classList.remove('hidden');
-                } else {
-                    adSpendContainer.classList.add('hidden');
-                    grandTotalContainer.classList.add('hidden');
-                }
+    overrideOneTimeInput.value = selections.overrides.oneTime ?? '';
+    overrideMonthlyInput.value = selections.overrides.monthly ?? '';
 
-                // Display the final grand totals.
-                document.getElementById('total-upfront').textContent = formatCurrency(finalOneTime);
-                const finalMonthlyInvestment = finalMonthly + totals.adSpend;
-                document.getElementById('total-investment').textContent = formatCurrency(finalMonthlyInvestment);
+    const adSpendContainer = document.getElementById('ad-spend-total-container');
+    const grandTotalContainer = document.getElementById('grand-total-container');
 
-                // Render the detailed item-by-item breakdown.
-                const detailedSummary = document.getElementById('detailed-summary');
-                let summaryHtml = '';
-                selections.phases.forEach(phase => {
-                    const itemsInPhase = breakdown.items.filter(item => item.phaseId === phase.id);
-                    if (itemsInPhase.length > 0) {
-                        summaryHtml += `<div class="mb-3"><div class="font-bold text-indigo-700 text-sm border-b pb-1 mb-1">${phase.name}</div>`;
-                        itemsInPhase.forEach(item => {
-                            summaryHtml += `
+    if (totals.adSpend > 0) {
+        adSpendContainer.classList.remove('hidden');
+        grandTotalContainer.classList.remove('hidden');
+    } else {
+        adSpendContainer.classList.add('hidden');
+        grandTotalContainer.classList.add('hidden');
+    }
+
+    document.getElementById('total-upfront').textContent = formatCurrency(finalOneTime);
+    const finalMonthlyInvestment = finalMonthly + totals.adSpend;
+    document.getElementById('total-investment').textContent = formatCurrency(finalMonthlyInvestment);
+
+    const detailedSummary = document.getElementById('detailed-summary');
+    let summaryHtml = '';
+    selections.phases.forEach(phase => {
+        const itemsInPhase = breakdown.items.filter(item => item.phaseId === phase.id);
+        if (itemsInPhase.length > 0) {
+            summaryHtml += `<div class="mb-3"><div class="font-bold text-indigo-700 text-sm border-b pb-1 mb-1">${phase.name}</div>`;
+            itemsInPhase.forEach(item => {
+                summaryHtml += `
                     <div class="flex justify-between items-center text-sm py-1">
                         <span class="text-gray-800">${item.name} <em class="text-gray-500 text-xs">(${item.desc})</em></span>
                         <span class="font-semibold">${formatCurrency(item.cost)}</span>
                     </div>`;
-                        });
-                        summaryHtml += `</div>`;
-                    }
-                });
-                detailedSummary.innerHTML = summaryHtml;
+            });
+            summaryHtml += `</div>`;
+        }
+    });
+    detailedSummary.innerHTML = summaryHtml;
 
+    const allDiscounts = [...(discounts || [])];
+    const oneTimeOverride = selections.overrides.oneTime;
+    if (typeof oneTimeOverride === 'number' && oneTimeOverride < totals.oneTime) {
+        const oneTimeDiscountAmount = totals.oneTime - oneTimeOverride;
+        allDiscounts.push({ name: 'Admin Price Adjustment (One-Time)', amount: oneTimeDiscountAmount });
+    }
 
-                // 4. --- NEW OVERRIDE DISCOUNT LOGIC ---
-                // Start with the automatically calculated discounts (bundle, term, coupon).
-                const allDiscounts = [...(discounts || [])];
+    const monthlyOverride = selections.overrides.monthly;
+    if (typeof monthlyOverride === 'number' && monthlyOverride < totals.monthly) {
+        const monthlyDiscountAmount = totals.monthly - monthlyOverride;
+        allDiscounts.push({ name: 'Admin Price Adjustment (Monthly)', amount: monthlyDiscountAmount });
+    }
 
-                // Check for a one-time override discount.
-                const oneTimeOverride = selections.overrides.oneTime;
-                if (typeof oneTimeOverride === 'number' && oneTimeOverride < totals.oneTime) {
-                    const oneTimeDiscountAmount = totals.oneTime - oneTimeOverride;
-                    allDiscounts.push({ name: 'Admin Price Adjustment (One-Time)', amount: oneTimeDiscountAmount });
-                }
-
-                // Check for a monthly override discount.
-                const monthlyOverride = selections.overrides.monthly;
-                if (typeof monthlyOverride === 'number' && monthlyOverride < totals.monthly) {
-                    const monthlyDiscountAmount = totals.monthly - monthlyOverride;
-                    allDiscounts.push({ name: 'Admin Price Adjustment (Monthly)', amount: monthlyDiscountAmount });
-                }
-                // --- END OF NEW LOGIC ---
-
-                // 5. Render the complete list of discounts, now including any manual adjustments.
-                const discountsList = document.getElementById('discounts-list');
-                if (allDiscounts.length > 0) {
-                    discountsList.innerHTML = allDiscounts.map(d => `
+    const discountsList = document.getElementById('discounts-list');
+    if (allDiscounts.length > 0) {
+        discountsList.innerHTML = allDiscounts.map(d => `
             <div class="flex justify-between items-center text-sm text-green-600">
                 <span>${d.name}</span>
                 <span>-${formatCurrency(d.amount)}</span>
             </div>
         `).join('');
-                    discountsList.classList.remove('hidden');
-                } else {
-                    discountsList.innerHTML = '';
-                    discountsList.classList.add('hidden');
-                }
+        discountsList.classList.remove('hidden');
+    } else {
+        discountsList.innerHTML = '';
+        discountsList.classList.add('hidden');
+    }
 
-                // Render the remaining summary sections.
-                renderValuePropositions(valueProps);
-                renderRoiProjections(roiProjections);
-                renderRoiForecast(forecast);
-            }
-            // END: REPLACE THIS FUNCTION
-            // END: REPLACE THIS FUNCTION
-            function setSummaryTab(tabId) {
-                document.querySelectorAll('#summary-tabs .summary-tab').forEach(t => t.classList.remove('active'));
-                document.querySelector(`[data-tab='${tabId}']`).classList.add('active');
-                if (tabId === 'summary') {
-                    document.getElementById('summary-tab-content-summary').classList.remove('hidden');
-                    document.getElementById('summary-tab-content-timeline').classList.add('hidden');
-                } else {
-                    document.getElementById('summary-tab-content-summary').classList.add('hidden');
-                    document.getElementById('summary-tab-content-timeline').classList.remove('hidden');
-                    // FIX: Calculate fresh data and render the chart only when the tab is made visible.
-                    const { timelineData } = calculateTotals(selections);
-                    renderTimelineChart(timelineData);
-                }
-            }
+    // Render the remaining summary sections, including the collapsible value props.
+    renderValuePropositions(valueProps);
+    renderRoiProjections(roiProjections);
+    renderRoiForecast(forecast);
+}
             function renderRoiProjections(projections) {
                 const container = document.getElementById('roi-projection-section');
                 if (!projections || projections.length === 0) {
