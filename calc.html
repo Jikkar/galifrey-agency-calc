@@ -1120,20 +1120,22 @@
                     const geoData = await response.json();
                     console.log("Geolocation data received:", geoData);
 
-                    // Sanitize city and region names (e.g., "New York" -> "new-york")
+                    // Sanitize city, region, and country names
                     const city = geoData.city?.toLowerCase().replace(/\s+/g, '-');
-                    const region = geoData.region?.toLowerCase().replace(/\s+/g, '-'); // e.g., 'texas'
+                    const region = geoData.region?.toLowerCase().replace(/\s+/g, '-'); // e.g., 'ontario', 'texas'
+                    const country = geoData.country_name?.toLowerCase().replace(/\s+/g, '-'); // e.g., 'canada', 'united-states'
 
-                    if (!region && !city) {
-                        console.log("Could not determine region or city from geodata.");
+                    if (!region && !city && !country) {
+                        console.log("Could not determine region, city, or country from geodata.");
                         return; // Exit if no useful location data is available
                     }
 
                     // Create an array of potential modifier names, from most specific to least
                     const potentialModifiers = [
-                        `${city}-${region}`, // 1. 'dallas-texas'
-                        city,               // 2. 'dallas'
-                        region              // 3. 'texas'
+                        `${city}-${region}`, // 1. 'toronto-ontario'
+                        city,               // 2. 'toronto'
+                        region,             // 3. 'ontario'
+                        country             // 4. 'canada'
                     ].filter(Boolean); // .filter(Boolean) removes any null/empty values
 
                     console.log("Checking for potential campaign modifiers:", potentialModifiers);
@@ -1145,14 +1147,15 @@
 
                     if (foundModifier) {
                         activeCampaign = foundModifier; // Set the globally used activeCampaign variable
-                        showToast(`Region-specific pricing applied: ${foundModifier}`, "info");
+                        //showToast(`Region-specific pricing applied: ${foundModifier}`, "info");
                         console.log(`Geolocation campaign applied: ${activeCampaign}`);
 
                         // Display a banner to inform the user.
-                        const banner = document.getElementById('campaign-modifier-banner');
+                        /* const banner = document.getElementById('campaign-modifier-banner');
                         const displayName = foundModifier.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                         banner.textContent = `Welcome! Region-specific pricing for ${displayName} has been applied.`;
                         banner.classList.remove('hidden');
+                        */
 
                     } else {
                         console.log("No matching geolocation campaign modifier found in config.");
