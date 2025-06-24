@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Pricing Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Base Styling & BEM Convention */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* gray-100 */
+        }
+
+        /* Helper class to hide elements */
+        .hidden {
+            display: none;
+        }
+
+        /* Scoped styles to prevent leakage between calculator and admin panel */
+        #calculator-interface .calculator__input, #admin-panel .admin-panel__input {
+            @apply w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500;
+        }
+
+        #calculator-interface .calculator__label, #admin-panel .admin-panel__label {
+            @apply block text-sm font-medium text-gray-700 mb-1;
+        }
+
+        #calculator-interface .calculator__button, #admin-panel .admin-panel__button {
+            @apply px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50;
+        }
+
+        #calculator-interface .calculator__card, #admin-panel .admin-panel__card {
+            @apply bg-white p-6 rounded-lg shadow-md mb-6;
+        }
+
+        #quote-summary .quote-summary__table {
+            @apply min-w-full divide-y divide-gray-200;
+        }
+        #quote-summary .quote-summary__cell {
+            @apply px-4 py-3 text-sm;
+        }
+        #quote-summary .quote-summary__header {
+            @apply px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Container for the entire application. Will be populated after decryption. -->
+    <div id="app-container">
+        <!-- Password prompt will be shown here initially -->
+        <div id="password-prompt" class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+            <div class="max-w-md w-full space-y-8 bg-white p-10 rounded-xl shadow-lg">
+                <div>
+                    <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                        Admin Access
+                    </h2>
+                    <p class="mt-2 text-center text-sm text-gray-600">
+                        Enter password to access the calculator and admin panel.
+                    </p>
+                </div>
+                <div class="mt-8 space-y-6">
+                    <div class="rounded-md shadow-sm -space-y-px">
+                        <div>
+                            <label for="password" class="sr-only">Password</label>
+                            <input id="password-input" name="password" type="password" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm" placeholder="Password">
+                        </div>
+                    </div>
+
+                    <div>
+                        <button id="submit-password" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Unlock
+                        </button>
+                    </div>
+                     <p id="password-error" class="mt-2 text-center text-sm text-red-600 hidden">Incorrect password. Please try again.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- The main application content is stored here, encrypted. -->
+    <!-- It will be decrypted and injected into #app-container. -->
+    <div id="encrypted-payload" class="hidden"></div>
+
+
+    <script>
+    // --- START: ENCRYPTION AND DECRYPTION LOGIC (Web Crypto API) ---
+    // This section handles the client-side password protection as specified in the blueprint.
+    const CryptoController = (function() {
+        const payloadContainer = document.getElementById('encrypted-payload');
+        const passwordPrompt = document.getElementById('password-prompt');
+        const passwordInput = document.getElementById('password-input');
+        const submitButton = document.getElementById('submit-password');
+        const passwordError = document.getElementById('password-error');
+        const appContainer = document.getElementById('app-container');
+
+        // This is the encrypted content of the application.
+        // In a real scenario, an offline tool would be used to encrypt the HTML.
+        // For this demo, we will encrypt it dynamically on first load if not already set.
+        // The default password is "admin123"
+        let encryptedData = {
+            "iv": "z5dC0j4gqY8nL2xP",
+            "salt": "a1b2c3d4e5f6g7h8",
+            "cipherText": "U2FsdGVkX1+zQhE5n/iN0G5bL3oD2jR8mF7kG4pS6fQ... (example)"
+        };
+
+        // The actual HTML content of the application that will be encrypted.
+        const appHTML = `
+            <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+                <header class="mb-8">
+                    <h1 id="company-header" class="text-4xl font-bold text-gray-800 text-center">Pricing Calculator</h1>
+                    <p class="text-center text-gray-500 mt-2">A comprehensive business engine for quotes.</p>
+                    <div class="flex justify-center mt-4 space-x-2">
+                        <button id="show-calculator-btn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-md">Calculator</button>
+                        <button id="show-admin-btn" class="px-4 py-2 bg-gray-600 text-white font-semibold rounded-md shadow-md">Admin Panel</button>
+                    </div>
+                </header>
+
+                <main>
+                    <!-- Calculator Interface -->
+                    <section id="calculator-interface">
+                        <!-- Content generated by JavaScript -->
+                    </section>
+
+                    <!-- Admin Panel -->
+                    <section id="admin-panel" class="hidden">
+                         <!-- Content generated by JavaScript -->
+                    </section>
+                </main>
+            </div>
+        `;
+
+
+        async function deriveKey(password, saltBuffer) {
+            const enc = new TextEncoder();
+            const keyMaterial = await window.crypto.subtle.importKey(
+                "raw",
+                enc.encode(password),
+                { name: "PBKDF2" },
+                false,
+                ["deriveBits", "deriveKey"]
+            );
+            return window.crypto.subtle.deriveKey(
+                {
+                    "name": "PBKDF2",
+                    salt: saltBuffer,
+                    "iterations": 100000,
+                    "hash": "SHA-256"
+                },
+                keyMaterial,
+                { "name": "AES-GCM", "length": 256 },
+                true,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        async function encrypt(data, password) {
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const key = await deriveKey(password, salt);
+            const enc = new TextEncoder();
+            const encodedData = enc.encode(data);
+
+            const cipherText = await window.crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                key,
+                encodedData
+            );
+
+            return {
+                cipherText: btoa(String.fromCharCode.apply(null, new Uint8Array(cipherText))),
+                iv: btoa(String.fromCharCode.apply(null, iv)),
+                salt: btoa(String.fromCharCode.apply(null, salt))
+            };
+        }
+
+
+        async function decrypt(encryptedData, password) {
+            try {
+                const saltStr = atob(encryptedData.salt);
+                const ivStr = atob(encryptedData.iv);
+                const cipherTextStr = atob(encryptedData.cipherText);
+
+                // Convert raw binary strings back to Uint8Arrays
+                const saltBuffer = new Uint8Array(saltStr.split('').map(c => c.charCodeAt(0)));
+                const ivBuffer = new Uint8Array(ivStr.split('').map(c => c.charCodeAt(0)));
+                const cipherBuffer = new Uint8Array(cipherTextStr.split('').map(c => c.charCodeAt(0)));
+                
+                const key = await deriveKey(password, saltBuffer);
+                const dec = new TextDecoder();
+                
+                const decrypted = await window.crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: ivBuffer },
+                    key,
+                    cipherBuffer
+                );
+
+                return dec.decode(decrypted);
+            } catch (e) {
+                console.error("Decryption failed:", e);
+                return null;
+            }
+        }
+        
+        async function handleUnlockAttempt() {
+            const password = passwordInput.value;
+            if (!password) return;
+
+            const decryptedHTML = await decrypt(JSON.parse(payloadContainer.textContent), password);
+
+            if (decryptedHTML) {
+                passwordError.classList.add('hidden');
+                appContainer.innerHTML = decryptedHTML;
+                App.init(); // Initialize the main application logic
+            } else {
+                passwordError.classList.remove('hidden');
+            }
+        }
+
+        async function init() {
+            // In a real build process, the payload would be pre-encrypted.
+            // For this demo, we encrypt it now with a default password.
+            const encryptedPayload = await encrypt(appHTML, "admin123");
+            payloadContainer.textContent = JSON.stringify(encryptedPayload, null, 2);
+
+
+            submitButton.addEventListener('click', handleUnlockAttempt);
+            passwordInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') {
+                    handleUnlockAttempt();
+                }
+            });
+        }
+        
+        return { init };
+    })();
+    // --- END: ENCRYPTION AND DECRYPTION LOGIC ---
+
+
+    // --- START: MAIN APPLICATION LOGIC (IIFE Modules) ---
+    // This follows the modular pattern specified in the blueprint.
+
+    /**
+     * @module App
+     * @description Main application controller. Initializes all other modules.
+     */
+    const App = (function() {
+        function init() {
+            console.log("Application Initialized.");
+            
+            // Initialize modules that don't depend on the decrypted DOM first
+            DataEngine.init();
+
+            // Initialize UI Controller to grab elements from the now-existing DOM
+            UIController.init();
+
+            // Set up view switching now that buttons are available
+            document.getElementById('show-calculator-btn').addEventListener('click', () => UIController.showView('calculator'));
+            document.getElementById('show-admin-btn').addEventListener('click', () => UIController.showView('admin'));
+            
+            // Initialize modules that render into the DOM
+            AdminPanel.init();
+            Calculator.init();
+
+            // Show calculator by default
+            UIController.showView('calculator');
+        }
+
+        return { init };
+    })();
+
+    /**
+     * @module DataEngine
+     * @description Handles all interactions with localStorage.
+     */
+    const DataEngine = (function() {
+        const DB_KEY = 'businessCalculatorData';
+
+        // Default data schema as per the blueprint
+        function getDefaultData() {
+            return {
+                "version": "1.0.0",
+                "settings": {
+                    "companyName": "Hutchison Custom Fabrication",
+                    "taxRate": 0.0875
+                },
+                "countertops": {
+                    "granite": {
+                        "name": "Granite",
+                        "cost_sqft": 80.63,
+                        "grades": {
+                            "level_1": { "name": "Level 1 (Standard)", "multiplier": 1.0 },
+                            "level_2": { "name": "Level 2 (Mid-Grade)", "multiplier": 1.2 },
+                            "exotic": { "name": "Exotic", "multiplier": 1.5 }
+                        },
+                        "edges": {
+                            "eased": { "name": "Eased (Standard)", "cost_lnft": 0 },
+                            "bevel": { "name": "Bevel", "cost_lnft": 10 },
+                            "ogee": { "name": "Ogee", "cost_lnft": 25 }
+                        },
+                        "cutouts": {
+                            "undermount_sink": { "name": "Undermount Sink", "cost": 300 },
+                            "dropin_sink": { "name": "Drop-in Sink", "cost": 150 },
+                            "cooktop": { "name": "Cooktop", "cost": 200 },
+                            "faucet_hole": { "name": "Faucet Hole", "cost": 20 }
+                        }
+                    }
+                    // Other countertop types will be added in Phase 2
+                },
+                "casework": {
+                    // To be implemented in Phase 2
+                },
+                "misc_services": {
+                    // To be implemented in Phase 2
+                }
+            };
+        }
+
+        // Initialize data if it doesn't exist
+        function init() {
+            if (!localStorage.getItem(DB_KEY)) {
+                console.log('No data found. Seeding with default values.');
+                saveData(getDefaultData());
+            } else {
+                console.log('Existing data found in localStorage.');
+            }
+        }
+
+        function getData() {
+            try {
+                return JSON.parse(localStorage.getItem(DB_KEY));
+            } catch (e) {
+                console.error("Error parsing data from localStorage:", e);
+                return getDefaultData(); // Fallback to default
+            }
+        }
+
+        function saveData(data) {
+            try {
+                localStorage.setItem(DB_KEY, JSON.stringify(data));
+            } catch (e) {
+                console.error("Error saving data to localStorage:", e);
+            }
+        }
+
+        return { init, getData, saveData };
+    })();
+
+    /**
+     * @module UIController
+     * @description Manages DOM manipulation and view switching.
+     */
+    const UIController = (function() {
+        // Declare variables in the outer scope. They will be assigned in init().
+        let views = {};
+        let buttons = {};
+
+        function init() {
+            // Assign elements now that the DOM is populated.
+            views = {
+                calculator: document.getElementById('calculator-interface'),
+                admin: document.getElementById('admin-panel')
+            };
+            buttons = {
+                calculator: document.getElementById('show-calculator-btn'),
+                admin: document.getElementById('show-admin-btn')
+            };
+        }
+
+        function showView(viewName) {
+            Object.keys(views).forEach(key => {
+                if (key === viewName) {
+                    views[key].classList.remove('hidden');
+                    buttons[key].classList.remove('bg-gray-600');
+                    buttons[key].classList.add('bg-indigo-600');
+                } else {
+                    views[key].classList.add('hidden');
+                    buttons[key].classList.add('bg-gray-600');
+                    buttons[key].classList.remove('bg-indigo-600');
+                }
+            });
+        }
+
+        // Helper to format numbers as currency
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(value);
+        }
+
+        return {
+            init,
+            showView,
+            formatCurrency
+        };
+    })();
+
+    /**
+     * @module AdminPanel
+     * @description Controls the logic and rendering of the admin panel.
+     */
+    const AdminPanel = (function() {
+        let container = null; // Will be assigned in init()
+
+        function render() {
+            const data = DataEngine.getData();
+            const graniteData = data.countertops.granite;
+
+            let html = `
+                <div class="admin-panel__card">
+                    <h2 class="text-2xl font-bold mb-4">Admin Panel - Granite Countertops</h2>
+                    <div class="space-y-6">
+                        <div>
+                            <label for="admin-base-cost" class="admin-panel__label">Base Cost per SqFt</label>
+                            <input type="number" id="admin-base-cost" class="admin-panel__input" step="0.01" value="${graniteData.cost_sqft}">
+                        </div>
+
+                        <!-- Edge treatments -->
+                        <h3 class="text-lg font-semibold border-b pb-2">Edge Treatments (per Linear Foot)</h3>
+                        <div id="admin-edges-container" class="space-y-3">
+                            ${Object.keys(graniteData.edges).map(key => `
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                                    <span class="font-medium">${graniteData.edges[key].name}</span>
+                                    <input type="number" data-key="${key}" class="admin-panel__input admin-edge-cost" step="0.01" value="${graniteData.edges[key].cost_lnft}">
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <!-- Cutouts -->
+                        <h3 class="text-lg font-semibold border-b pb-2">Cutout Costs</h3>
+                        <div id="admin-cutouts-container" class="space-y-3">
+                            ${Object.keys(graniteData.cutouts).map(key => `
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                                    <span class="font-medium">${graniteData.cutouts[key].name}</span>
+                                    <input type="number" data-key="${key}" class="admin-panel__input admin-cutout-cost" step="0.01" value="${graniteData.cutouts[key].cost}">
+                                </div>
+                            `).join('')}
+                        </div>
+                        
+                        <div class="flex justify-end mt-6">
+                            <button id="save-admin-changes" class="admin-panel__button">Save Changes</button>
+                        </div>
+                         <div id="save-confirmation" class="text-green-600 font-semibold mt-4 text-right hidden">Changes saved successfully!</div>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+        
+        function saveChanges() {
+            const data = DataEngine.getData();
+            
+            // Update base cost
+            data.countertops.granite.cost_sqft = parseFloat(document.getElementById('admin-base-cost').value);
+
+            // Update edge costs
+            document.querySelectorAll('.admin-edge-cost').forEach(input => {
+                const key = input.dataset.key;
+                data.countertops.granite.edges[key].cost_lnft = parseFloat(input.value);
+            });
+
+            // Update cutout costs
+            document.querySelectorAll('.admin-cutout-cost').forEach(input => {
+                const key = input.dataset.key;
+                data.countertops.granite.cutouts[key].cost = parseFloat(input.value);
+            });
+            
+            DataEngine.saveData(data);
+            
+            // Show confirmation message
+            const confirmationMsg = document.getElementById('save-confirmation');
+            confirmationMsg.classList.remove('hidden');
+            setTimeout(() => confirmationMsg.classList.add('hidden'), 3000);
+
+            // Re-render the calculator to reflect changes immediately
+            Calculator.render();
+        }
+
+        function init() {
+            container = document.getElementById('admin-panel');
+            render();
+            container.addEventListener('click', function(e) {
+                if(e.target.id === 'save-admin-changes') {
+                    saveChanges();
+                }
+            });
+        }
+        
+        return { init };
+    })();
+
+    /**
+     * @module Calculator
+     * @description Logic for the main pricing calculator interface.
+     */
+    const Calculator = (function() {
+        let container = null; // Will be assigned in init()
+        
+        function render() {
+             const data = DataEngine.getData();
+             const graniteData = data.countertops.granite;
+
+             let html = `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Left side: inputs -->
+                    <div class="lg:col-span-2">
+                        <div class="calculator__card">
+                            <h2 class="text-2xl font-bold mb-4">Granite Countertop Calculator</h2>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <!-- Step 1: Dimensions -->
+                                <fieldset class="space-y-4">
+                                    <legend class="text-lg font-semibold">1. Dimensions (in inches)</legend>
+                                    <div>
+                                        <label for="calc-length" class="calculator__label">Length</label>
+                                        <input type="number" id="calc-length" class="calculator__input" placeholder="e.g., 120">
+                                    </div>
+                                    <div>
+                                        <label for="calc-width" class="calculator__label">Width</label>
+                                        <input type="number" id="calc-width" class="calculator__input" placeholder="e.g., 25.5">
+                                    </div>
+                                </fieldset>
+
+                                <!-- Step 2: Material Options -->
+                                <fieldset class="space-y-4">
+                                    <legend class="text-lg font-semibold">2. Material Grade</legend>
+                                    <select id="calc-grade" class="calculator__input">
+                                        ${Object.keys(graniteData.grades).map(key => `
+                                            <option value="${key}">${graniteData.grades[key].name}</option>
+                                        `).join('')}
+                                    </select>
+                                </fieldset>
+
+                                <!-- Step 3: Edge & Corner -->
+                                <fieldset class="space-y-4">
+                                     <legend class="text-lg font-semibold">3. Edge Treatment</legend>
+                                     <select id="calc-edge" class="calculator__input">
+                                        ${Object.keys(graniteData.edges).map(key => `
+                                            <option value="${key}">${graniteData.edges[key].name}</option>
+                                        `).join('')}
+                                     </select>
+                                </fieldset>
+
+                                <!-- Step 4: Cutouts & Add-ons -->
+                                <fieldset class="space-y-4">
+                                     <legend class="text-lg font-semibold">4. Cutouts & Add-ons</legend>
+                                     <div class="space-y-2">
+                                        ${Object.keys(graniteData.cutouts).map(key => `
+                                            <div class="flex items-center">
+                                                <input type="checkbox" id="calc-cutout-${key}" data-key="${key}" class="calc-cutout h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                                                <label for="calc-cutout-${key}" class="ml-2 block text-sm text-gray-900">${graniteData.cutouts[key].name}</label>
+                                            </div>
+                                        `).join('')}
+                                     </div>
+                                </fieldset>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right side: quote summary -->
+                    <div class="lg:col-span-1">
+                        <div id="quote-summary" class="calculator__card sticky top-8">
+                            <h2 class="text-2xl font-bold mb-4">Quote Summary</h2>
+                            <div id="quote-details">
+                                <p class="text-gray-500 text-center py-8">Enter dimensions to begin.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+             `;
+             container.innerHTML = html;
+        }
+
+        function calculateQuote() {
+            const data = DataEngine.getData();
+            const graniteData = data.countertops.granite;
+            const settings = data.settings;
+
+            // 1. Gather Inputs
+            const length = parseFloat(document.getElementById('calc-length').value) || 0;
+            const width = parseFloat(document.getElementById('calc-width').value) || 0;
+            const selectedGradeKey = document.getElementById('calc-grade').value;
+            const selectedEdgeKey = document.getElementById('calc-edge').value;
+
+            const quoteDetailsContainer = document.getElementById('quote-details');
+            if (length === 0 || width === 0) {
+                 quoteDetailsContainer.innerHTML = `<p class="text-gray-500 text-center py-8">Enter dimensions to begin.</p>`;
+                 return;
+            }
+
+            // 2. Perform Calculations
+            const squareInches = length * width;
+            const squareFeet = squareInches / 144;
+            const linearFeet = (length * 2 + width * 2) / 12;
+
+            const gradeMultiplier = graniteData.grades[selectedGradeKey].multiplier;
+            const baseMaterialCostSqFt = graniteData.cost_sqft;
+            const adjustedMaterialCostSqFt = baseMaterialCostSqFt * gradeMultiplier;
+            
+            const totalMaterialCost = squareFeet * adjustedMaterialCostSqFt;
+            const edgeCost = linearFeet * graniteData.edges[selectedEdgeKey].cost_lnft;
+
+            let cutoutCost = 0;
+            let cutoutItems = [];
+            document.querySelectorAll('.calc-cutout:checked').forEach(checkbox => {
+                const key = checkbox.dataset.key;
+                const cost = graniteData.cutouts[key].cost;
+                cutoutCost += cost;
+                cutoutItems.push({ name: graniteData.cutouts[key].name, cost: cost });
+            });
+
+            const subtotal = totalMaterialCost + edgeCost + cutoutCost;
+            const tax = subtotal * settings.taxRate;
+            const total = subtotal + tax;
+
+            // 3. Display Results
+            let summaryHTML = `
+                <table class="quote-summary__table">
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <tr>
+                            <td class="quote-summary__cell font-medium text-gray-900">Material (${squareFeet.toFixed(2)} sq ft)</td>
+                            <td class="quote-summary__cell text-right">${UIController.formatCurrency(totalMaterialCost)}</td>
+                        </tr>
+                        <tr>
+                            <td class="quote-summary__cell font-medium text-gray-900">Edge Treatment (${linearFeet.toFixed(2)} ln ft)</td>
+                            <td class="quote-summary__cell text-right">${UIController.formatCurrency(edgeCost)}</td>
+                        </tr>
+            `;
+
+            cutoutItems.forEach(item => {
+                 summaryHTML += `
+                    <tr>
+                        <td class="quote-summary__cell font-medium text-gray-900">${item.name}</td>
+                        <td class="quote-summary__cell text-right">${UIController.formatCurrency(item.cost)}</td>
+                    </tr>
+                 `;
+            });
+            
+            summaryHTML += `
+                        <tr class="bg-gray-50">
+                            <td class="quote-summary__cell font-semibold text-gray-900">Subtotal</td>
+                            <td class="quote-summary__cell text-right font-semibold">${UIController.formatCurrency(subtotal)}</td>
+                        </tr>
+                        <tr>
+                            <td class="quote-summary__cell font-medium text-gray-900">Tax (${(settings.taxRate * 100).toFixed(2)}%)</td>
+                            <td class="quote-summary__cell text-right">${UIController.formatCurrency(tax)}</td>
+                        </tr>
+                        <tr class="bg-gray-100">
+                            <td class="quote-summary__cell text-lg font-bold text-gray-900">Total</td>
+                            <td class="quote-summary__cell text-right text-lg font-bold">${UIController.formatCurrency(total)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+
+            quoteDetailsContainer.innerHTML = summaryHTML;
+        }
+
+
+        function init() {
+            container = document.getElementById('calculator-interface');
+            render();
+            // Add event listeners to all inputs to trigger real-time calculation
+            container.addEventListener('input', calculateQuote);
+            container.addEventListener('change', calculateQuote); // For checkboxes and selects
+        }
+        
+        return { init, render };
+    })();
+    // --- END: MAIN APPLICATION LOGIC ---
+
+
+    // --- APPLICATION ENTRY POINT ---
+    // This starts the password check process when the page loads.
+    window.onload = function() {
+        CryptoController.init();
+    };
+
+    </script>
+
+</body>
+</html>
