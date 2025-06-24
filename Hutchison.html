@@ -371,7 +371,7 @@
         margin-top: calc(var(--spacing-unit) * 4);
     }
     
-    #save-admin-changes {
+    .save-button {
         padding: calc(var(--spacing-unit) * 1.25) calc(var(--spacing-unit) * 3);
         background-color: var(--color-primary);
         color: var(--color-surface);
@@ -382,7 +382,7 @@
         transition: background-color var(--transition-speed);
     }
     
-    #save-admin-changes:hover {
+    .save-button:hover {
         background-color: var(--color-primary-dark);
     }
 
@@ -398,10 +398,8 @@
     ============================================
     */
     @media (max-width: 992px) {
-        #calculator-interface .main-grid {
-            grid-template-columns: 1fr;
-        }
-        #calculator-interface, #admin-panel {
+        #calculator-interface .main-grid,
+        #admin-panel .main-grid {
             grid-template-columns: 1fr;
         }
     }
@@ -447,175 +445,13 @@
 
 
     <script>
-    // --- START: ENCRYPTION AND DECRYPTION LOGIC (Web Crypto API) ---
-    // This section handles the client-side password protection as specified in the blueprint.
-    const CryptoController = (function() {
-        const payloadContainer = document.getElementById('encrypted-payload');
-        const passwordPrompt = document.getElementById('password-prompt');
-        const passwordInput = document.getElementById('password-input');
-        const submitButton = document.getElementById('submit-password');
-        const passwordError = document.getElementById('password-error');
-        const appContainer = document.getElementById('app-container');
-
-        // This is the encrypted content of the application.
-        // The default password is "admin123"
-        let encryptedData = {};
-
-        // The actual HTML content of the application that will be encrypted.
-        const appHTML = `
-            <div class="app-wrapper">
-                <header>
-                    <h1 id="company-header">Pricing Calculator</h1>
-                    <p>A comprehensive business engine for quotes.</p>
-                    <div class="view-switcher">
-                        <button id="show-calculator-btn">Calculator</button>
-                        <button id="show-admin-btn">Admin Panel</button>
-                    </div>
-                </header>
-
-                <main>
-                    <div id="calculator-interface" class="card">
-                        <!-- Calculator content is rendered here by its module -->
-                    </div>
-                    <div id="admin-panel" class="card hidden">
-                        <!-- Admin Panel content is rendered here by its module -->
-                    </div>
-                </main>
-            </div>
-        `;
-
-
-        async function deriveKey(password, saltBuffer) {
-            const enc = new TextEncoder();
-            const keyMaterial = await window.crypto.subtle.importKey(
-                "raw",
-                enc.encode(password),
-                { name: "PBKDF2" },
-                false,
-                ["deriveBits", "deriveKey"]
-            );
-            return window.crypto.subtle.deriveKey(
-                {
-                    "name": "PBKDF2",
-                    salt: saltBuffer,
-                    "iterations": 100000,
-                    "hash": "SHA-256"
-                },
-                keyMaterial,
-                { "name": "AES-GCM", "length": 256 },
-                true,
-                ["encrypt", "decrypt"]
-            );
-        }
-
-        async function encrypt(data, password) {
-            const salt = window.crypto.getRandomValues(new Uint8Array(16));
-            const iv = window.crypto.getRandomValues(new Uint8Array(12));
-            const key = await deriveKey(password, salt);
-            const enc = new TextEncoder();
-            const encodedData = enc.encode(data);
-
-            const cipherText = await window.crypto.subtle.encrypt(
-                { name: "AES-GCM", iv: iv },
-                key,
-                encodedData
-            );
-
-            return {
-                cipherText: btoa(String.fromCharCode.apply(null, new Uint8Array(cipherText))),
-                iv: btoa(String.fromCharCode.apply(null, new Uint8Array(iv))),
-                salt: btoa(String.fromCharCode.apply(null, new Uint8Array(salt)))
-            };
-        }
-
-
-        async function decrypt(encryptedData, password) {
-            try {
-                const saltStr = atob(encryptedData.salt);
-                const ivStr = atob(encryptedData.iv);
-                const cipherTextStr = atob(encryptedData.cipherText);
-
-                // Convert raw binary strings back to Uint8Arrays
-                const saltBuffer = new Uint8Array(saltStr.split('').map(c => c.charCodeAt(0)));
-                const ivBuffer = new Uint8Array(ivStr.split('').map(c => c.charCodeAt(0)));
-                const cipherBuffer = new Uint8Array(cipherTextStr.split('').map(c => c.charCodeAt(0)));
-                
-                const key = await deriveKey(password, saltBuffer);
-                const dec = new TextDecoder();
-                
-                const decrypted = await window.crypto.subtle.decrypt(
-                    { name: "AES-GCM", iv: ivBuffer },
-                    key,
-                    cipherBuffer
-                );
-
-                return dec.decode(decrypted);
-            } catch (e) {
-                console.error("Decryption failed:", e);
-                return null;
-            }
-        }
-        
-        async function handleUnlockAttempt() {
-            const password = passwordInput.value;
-            if (!password) return;
-
-            const decryptedHTML = await decrypt(JSON.parse(payloadContainer.textContent), password);
-
-            if (decryptedHTML) {
-                passwordError.classList.add('hidden');
-                appContainer.innerHTML = decryptedHTML;
-                App.init(); // Initialize the main application logic
-            } else {
-                passwordError.classList.remove('hidden');
-            }
-        }
-
-        async function init() {
-            // In a real build process, the payload would be pre-encrypted.
-            // For this demo, we encrypt it now with a default password.
-            const encryptedPayload = await encrypt(appHTML, "admin123");
-            payloadContainer.textContent = JSON.stringify(encryptedPayload, null, 2);
-
-
-            submitButton.addEventListener('click', handleUnlockAttempt);
-            passwordInput.addEventListener('keyup', (e) => {
-                if (e.key === 'Enter') {
-                    handleUnlockAttempt();
-                }
-            });
-        }
-        
-        return { init };
-    })();
-    // --- END: ENCRYPTION AND DECRYPTION LOGIC ---
-
-
     // --- START: MAIN APPLICATION LOGIC (IIFE Modules) ---
     // This follows the modular pattern specified in the blueprint.
-
-    /**
-     * @module App
-     * @description Main application controller. Initializes all other modules.
-     */
-    const App = (function() {
-        function init() {
-            DataEngine.init();
-            UIController.init(); // Init grabs the main containers
-            
-            // Wire up main view switcher (Calculator vs Admin)
-            document.getElementById('show-calculator-btn').addEventListener('click', () => UIController.showMainView('calculator'));
-            document.getElementById('show-admin-btn').addEventListener('click', () => UIController.showMainView('admin'));
-            
-            // Show the calculator view by default, which will trigger its own render
-            UIController.showMainView('calculator');
-        }
-        return { init };
-    })();
+    // The modules are ordered to resolve dependencies: modules that are needed by others are defined first.
 
     /**
      * @module DataEngine
-     * @description Handles all interactions with localStorage.
+     * @description Handles all interactions with localStorage. No dependencies.
      */
     const DataEngine = (function() {
         const DB_KEY = 'businessCalculatorData';
@@ -637,7 +473,7 @@
             };
 
             return {
-                "version": "1.3.0", // Incremented version for Admin Panel changes
+                "version": "1.4.0", // Incremented version for new admin features
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -739,7 +575,7 @@
 
     /**
      * @module UIController
-     * @description Manages DOM manipulation and view switching.
+     * @description Manages DOM manipulation and view switching. Depends on Calculator and AdminPanel modules at runtime.
      */
     const UIController = (function() {
         let mainViews = {};
@@ -763,6 +599,7 @@
                 if (mainButtons[key]) mainButtons[key].classList.toggle('active', isActive);
             });
             // When switching main views, trigger a render of the active category
+            // These calls are safe because by the time this is executed, all modules are defined.
             if(viewName === 'calculator') Calculator.render();
             if(viewName === 'admin') AdminPanel.render();
         }
@@ -773,239 +610,19 @@
 
         return { init, showMainView, formatCurrency };
     })();
-
-    const AdminPanel = (function() {
-        let container = null;
-        let currentCategory = 'countertops';
-
-        function render() {
-            container = container || document.getElementById('admin-panel');
-            if(!container) return; // Exit if the admin panel element isn't on the page
-            
-            let html = `
-                <div id="admin-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
-                    <button data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
-                    <button data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
-                    <button data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
-                </div>
-                <div id="admin-category-content"></div>`;
-            container.innerHTML = html;
-            renderCategoryContent(currentCategory);
-            attachNavListeners();
-        }
-        
-        function renderCategoryContent(category) {
-            currentCategory = category;
-            const contentContainer = container.querySelector('#admin-category-content');
-            if(!contentContainer) return;
-
-            if(category === 'countertops') {
-                renderCountertopAdmin(contentContainer);
-            } else if (category === 'casework') {
-                 contentContainer.innerHTML = '<h2 class="card__title">Casework Admin - Coming Soon</h2>'; // Placeholder
-            } else if (category === 'misc_services') {
-                contentContainer.innerHTML = '<h2 class="card__title">Misc Services Admin - To be implemented</h2>';
-            }
-        }
-        
-        /**
-         * Renders the main admin view for the Countertops category.
-         * This includes the material selector dropdown.
-         */
-        function renderCountertopAdmin(contentContainer) {
-            const data = DataEngine.getData();
-            const allMaterials = data.countertops;
-            
-            let materialOptionsHTML = Object.keys(allMaterials).map(key => `<option value="${key}">${allMaterials[key].name}</option>`).join('');
-
-            let html = `
-                <h2 class="card__title">Edit Countertop Pricing</h2>
-                <div class="form-group">
-                    <label for="admin-material-select" class="form-group__label">Select a Material to Edit</label>
-                    <select id="admin-material-select" class="form-group__select">${materialOptionsHTML}</select>
-                </div>
-                <div id="admin-material-form-container" class="mt-4">
-                    <!-- Dynamic form for the selected material will be injected here -->
-                </div>
-            `;
-            contentContainer.innerHTML = html;
-            
-            const materialSelect = contentContainer.querySelector('#admin-material-select');
-            materialSelect.addEventListener('change', () => renderCountertopAdminForm(materialSelect.value));
-            
-            // Initial render of the form for the first material in the list
-            renderCountertopAdminForm(materialSelect.value);
-        }
-
-        /**
-         * Renders the dynamic form for a specific countertop material.
-         */
-        function renderCountertopAdminForm(materialKey) {
-            const formContainer = container.querySelector('#admin-material-form-container');
-            if(!formContainer) return;
-
-            const data = DataEngine.getData();
-            const materialData = data.countertops[materialKey];
-            if(!materialData) {
-                formContainer.innerHTML = '<p class="text-error">Could not load material data.</p>';
-                return;
-            }
-
-            // Generate HTML for option multipliers
-            let optionsHTML = materialData.options ? Object.keys(materialData.options).map(optKey => {
-                const option = materialData.options[optKey];
-                return `
-                    <h3 class="admin-section-title">${option.name} Multipliers</h3>
-                    ${Object.keys(option.values).map(valKey => {
-                        const valueData = option.values[valKey];
-                        return `
-                        <div class="admin-group">
-                             <label for="admin-option-${optKey}-${valKey}" class="admin-group__label">${valueData.name}</label>
-                             <input type="number" id="admin-option-${optKey}-${valKey}" data-type="option" data-option-key="${optKey}" data-value-key="${valKey}" class="form-group__input" step="0.01" value="${valueData.multiplier}">
-                        </div>`;
-                    }).join('')}
-                `;
-            }).join('') : '';
-
-            // Generate HTML for edge costs
-            let edgesHTML = materialData.edges ? Object.keys(materialData.edges).map(edgeKey => {
-                 const edgeData = materialData.edges[edgeKey];
-                 return `
-                    <div class="admin-group">
-                        <label for="admin-edge-${edgeKey}" class="admin-group__label">${edgeData.name}</label>
-                        <input type="number" id="admin-edge-${edgeKey}" data-type="edge" data-key="${edgeKey}" class="form-group__input" step="0.01" value="${edgeData.cost_lnft}">
-                    </div>
-                 `;
-            }).join('') : '';
-
-            // Generate HTML for cutout costs
-            let cutoutsHTML = materialData.cutouts ? Object.keys(materialData.cutouts).map(cutoutKey => {
-                const cutoutData = materialData.cutouts[cutoutKey];
-                return `
-                   <div class="admin-group">
-                       <label for="admin-cutout-${cutoutKey}" class="admin-group__label">${cutoutData.name}</label>
-                       <input type="number" id="admin-cutout-${cutoutKey}" data-type="cutout" data-key="${cutoutKey}" class="form-group__input" step="0.01" value="${cutoutData.cost}">
-                   </div>
-                `;
-           }).join('') : '';
-
-            // The complete form structure
-            let html = `
-                <div class="form-grid">
-                    <fieldset class="form-fieldset">
-                        <legend class="form-fieldset__legend">Base Costs</legend>
-                        <div class="admin-group">
-                            <label for="admin-cost-sqft" class="admin-group__label">Cost per Sq. Ft.</label>
-                            <input type="number" id="admin-cost-sqft" class="form-group__input" step="0.01" value="${materialData.cost_sqft}">
-                        </div>
-                    </fieldset>
-                    
-                     <fieldset class="form-fieldset">
-                        <legend class="form-fieldset__legend">Option Multipliers</legend>
-                        ${optionsHTML}
-                    </fieldset>
-
-                    <fieldset class="form-fieldset">
-                        <legend class="form-fieldset__legend">Edge Costs (per Ln. Ft.)</legend>
-                        ${edgesHTML}
-                    </fieldset>
-
-                    <fieldset class="form-fieldset">
-                        <legend class="form-fieldset__legend">Cutout Costs</legend>
-                        ${cutoutsHTML}
-                    </fieldset>
-                </div>
-                
-                <div class="admin-actions">
-                    <span id="save-confirmation" class="hidden">Changes saved!</span>
-                    <button id="save-admin-changes" data-material-key="${materialKey}">Save Changes</button>
-                </div>
-            `;
-
-            formContainer.innerHTML = html;
-            attachFormListeners();
-        }
-
-        /**
-         * Saves the changes made in the countertop admin form to localStorage.
-         */
-        function saveCountertopChanges(materialKey) {
-            const data = DataEngine.getData();
-            const materialData = data.countertops[materialKey];
-            if(!materialData) {
-                console.error("Could not find material to save:", materialKey);
-                return;
-            }
-
-            // Update cost_sqft
-            materialData.cost_sqft = parseFloat(container.querySelector('#admin-cost-sqft').value);
-
-            // Update option multipliers
-            container.querySelectorAll('input[data-type="option"]').forEach(input => {
-                const optKey = input.dataset.optionKey;
-                const valKey = input.dataset.valueKey;
-                materialData.options[optKey].values[valKey].multiplier = parseFloat(input.value);
-            });
-
-            // Update edge costs
-            container.querySelectorAll('input[data-type="edge"]').forEach(input => {
-                const key = input.dataset.key;
-                materialData.edges[key].cost_lnft = parseFloat(input.value);
-            });
-
-            // Update cutout costs
-            container.querySelectorAll('input[data-type="cutout"]').forEach(input => {
-                const key = input.dataset.key;
-                materialData.cutouts[key].cost = parseFloat(input.value);
-            });
-            
-            // Save the entire updated data object
-            DataEngine.saveData(data);
-            
-            // Provide user feedback
-            const confirmation = container.querySelector('#save-confirmation');
-            confirmation.classList.remove('hidden');
-            setTimeout(() => { confirmation.classList.add('hidden'); }, 3000);
-
-            // Refresh the calculator to reflect the new prices
-            Calculator.render();
-        }
-
-
-        function attachNavListeners() {
-            const tabs = container.querySelector('#admin-category-tabs');
-            if (tabs) {
-                tabs.addEventListener('click', e => {
-                    if (e.target.tagName === 'BUTTON') {
-                        const category = e.target.dataset.category;
-                        // Update active button state
-                        container.querySelectorAll('#admin-category-tabs button').forEach(btn => btn.classList.remove('active'));
-                        e.target.classList.add('active');
-                        renderCategoryContent(category);
-                    }
-                });
-            }
-        }
-        
-        function attachFormListeners() {
-            const saveButton = container.querySelector('#save-admin-changes');
-            if(saveButton) {
-                saveButton.addEventListener('click', (e) => {
-                    saveCountertopChanges(e.target.dataset.materialKey);
-                });
-            }
-        }
-
-        function init() {
-            // Initial render is triggered by UIController.showMainView
-        }
-        
-        return { init, render };
-    })();
-
+    
+    /**
+     * @module Calculator
+     * @description Handles rendering and logic for the public-facing calculator.
+     * @dependencies DataEngine, UIController
+     */
     const Calculator = (function() {
         let container = null;
         let currentCategory = 'countertops';
+
+        function init() {
+            // This module is rendered on demand by UIController, so init can be empty.
+        }
 
         function render() {
              container = container || document.getElementById('calculator-interface');
@@ -1038,7 +655,6 @@
         
         // Renders the specific UI for the Countertop calculator
         function renderCountertopCalculator(container) {
-            // This function is essentially the old `render` function from the Calculator module
             const data = DataEngine.getData();
             const allMaterials = data.countertops;
             
@@ -1074,7 +690,6 @@
         }
         
         function renderCountertopOptions(materialKey) {
-            // This is the old `renderOptions` function
             const optionsContainer = document.getElementById('calc-options-container');
             const data = DataEngine.getData();
             const materialData = data.countertops[materialKey];
@@ -1269,6 +884,7 @@
 
         // Generic quote calculation dispatcher
         function calculateQuote() {
+            if(!container) return; // Don't calculate if the calculator isn't rendered
             if (currentCategory === 'countertops') {
                 calculateCountertopQuote();
             } else if (currentCategory === 'casework') {
@@ -1450,13 +1066,488 @@
              }
         }
         
+        return { init, render };
+    })();
+
+    /**
+     * @module AdminPanel
+     * @description Handles rendering and logic for the admin panel.
+     * @dependencies DataEngine, UIController, Calculator
+     */
+    const AdminPanel = (function() {
+        let container = null;
+        let currentCategory = 'countertops';
+
+        // Fix: Add the init function that was missing, causing a ReferenceError on load.
         function init() {
-            // Initial render is triggered by UIController.showMainView
+            // Initial render is triggered by UIController.showMainView, so this can be empty.
+        }
+
+        function render() {
+            container = container || document.getElementById('admin-panel');
+            if(!container) return; // Exit if the admin panel element isn't on the page
+            
+            let html = `
+                <div id="admin-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
+                    <button data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
+                    <button data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
+                    <button data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
+                </div>
+                <div id="admin-category-content"></div>`;
+            container.innerHTML = html;
+            renderCategoryContent(currentCategory);
+            attachNavListeners();
+        }
+        
+        function renderCategoryContent(category) {
+            currentCategory = category;
+            const contentContainer = container.querySelector('#admin-category-content');
+            if(!contentContainer) return;
+
+            if(category === 'countertops') {
+                renderCountertopAdmin(contentContainer);
+            } else if (category === 'casework') {
+                 renderCaseworkAdmin(contentContainer);
+            } else if (category === 'misc_services') {
+                renderMiscServicesAdmin(contentContainer);
+            }
+        }
+        
+        /**
+         * Renders the main admin view for the Countertops category.
+         */
+        function renderCountertopAdmin(contentContainer) {
+            const data = DataEngine.getData();
+            const allMaterials = data.countertops;
+            
+            let materialOptionsHTML = Object.keys(allMaterials).map(key => `<option value="${key}">${allMaterials[key].name}</option>`).join('');
+
+            let html = `
+                <h2 class="card__title">Edit Countertop Pricing</h2>
+                <div class="form-group">
+                    <label for="admin-material-select" class="form-group__label">Select a Material to Edit</label>
+                    <select id="admin-material-select" class="form-group__select">${materialOptionsHTML}</select>
+                </div>
+                <div id="admin-material-form-container" class="mt-4"></div>
+            `;
+            contentContainer.innerHTML = html;
+            
+            const materialSelect = contentContainer.querySelector('#admin-material-select');
+            materialSelect.addEventListener('change', () => renderCountertopAdminForm(materialSelect.value));
+            
+            renderCountertopAdminForm(materialSelect.value);
+            attachFormListeners();
+        }
+
+        /**
+         * Renders the dynamic form for a specific countertop material.
+         */
+        function renderCountertopAdminForm(materialKey) {
+            const formContainer = container.querySelector('#admin-material-form-container');
+            if(!formContainer) return;
+
+            const materialData = DataEngine.getData().countertops[materialKey];
+            if(!materialData) {
+                formContainer.innerHTML = '<p class="text-error">Could not load material data.</p>';
+                return;
+            }
+
+            let optionsHTML = materialData.options ? Object.keys(materialData.options).map(optKey => {
+                const option = materialData.options[optKey];
+                return `
+                    <h3 class="admin-section-title">${option.name} Multipliers</h3>
+                    ${Object.keys(option.values).map(valKey => `
+                        <div class="admin-group">
+                             <label for="admin-ct-option-${optKey}-${valKey}" class="admin-group__label">${option.values[valKey].name}</label>
+                             <input type="number" id="admin-ct-option-${optKey}-${valKey}" data-type="option" data-option-key="${optKey}" data-value-key="${valKey}" class="form-group__input" step="0.01" value="${option.values[valKey].multiplier}">
+                        </div>`).join('')}
+                `;
+            }).join('') : '';
+
+            let edgesHTML = materialData.edges ? Object.keys(materialData.edges).map(edgeKey => `
+                <div class="admin-group">
+                    <label for="admin-edge-${edgeKey}" class="admin-group__label">${materialData.edges[edgeKey].name}</label>
+                    <input type="number" id="admin-edge-${edgeKey}" data-type="edge" data-key="${edgeKey}" class="form-group__input" step="0.01" value="${materialData.edges[edgeKey].cost_lnft}">
+                </div>`).join('') : '';
+
+            let cutoutsHTML = materialData.cutouts ? Object.keys(materialData.cutouts).map(cutoutKey => `
+               <div class="admin-group">
+                   <label for="admin-cutout-${cutoutKey}" class="admin-group__label">${materialData.cutouts[cutoutKey].name}</label>
+                   <input type="number" id="admin-cutout-${cutoutKey}" data-type="cutout" data-key="${cutoutKey}" class="form-group__input" step="0.01" value="${materialData.cutouts[cutoutKey].cost}">
+               </div>`).join('') : '';
+
+            let html = `
+                <div class="form-grid">
+                    <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Base Costs</legend>
+                        <div class="admin-group">
+                            <label for="admin-cost-sqft" class="admin-group__label">Cost per Sq. Ft.</label>
+                            <input type="number" id="admin-cost-sqft" class="form-group__input" step="0.01" value="${materialData.cost_sqft}">
+                        </div>
+                    </fieldset>
+                     <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Option Multipliers</legend>
+                        <div id="admin-ct-options-wrapper">${optionsHTML}</div>
+                    </fieldset>
+                    <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Edge Costs (per Ln. Ft.)</legend>
+                        <div id="admin-edges-wrapper">${edgesHTML}</div>
+                    </fieldset>
+                    <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Cutout Costs</legend>
+                        <div id="admin-cutouts-wrapper">${cutoutsHTML}</div>
+                    </fieldset>
+                </div>
+                <div class="admin-actions">
+                    <span id="save-confirmation" class="hidden">Changes saved!</span>
+                    <button class="save-button" data-save-type="countertop" data-material-key="${materialKey}">Save Changes</button>
+                </div>`;
+            formContainer.innerHTML = html;
+        }
+
+        /**
+         * Renders the main admin view for the Casework category.
+         */
+        function renderCaseworkAdmin(contentContainer) {
+            const data = DataEngine.getData();
+            const allCasework = data.casework;
+            
+            let caseworkOptionsHTML = Object.keys(allCasework).map(key => `<option value="${key}">${allCasework[key].name}</option>`).join('');
+
+            let html = `
+                <h2 class="card__title">Edit Casework Pricing</h2>
+                <div class="form-group">
+                    <label for="admin-casework-select" class="form-group__label">Select a Casework Type to Edit</label>
+                    <select id="admin-casework-select" class="form-group__select">${caseworkOptionsHTML}</select>
+                </div>
+                <div id="admin-casework-form-container" class="mt-4"></div>
+            `;
+            contentContainer.innerHTML = html;
+
+            const caseworkSelect = contentContainer.querySelector('#admin-casework-select');
+            caseworkSelect.addEventListener('change', () => renderCaseworkAdminForm(caseworkSelect.value));
+
+            renderCaseworkAdminForm(caseworkSelect.value);
+            attachFormListeners();
+        }
+
+        /**
+         * Renders the dynamic form for a specific casework type.
+         */
+        function renderCaseworkAdminForm(caseworkKey) {
+            const formContainer = container.querySelector('#admin-casework-form-container');
+            if(!formContainer) return;
+
+            const caseworkData = DataEngine.getData().casework[caseworkKey];
+            if (!caseworkData) {
+                formContainer.innerHTML = '<p class="text-error">Could not load casework data.</p>';
+                return;
+            }
+
+            let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
+                const option = caseworkData.options[optKey];
+                return `
+                    <h3 class="admin-section-title">${option.name} Multipliers</h3>
+                    ${Object.keys(option.values).map(valKey => `
+                        <div class="admin-group">
+                             <label for="admin-cw-option-${optKey}-${valKey}" class="admin-group__label">${option.values[valKey].name}</label>
+                             <input type="number" id="admin-cw-option-${optKey}-${valKey}" data-type="option" data-option-key="${optKey}" data-value-key="${valKey}" class="form-group__input" step="0.01" value="${option.values[valKey].multiplier}">
+                        </div>`).join('')}
+                `;
+            }).join('');
+
+            let html = `
+                <div class="form-grid">
+                    <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Base Costs</legend>
+                        <div class="admin-group">
+                            <label for="admin-cost-lnft" class="admin-group__label">Cost per Ln. Ft.</label>
+                            <input type="number" id="admin-cost-lnft" class="form-group__input" step="0.01" value="${caseworkData.cost_lnft}">
+                        </div>
+                    </fieldset>
+                     <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Option Multipliers</legend>
+                        <div id="admin-cw-options-wrapper">${optionsHTML}</div>
+                    </fieldset>
+                </div>
+                <div class="admin-actions">
+                    <span id="save-confirmation" class="hidden">Changes saved!</span>
+                    <button class="save-button" data-save-type="casework" data-casework-key="${caseworkKey}">Save Changes</button>
+                </div>
+            `;
+            formContainer.innerHTML = html;
+        }
+
+        /**
+         * Renders the admin view for Miscellaneous Services.
+         */
+        function renderMiscServicesAdmin(contentContainer) {
+            const miscServices = DataEngine.getData().misc_services;
+            
+            let servicesHTML = Object.keys(miscServices).map(key => {
+                const service = miscServices[key];
+                return `
+                    <h3 class="admin-section-title">${service.name}</h3>
+                    ${Object.keys(service).filter(prop => prop !== 'name').map(prop => `
+                        <div class="admin-group">
+                            <label for="admin-misc-${key}-${prop}" class="admin-group__label">${prop.replace('_', ' ')}</label>
+                            <input type="number" id="admin-misc-${key}-${prop}" data-service-key="${key}" data-property="${prop}" class="form-group__input" step="0.01" value="${service[prop]}">
+                        </div>
+                    `).join('')}
+                `;
+            }).join('');
+            
+            let html = `
+                <h2 class="card__title">Edit Miscellaneous Services Pricing</h2>
+                <div id="admin-misc-form-container">
+                    ${servicesHTML}
+                </div>
+                <div class="admin-actions">
+                    <span id="save-confirmation" class="hidden">Changes saved!</span>
+                    <button class="save-button" data-save-type="misc">Save Changes</button>
+                </div>
+            `;
+            contentContainer.innerHTML = html;
+            attachFormListeners();
+        }
+
+        /**
+         * Saves all changes from the admin panel based on the active category.
+         */
+        function saveChanges(button) {
+            const saveType = button.dataset.saveType;
+            const data = DataEngine.getData();
+
+            if (saveType === 'countertop') {
+                const materialKey = button.dataset.materialKey;
+                const materialData = data.countertops[materialKey];
+                materialData.cost_sqft = parseFloat(container.querySelector('#admin-cost-sqft').value);
+                container.querySelectorAll('#admin-ct-options-wrapper input').forEach(input => {
+                    materialData.options[input.dataset.optionKey].values[input.dataset.valueKey].multiplier = parseFloat(input.value);
+                });
+                container.querySelectorAll('#admin-edges-wrapper input').forEach(input => {
+                    materialData.edges[input.dataset.key].cost_lnft = parseFloat(input.value);
+                });
+                container.querySelectorAll('#admin-cutouts-wrapper input').forEach(input => {
+                    materialData.cutouts[input.dataset.key].cost = parseFloat(input.value);
+                });
+            } else if (saveType === 'casework') {
+                const caseworkKey = button.dataset.caseworkKey;
+                const caseworkData = data.casework[caseworkKey];
+                caseworkData.cost_lnft = parseFloat(container.querySelector('#admin-cost-lnft').value);
+                container.querySelectorAll('#admin-cw-options-wrapper input').forEach(input => {
+                    caseworkData.options[input.dataset.optionKey].values[input.dataset.valueKey].multiplier = parseFloat(input.value);
+                });
+            } else if (saveType === 'misc') {
+                container.querySelectorAll('#admin-misc-form-container input').forEach(input => {
+                    data.misc_services[input.dataset.serviceKey][input.dataset.property] = parseFloat(input.value);
+                });
+            }
+
+            DataEngine.saveData(data);
+            
+            const confirmation = container.querySelector('#save-confirmation');
+            confirmation.classList.remove('hidden');
+            setTimeout(() => { confirmation.classList.add('hidden'); }, 3000);
+
+            Calculator.render();
+        }
+
+        function attachNavListeners() {
+            const tabs = container.querySelector('#admin-category-tabs');
+            if (tabs) {
+                tabs.addEventListener('click', e => {
+                    if (e.target.tagName === 'BUTTON') {
+                        const category = e.target.dataset.category;
+                        container.querySelectorAll('#admin-category-tabs button').forEach(btn => btn.classList.remove('active'));
+                        e.target.classList.add('active');
+                        renderCategoryContent(category);
+                    }
+                });
+            }
+        }
+        
+        function attachFormListeners() {
+            // Use event delegation for save buttons
+            const contentContainer = container.querySelector('#admin-category-content');
+            if(contentContainer) {
+                contentContainer.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('save-button')) {
+                        saveChanges(e.target);
+                    }
+                });
+            }
         }
         
         return { init, render };
     })();
-    // --- END: MAIN APPLICATION LOGIC ---
+    
+    /**
+     * @module App
+     * @description Main application controller. Initializes all other modules.
+     * @dependencies DataEngine, UIController, Calculator, AdminPanel
+     */
+    const App = (function() {
+        function init() {
+            DataEngine.init();
+            UIController.init(); // Init grabs the main containers
+            
+            // Wire up main view switcher (Calculator vs Admin)
+            document.getElementById('show-calculator-btn').addEventListener('click', () => UIController.showMainView('calculator'));
+            document.getElementById('show-admin-btn').addEventListener('click', () => UIController.showMainView('admin'));
+            
+            // Show the calculator view by default, which will trigger its own render
+            UIController.showMainView('calculator');
+        }
+        return { init };
+    })();
+
+    /**
+     * @module CryptoController
+     * @description Handles password protection and decryption.
+     * @dependencies App
+     */
+    const CryptoController = (function() {
+        const payloadContainer = document.getElementById('encrypted-payload');
+        const passwordPrompt = document.getElementById('password-prompt');
+        const passwordInput = document.getElementById('password-input');
+        const submitButton = document.getElementById('submit-password');
+        const passwordError = document.getElementById('password-error');
+        const appContainer = document.getElementById('app-container');
+
+        // This is the encrypted content of the application.
+        // The default password is "admin123"
+        let encryptedData = {};
+
+        // The actual HTML content of the application that will be encrypted.
+        const appHTML = `
+            <div class="app-wrapper">
+                <header>
+                    <h1 id="company-header">Pricing Calculator</h1>
+                    <p>A comprehensive business engine for quotes.</p>
+                    <div class="view-switcher">
+                        <button id="show-calculator-btn">Calculator</button>
+                        <button id="show-admin-btn">Admin Panel</button>
+                    </div>
+                </header>
+
+                <main>
+                    <div id="calculator-interface" class="card">
+                        <!-- Calculator content is rendered here by its module -->
+                    </div>
+                    <div id="admin-panel" class="card hidden">
+                        <!-- Admin Panel content is rendered here by its module -->
+                    </div>
+                </main>
+            </div>
+        `;
+
+
+        async function deriveKey(password, saltBuffer) {
+            const enc = new TextEncoder();
+            const keyMaterial = await window.crypto.subtle.importKey(
+                "raw",
+                enc.encode(password),
+                { name: "PBKDF2" },
+                false,
+                ["deriveBits", "deriveKey"]
+            );
+            return window.crypto.subtle.deriveKey(
+                {
+                    "name": "PBKDF2",
+                    salt: saltBuffer,
+                    "iterations": 100000,
+                    "hash": "SHA-256"
+                },
+                keyMaterial,
+                { "name": "AES-GCM", "length": 256 },
+                true,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        async function encrypt(data, password) {
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const key = await deriveKey(password, salt);
+            const enc = new TextEncoder();
+            const encodedData = enc.encode(data);
+
+            const cipherText = await window.crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                key,
+                encodedData
+            );
+
+            return {
+                cipherText: btoa(String.fromCharCode.apply(null, new Uint8Array(cipherText))),
+                iv: btoa(String.fromCharCode.apply(null, new Uint8Array(iv))),
+                salt: btoa(String.fromCharCode.apply(null, new Uint8Array(salt)))
+            };
+        }
+
+
+        async function decrypt(encryptedData, password) {
+            try {
+                const saltStr = atob(encryptedData.salt);
+                const ivStr = atob(encryptedData.iv);
+                const cipherTextStr = atob(encryptedData.cipherText);
+
+                // Convert raw binary strings back to Uint8Arrays
+                const saltBuffer = new Uint8Array(saltStr.split('').map(c => c.charCodeAt(0)));
+                const ivBuffer = new Uint8Array(ivStr.split('').map(c => c.charCodeAt(0)));
+                const cipherBuffer = new Uint8Array(cipherTextStr.split('').map(c => c.charCodeAt(0)));
+                
+                const key = await deriveKey(password, saltBuffer);
+                const dec = new TextDecoder();
+                
+                const decrypted = await window.crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: ivBuffer },
+                    key,
+                    cipherBuffer
+                );
+
+                return dec.decode(decrypted);
+            } catch (e) {
+                console.error("Decryption failed:", e);
+                return null;
+            }
+        }
+        
+        async function handleUnlockAttempt() {
+            const password = passwordInput.value;
+            if (!password) return;
+
+            const decryptedHTML = await decrypt(JSON.parse(payloadContainer.textContent), password);
+
+            if (decryptedHTML) {
+                passwordError.classList.add('hidden');
+                appContainer.innerHTML = decryptedHTML;
+                // This call is now safe because App is defined before CryptoController
+                App.init(); 
+            } else {
+                passwordError.classList.remove('hidden');
+            }
+        }
+
+        async function init() {
+            // In a real build process, the payload would be pre-encrypted.
+            // For this demo, we encrypt it now with a default password.
+            const encryptedPayload = await encrypt(appHTML, "admin123");
+            payloadContainer.textContent = JSON.stringify(encryptedPayload, null, 2);
+
+
+            submitButton.addEventListener('click', handleUnlockAttempt);
+            passwordInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') {
+                    handleUnlockAttempt();
+                }
+            });
+        }
+        
+        return { init };
+    })();
+    // --- END: ALL APPLICATION LOGIC ---
 
 
     // --- APPLICATION ENTRY POINT ---
