@@ -509,7 +509,6 @@
 
     <script>
     // --- START: MAIN APPLICATION LOGIC (IIFE Modules) ---
-    // This follows the modular pattern specified in the blueprint.
     // The modules are ordered to resolve dependencies: modules that are needed by others are defined first.
 
     /**
@@ -536,7 +535,7 @@
             };
 
             return {
-                "version": "1.7.0", // Incremented for new admin features
+                "version": "1.8.0", // Incremented for bug fixes and new features
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -685,12 +684,15 @@
         let quoteChart = null;
 
         function init() {
-            // This module is rendered on demand by UIController, so init can be empty.
+            container = document.getElementById('calculator-interface');
+            if (container) {
+                attachListeners();
+            }
         }
 
         function render() {
-             container = container || document.getElementById('calculator-interface');
-             if(!container) return; // Exit if calculator element doesn't exist
+             if(!container) container = document.getElementById('calculator-interface');
+             if(!container) return; 
              let html = `
                 <div id="calc-category-tabs" role="tablist" aria-label="Service Categories" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
                     <button id="tab-countertops" role="tab" aria-selected="${currentCategory === 'countertops'}" aria-controls="panel-countertops" data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
@@ -700,7 +702,6 @@
                 <div id="calc-category-content"></div>`;
             container.innerHTML = html;
             renderCategoryContent(currentCategory);
-            attachNavListeners();
         }
 
         function renderCategoryContent(category) {
@@ -760,10 +761,7 @@
                 </div>`;
              container.innerHTML = html;
              
-             const materialSelect = document.getElementById('calc-material-select');
-             materialSelect.addEventListener('change', () => renderCountertopOptions(materialSelect.value));
-             renderCountertopOptions(materialSelect.value); // Initial render
-             attachFormListeners();
+             renderCountertopOptions(document.getElementById('calc-material-select').value);
         }
         
         function renderCountertopOptions(materialKey) {
@@ -850,11 +848,7 @@
                 </div>
              `;
              container.innerHTML = html;
-
-             const caseworkSelect = document.getElementById('calc-casework-select');
-             caseworkSelect.addEventListener('change', () => renderCaseworkOptions(caseworkSelect.value));
-             renderCaseworkOptions(caseworkSelect.value); // Initial render
-             attachFormListeners();
+             renderCaseworkOptions(document.getElementById('calc-casework-select').value);
         }
 
         function renderCaseworkOptions(caseworkKey) {
@@ -915,11 +909,7 @@
                     </aside>
                 </div>`;
              container.innerHTML = html;
-
-             const miscSelect = document.getElementById('calc-misc-select');
-             miscSelect.addEventListener('change', () => renderMiscServiceOptions(miscSelect.value));
-             renderMiscServiceOptions(miscSelect.value); // Initial Render
-             attachFormListeners();
+             renderMiscServiceOptions(document.getElementById('calc-misc-select').value);
         }
 
         function renderMiscServiceOptions(serviceKey) {
@@ -959,8 +949,6 @@
 
         function calculateQuote() {
             if(!container) return; 
-            const calcContent = container.querySelector('#calc-category-content');
-            if(!calcContent) return;
 
             if (currentCategory === 'countertops') {
                 calculateCountertopQuote();
@@ -1165,30 +1153,39 @@
 
         }
 
-        function attachNavListeners() {
-            const tabs = container.querySelector('#calc-category-tabs');
-             if (tabs) {
-                tabs.addEventListener('click', e => {
-                    if (e.target.tagName === 'BUTTON') {
-                        const category = e.target.dataset.category;
-                        container.querySelectorAll('#calc-category-tabs button').forEach(btn => {
-                            btn.classList.remove('active');
-                            btn.setAttribute('aria-selected', 'false');
-                        });
-                        e.target.classList.add('active');
-                        e.target.setAttribute('aria-selected', 'true');
-                        renderCategoryContent(category);
+        /**
+         * Attaches event listeners to the main calculator container using event delegation.
+         * This is more efficient than attaching listeners to each individual element, especially
+         * since the form content is re-rendered frequently.
+         */
+        function attachListeners() {
+            if(!container) return;
+            
+            // Listener for clicks (tabs)
+            container.addEventListener('click', function(e) {
+                const tabButton = e.target.closest('button[data-category]');
+                if (tabButton && container.querySelector('#calc-category-tabs').contains(tabButton)) {
+                    const category = tabButton.dataset.category;
+                    if (category !== currentCategory) {
+                        currentCategory = category;
+                        render();
                     }
-                });
-            }
-        }
+                }
+            });
 
-        function attachFormListeners() {
-             const calcContent = container.querySelector('#calc-category-content');
-             if(calcContent) {
-                calcContent.addEventListener('input', calculateQuote);
-                calcContent.addEventListener('change', calculateQuote);
-             }
+            // Listener for inputs and changes (forms)
+            container.addEventListener('input', calculateQuote);
+            container.addEventListener('change', (e) => {
+                if(e.target.matches('#calc-material-select')) {
+                    renderCountertopOptions(e.target.value);
+                } else if (e.target.matches('#calc-casework-select')) {
+                    renderCaseworkOptions(e.target.value);
+                } else if (e.target.matches('#calc-misc-select')) {
+                    renderMiscServiceOptions(e.target.value);
+                } else {
+                    calculateQuote();
+                }
+            });
         }
         
         return { init, render };
@@ -1204,12 +1201,15 @@
         let currentCategory = 'settings';
 
         function init() {
-            // Initial render is triggered by UIController.showMainView, so this can be empty.
+            container = document.getElementById('admin-panel');
+            if (container) {
+                attachListeners();
+            }
         }
 
         function render() {
-            container = container || document.getElementById('admin-panel');
-            if(!container) return; // Exit if the admin panel element isn't on the page
+            if(!container) container = document.getElementById('admin-panel');
+            if(!container) return;
             
             let html = `
                 <div id="admin-category-tabs" role="tablist" aria-label="Admin Sections" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
@@ -1222,7 +1222,6 @@
                 <div id="admin-category-content" role="region" aria-live="polite"></div>`;
             container.innerHTML = html;
             renderCategoryContent(currentCategory);
-            attachNavListeners();
         }
         
         function renderCategoryContent(category) {
@@ -1288,8 +1287,6 @@
                 </div>
             `;
             contentContainer.innerHTML = html;
-            attachDataManagementListeners();
-            attachFormListeners();
         }
         
         function renderCountertopAdmin(contentContainer) {
@@ -1312,11 +1309,7 @@
             `;
             contentContainer.innerHTML = html;
             
-            const materialSelect = contentContainer.querySelector('#admin-material-select');
-            materialSelect.addEventListener('change', () => renderCountertopAdminForm(materialSelect.value));
-            
-            renderCountertopAdminForm(materialSelect.value);
-            attachFormListeners();
+            renderCountertopAdminForm(contentContainer.querySelector('#admin-material-select').value);
         }
 
         function renderCountertopAdminForm(materialKey) {
@@ -1401,12 +1394,7 @@
                 <div id="admin-casework-form-container" class="mt-4"></div>
             `;
             contentContainer.innerHTML = html;
-
-            const caseworkSelect = contentContainer.querySelector('#admin-casework-select');
-            caseworkSelect.addEventListener('change', () => renderCaseworkAdminForm(caseworkSelect.value));
-
-            renderCaseworkAdminForm(caseworkSelect.value);
-            attachFormListeners();
+            renderCaseworkAdminForm(contentContainer.querySelector('#admin-casework-select').value);
         }
 
         function renderCaseworkAdminForm(caseworkKey) {
@@ -1480,7 +1468,6 @@
                 </div>
             `;
             contentContainer.innerHTML = html;
-            attachFormListeners();
         }
 
         function renderHelpAdmin(contentContainer) {
@@ -1548,9 +1535,11 @@
             DataEngine.saveData(data);
             
             const confirmation = container.querySelector('#save-confirmation');
-            confirmation.textContent = confirmationMessage;
-            confirmation.classList.remove('hidden');
-            setTimeout(() => { confirmation.classList.add('hidden'); }, 3000);
+            if(confirmation) {
+                confirmation.textContent = confirmationMessage;
+                confirmation.classList.remove('hidden');
+                setTimeout(() => { confirmation.classList.add('hidden'); }, 3000);
+            }
             
             Calculator.render();
         }
@@ -1690,52 +1679,52 @@
             }
         }
 
-
-        function attachNavListeners() {
-            const tabs = container.querySelector('#admin-category-tabs');
-            if (tabs) {
-                tabs.addEventListener('click', e => {
-                    const button = e.target.closest('button');
-                    if (button) {
-                        const category = button.dataset.category;
-                        container.querySelectorAll('#admin-category-tabs button').forEach(btn => {
-                            btn.classList.remove('active');
-                            btn.setAttribute('aria-selected', 'false');
-                        });
-                        button.classList.add('active');
-                        button.setAttribute('aria-selected', 'true');
-                        renderCategoryContent(category);
+        /**
+         * Attaches event listeners to the admin panel using event delegation.
+         */
+        function attachListeners() {
+            if (!container) return;
+            
+            container.addEventListener('click', (e) => {
+                const target = e.target;
+                
+                // Handle tab switching
+                const tabButton = target.closest('button[data-category]');
+                 if (tabButton && container.querySelector('#admin-category-tabs').contains(tabButton)) {
+                    const category = tabButton.dataset.category;
+                    if (category !== currentCategory) {
+                        currentCategory = category;
+                        render();
                     }
-                });
-            }
-        }
-        
-        function attachFormListeners() {
-            const contentContainer = container.querySelector('#admin-category-content');
-            if(contentContainer) {
-                contentContainer.addEventListener('click', (e) => {
-                    const target = e.target;
-                    if (target.classList.contains('save-button')) {
-                        saveChanges(target);
-                    } else if (target.id === 'add-new-material-btn') {
-                        addNewItem('material');
-                    } else if (target.id === 'add-new-casework-btn') {
-                        addNewItem('casework');
-                    } else if (target.id === 'delete-material-btn') {
-                        deleteSelectedItem('material');
-                    } else if (target.id === 'delete-casework-btn') {
-                        deleteSelectedItem('casework');
-                    }
-                });
-            }
-        }
+                    return; // Prevent other actions from firing
+                }
 
-        function attachDataManagementListeners() {
-            const exportBtn = document.getElementById('export-json-btn');
-            const importInput = document.getElementById('import-json-file');
-
-            if(exportBtn) exportBtn.addEventListener('click', exportDataToJSON);
-            if(importInput) importInput.addEventListener('change', importDataFromJSON);
+                // Handle other buttons
+                if (target.classList.contains('save-button')) {
+                    saveChanges(target);
+                } else if (target.id === 'add-new-material-btn') {
+                    addNewItem('material');
+                } else if (target.id === 'add-new-casework-btn') {
+                    addNewItem('casework');
+                } else if (target.id === 'delete-material-btn') {
+                    deleteSelectedItem('material');
+                } else if (target.id === 'delete-casework-btn') {
+                    deleteSelectedItem('casework');
+                } else if (target.id === 'export-json-btn') {
+                     exportDataToJSON();
+                }
+            });
+            
+            container.addEventListener('change', (e) => {
+                const target = e.target;
+                 if (target.id === 'import-json-file') {
+                    importDataFromJSON(e);
+                } else if(target.id === 'admin-material-select') {
+                    renderCountertopAdminForm(target.value);
+                } else if (target.id === 'admin-casework-select') {
+                    renderCaseworkAdminForm(target.value);
+                }
+            });
         }
         
         return { init, render };
@@ -1750,7 +1739,9 @@
         function init() {
             DataEngine.init();
             UIController.init();
-            
+            Calculator.init();
+            AdminPanel.init();
+
             const header = document.querySelector('header');
             if (header) {
                 header.addEventListener('click', (e) => {
