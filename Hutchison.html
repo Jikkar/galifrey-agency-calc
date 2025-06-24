@@ -535,7 +535,7 @@
             };
 
             return {
-                "version": "1.9.0", // Incremented for new data and fixes
+                "version": "1.9.1", // Incremented for new data and fixes
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -610,21 +610,37 @@
             };
         }
 
+        // CORRECTED: More robust init and getData functions to prevent errors
+        // from outdated or incomplete localStorage data.
         function init() {
-            if (!localStorage.getItem(DB_KEY)) {
-                console.log('No data found. Seeding with default values.');
-                saveData(getDefaultData());
-            } else {
-                console.log('Existing data found in localStorage.');
-            }
+            const currentData = getData();
+            saveData(currentData);
+            console.log('Data engine initialized and data validated.');
         }
 
         function getData() {
+            const defaultData = getDefaultData();
             try {
-                return JSON.parse(localStorage.getItem(DB_KEY));
+                const storedDataString = localStorage.getItem(DB_KEY);
+                if (storedDataString) {
+                    const storedData = JSON.parse(storedDataString);
+                    // This merge ensures that all top-level keys from the default data are present,
+                    // preventing errors if the stored data is from an older version.
+                    const mergedData = {
+                        ...defaultData,
+                        ...storedData,
+                        // Explicitly merge nested objects
+                        settings: { ...defaultData.settings, ...(storedData.settings || {}) },
+                        countertops: { ...defaultData.countertops, ...(storedData.countertops || {}) },
+                        casework: { ...defaultData.casework, ...(storedData.casework || {}) },
+                        misc_services: { ...defaultData.misc_services, ...(storedData.misc_services || {}) },
+                    };
+                    return mergedData;
+                }
+                return defaultData;
             } catch (e) {
-                console.error("Error parsing data from localStorage:", e);
-                return getDefaultData();
+                console.error("Error parsing data from localStorage, falling back to defaults:", e);
+                return defaultData;
             }
         }
 
@@ -824,9 +840,10 @@
             calculateQuote();
         }
 
+        // CORRECTED: This function now generates the dropdown menu.
         function renderCaseworkCalculator(container) {
             const data = DataEngine.getData();
-            const allCasework = data.casework;
+            const allCasework = data.casework || {}; // Ensure it's an object
             let caseworkOptionsHTML = Object.keys(allCasework).map(key => `<option value="${key}">${allCasework[key].name}</option>`).join('');
 
              let html = `
@@ -852,7 +869,12 @@
                 </div>
              `;
              container.innerHTML = html;
-             renderCaseworkOptions(document.getElementById('calc-casework-select').value);
+             // Only proceed if there are options to render
+             if (Object.keys(allCasework).length > 0) {
+                renderCaseworkOptions(document.getElementById('calc-casework-select').value);
+             } else {
+                document.getElementById('calc-casework-options-container').innerHTML = '<p class="text-error">No casework data found.</p>';
+             }
         }
 
         function renderCaseworkOptions(caseworkKey) {
@@ -922,19 +944,23 @@
             calculateQuote();
         }
 
+        // CORRECTED: This function now generates the dropdown menu.
         function renderMiscServicesCalculator(container) {
             const data = DataEngine.getData();
-            const allMiscServices = data.misc_services;
+            const allMiscServices = data.misc_services || {}; // Ensure it's an object
             let serviceOptionsHTML = Object.keys(allMiscServices).map(key => `<option value="${key}">${allMiscServices[key].name}</option>`).join('');
 
              let html = `
                 <div class="main-grid">
                     <section aria-labelledby="misc-calculator-title">
-                         <div class="form-group">
-                            <label id="misc-calculator-title" for="calc-misc-select" class="form-group__label">1. Select Service</label>
-                            <select id="calc-misc-select" class="form-group__select">${serviceOptionsHTML}</select>
+                         <div class="card" style="margin-bottom: 0;">
+                            <h2 id="misc-calculator-title" class="card__title">Miscellaneous Services Calculator</h2>
+                            <div class="form-group">
+                                <label for="calc-misc-select" class="form-group__label">1. Select Service</label>
+                                <select id="calc-misc-select" class="form-group__select">${serviceOptionsHTML}</select>
+                            </div>
+                            <div id="calc-misc-options-container"></div>
                         </div>
-                        <div id="calc-misc-options-container"></div>
                     </section>
                     <aside aria-labelledby="misc-summary-title">
                         <div id="quote-summary" class="card">
@@ -946,7 +972,12 @@
                     </aside>
                 </div>`;
              container.innerHTML = html;
-             renderMiscServiceOptions(document.getElementById('calc-misc-select').value);
+             // Only proceed if there are options to render
+             if (Object.keys(allMiscServices).length > 0) {
+                renderMiscServiceOptions(document.getElementById('calc-misc-select').value);
+             } else {
+                document.getElementById('calc-misc-options-container').innerHTML = '<p class="text-error">No miscellaneous services data found.</p>';
+             }
         }
 
         function renderMiscServiceOptions(serviceKey) {
@@ -1012,7 +1043,7 @@
 
             if (length === 0 || width === 0) {
                  quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter dimensions to begin.</p>`;
-                 quoteChartContainer.classList.add('hidden');
+                 if (quoteChartContainer) quoteChartContainer.classList.add('hidden');
                  return;
             }
 
@@ -1058,7 +1089,7 @@
 
             quoteDetailsContainer.innerHTML = summaryHTML;
             renderQuoteChart([totalMaterialCost, edgeCost, cutoutCost, tax]);
-            quoteChartContainer.classList.remove('hidden');
+            if (quoteChartContainer) quoteChartContainer.classList.remove('hidden');
         }
 
         function calculateCaseworkQuote() {
@@ -1092,8 +1123,9 @@
             
             // Custom Millwork Calculation
             } else if (caseworkData.type === 'custom_millwork') {
-                let currentCost = caseworkData.base_cost;
-                let lineItems = [{name: 'Base Unit', cost: caseworkData.base_cost}];
+                let baseCost = caseworkData.base_cost;
+                let finalCost = baseCost;
+                let lineItems = [{name: `${caseworkData.name} Base Unit`, cost: baseCost}];
 
                 document.querySelectorAll('#calc-casework-options-container .calc-input').forEach(input => {
                     const optKey = input.dataset.optionKey;
@@ -1101,13 +1133,19 @@
                     
                     if(input.type === 'select-one') {
                         const valKey = input.value;
-                        currentCost *= option.values[valKey].multiplier;
+                        const multiplier = option.values[valKey].multiplier;
+                        if (multiplier !== 1) {
+                            finalCost *= multiplier;
+                        }
                     } else if (input.type === 'checkbox' && input.checked) {
-                        currentCost += option.cost;
+                        finalCost += option.cost;
                         lineItems.push({name: option.name, cost: option.cost});
                     }
                 });
-                totalCost = currentCost;
+                
+                lineItems[0].cost = finalCost - lineItems.slice(1).reduce((sum, item) => sum + item.cost, 0);
+
+                totalCost = finalCost;
                 lineItemsHTML = lineItems.map(item => `<tr><td class="item-name">${item.name}</td><td class="item-cost">${UIController.formatCurrency(item.cost)}</td></tr>`).join('');
             }
 
