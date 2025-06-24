@@ -535,7 +535,7 @@
             };
 
             return {
-                "version": "1.8.0", // Incremented for bug fixes and new features
+                "version": "1.9.0", // Incremented for new data and fixes
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -544,50 +544,51 @@
                     "plastic_laminate": { name: "Plastic Laminate", cost_sqft: 35.67, options: { brand: { name: "Brand/Finish", type: "select", values: { standard: { name: "Standard (Formica, Wilsonart)", multiplier: 1.0 }, premium: { name: "Premium Finish", multiplier: 1.25 } } } }, edges: commonEdges, cutouts: commonCutouts },
                     "granite": { name: "Granite", cost_sqft: 80.63, options: { grade: { name: "Grade", type: "select", values: { level_1: { name: "Level 1 (Standard)", multiplier: 1.0 }, level_2: { name: "Level 2 (Mid-Grade)", multiplier: 1.2 }, exotic: { name: "Exotic", multiplier: 1.5 } } } }, edges: commonEdges, cutouts: commonCutouts },
                     "quartz": { name: "Quartz", cost_sqft: 73.16, options: { brand: { name: "Brand", type: "select", values: { standard: { name: "Standard (e.g., Silestone)", multiplier: 1.0 }, premium: { name: "Premium (e.g., Cambria)", multiplier: 1.3 } } } }, edges: commonEdges, cutouts: commonCutouts },
-                    "epoxy_resin": { name: "Epoxy Resin", cost_sqft: 100.00, options: { design: { name: "Design Complexity", type: "select", values: { simple: { name: "Simple (1-2 Colors)", multiplier: 1.0 }, complex: { name: "Complex (Metallics, Veining)", multiplier: 1.5 } } } }, edges: { square: { name: "Square Edge", cost_lnft: 0 } }, cutouts: commonCutouts },
-                    "solid_surface": { name: "Solid Surface", cost_sqft: 49.27, options: { color: { name: "Color/Pattern", type: "select", values: { standard: { name: "Standard Color", multiplier: 1.0 }, premium: { name: "Premium Pattern", multiplier: 1.2 } } } }, edges: commonEdges, cutouts: { ...commonCutouts, integral_sink: { name: "Integral Sink", cost: 450 } } }
+                    "solid_surface": { name: "Solid Surface", cost_sqft: 49.27, options: { color: { name: "Color/Pattern", type: "select", values: { standard: { name: "Standard Color", multiplier: 1.0 }, premium: { name: "Premium Pattern", multiplier: 1.2 } } } }, edges: commonEdges, cutouts: { ...commonCutouts, integral_sink: { name: "Integral Sink", cost: 450 } } },
+                    "butcher_block": { name: "Butcher Block", cost_sqft: 39.63, options: { species: { name: "Wood Species", type: "select", values: { oak: { name: "Oak", multiplier: 1.0 }, maple: { name: "Maple", multiplier: 1.1 }, walnut: { name: "Walnut", multiplier: 1.5 } } } }, edges: commonEdges, cutouts: commonCutouts },
+                    "stainless_steel": { name: "Stainless Steel", cost_sqft: 90.32, options: { gauge: { name: "Gauge", type: "select", values: { '16_gauge': { name: "16-Gauge (Standard)", multiplier: 1.0 }, '14_gauge': { name: "14-Gauge (Heavy Duty)", multiplier: 1.3 } } } }, edges: { square: { name: "Square Edge", cost_lnft: 0 } }, cutouts: commonCutouts },
+                    "phenolic_resin": { name: "Phenolic Resin", cost_sqft: 60.00, options: { thickness: { name: "Thickness", type: "select", values: { 'three_quarter': { name: "3/4 inch", multiplier: 1.0 }, 'one_inch': { name: "1 inch", multiplier: 1.25 } } } }, edges: { square: { name: "Square Edge", cost_lnft: 0 } }, cutouts: commonCutouts },
+                    "epoxy_resin": { name: "Epoxy Resin", cost_sqft: 100.00, options: { design: { name: "Design Complexity", type: "select", values: { simple: { name: "Simple (1-2 Colors)", multiplier: 1.0 }, complex: { name: "Complex (Metallics, Veining)", multiplier: 1.5 } } } }, edges: { square: { name: "Square Edge", cost_lnft: 0 } }, cutouts: commonCutouts }
                 },
                 "casework": {
                     "base_cabinets": { 
-                        name: "Base Cabinets", 
-                        cost_lnft: 250, // Base cost per linear foot for standard base cabinets
+                        name: "Base Cabinets",
+                        type: "standard",
+                        cost_lnft: 250,
                         options: {
-                            awi_grade: {
-                                name: "AWI Grade",
-                                type: "select",
-                                values: {
-                                    economy: { name: "Economy", multiplier: 1.0 },
-                                    custom: { name: "Custom", multiplier: 1.4 },
-                                    premium: { name: "Premium", multiplier: 2.0 }
-                                }
-                            },
-                            material: {
-                                name: "Material",
-                                type: "select",
-                                values: {
-                                    p_laminate: { name: "Plastic Laminate", multiplier: 1.0 },
-                                    wood_veneer: { name: "Wood Veneer", multiplier: 1.8 }
-                                }
-                            },
-                            construction: {
-                                name: "Construction",
-                                type: "select",
-                                values: {
-                                    frameless: { name: "Frameless", multiplier: 1.0 },
-                                    face_frame: { name: "Face Frame", multiplier: 1.15 },
-                                    inset: { name: "Inset", multiplier: 1.35 }
-                                }
-                            }
+                            awi_grade: { name: "AWI Grade", type: "select", values: { economy: { name: "Economy", multiplier: 1.0 }, custom: { name: "Custom", multiplier: 1.4 }, premium: { name: "Premium", multiplier: 2.0 } } },
+                            material: { name: "Material", type: "select", values: { p_laminate: { name: "Plastic Laminate", multiplier: 1.0 }, wood_veneer: { name: "Wood Veneer", multiplier: 1.8 } } },
+                            construction: { name: "Construction", type: "select", values: { frameless: { name: "Frameless", multiplier: 1.0 }, face_frame: { name: "Face Frame", multiplier: 1.15 }, inset: { name: "Inset", multiplier: 1.35 } } }
                         }
                     },
                     "wall_cabinets": {
                         name: "Wall Cabinets",
-                        cost_lnft: 200, // Wall cabinets are typically less expensive
-                        // Options are the same as base cabinets, they can be reused or customized
+                        type: "standard",
+                        cost_lnft: 200, 
                         options: {
                              awi_grade: { name: "AWI Grade", type: "select", values: { economy: { name: "Economy", multiplier: 1.0 }, custom: { name: "Custom", multiplier: 1.4 }, premium: { name: "Premium", multiplier: 2.0 } } },
                              material: { name: "Material", type: "select", values: { p_laminate: { name: "Plastic Laminate", multiplier: 1.0 }, wood_veneer: { name: "Wood Veneer", multiplier: 1.8 } } },
                              construction: { name: "Construction", type: "select", values: { frameless: { name: "Frameless", multiplier: 1.0 }, face_frame: { name: "Face Frame", multiplier: 1.15 } } }
+                        }
+                    },
+                    "reception_desk": {
+                        name: "Reception Desk",
+                        type: "custom_millwork",
+                        base_cost: 3000,
+                        options: {
+                            shape: { name: "Shape", type: "select", values: { straight: {name: "Straight", multiplier: 1.0}, l_shape: {name: "L-Shape", multiplier: 1.5}, u_shape: {name: "U-Shape", multiplier: 2.0} } },
+                            ada_section: { name: "ADA Compliant Section", type: "checkbox", cost: 500 },
+                            transaction_top: { name: "Transaction Top", type: "checkbox", cost: 750 }
+                        }
+                    },
+                     "trophy_case": {
+                        name: "Trophy Case",
+                        type: "custom_millwork",
+                        base_cost: 2500,
+                        options: {
+                            size: { name: "Size", type: "select", values: { "48in": {name: "48-inch", multiplier: 1.0}, "60in": {name: "60-inch", multiplier: 1.25}, "72in": {name: "72-inch", multiplier: 1.5} } },
+                            lighting: { name: "LED Lighting", type: "checkbox", cost: 400 },
+                            locking_doors: { name: "Locking Doors", type: "checkbox", cost: 150 }
                         }
                     }
                 },
@@ -600,12 +601,15 @@
                         "name": "CNC Machining",
                         "rate_hourly": 90,
                         "setup_fee": 50
+                    },
+                    "welding_fab": {
+                        "name": "Light Welding & Fabrication",
+                        "rate_hourly": 65
                     }
                 }
             };
         }
 
-        // Initialize data if it doesn't exist
         function init() {
             if (!localStorage.getItem(DB_KEY)) {
                 console.log('No data found. Seeding with default values.');
@@ -620,7 +624,7 @@
                 return JSON.parse(localStorage.getItem(DB_KEY));
             } catch (e) {
                 console.error("Error parsing data from localStorage:", e);
-                return getDefaultData(); // Fallback to default
+                return getDefaultData();
             }
         }
 
@@ -660,8 +664,7 @@
                 if (mainViews[key]) mainViews[key].classList.toggle('hidden', !isActive);
                 if (mainButtons[key]) mainButtons[key].classList.toggle('active', isActive);
             });
-            // When switching main views, trigger a render of the active category
-            // These calls are safe because by the time this is executed, all modules are defined.
+            
             if(viewName === 'calculator') Calculator.render();
             if(viewName === 'admin') AdminPanel.render();
         }
@@ -696,7 +699,7 @@
              let html = `
                 <div id="calc-category-tabs" role="tablist" aria-label="Service Categories" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
                     <button id="tab-countertops" role="tab" aria-selected="${currentCategory === 'countertops'}" aria-controls="panel-countertops" data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
-                    <button id="tab-casework" role="tab" aria-selected="${currentCategory === 'casework'}" aria-controls="panel-casework" data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
+                    <button id="tab-casework" role="tab" aria-selected="${currentCategory === 'casework'}" aria-controls="panel-casework" data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework & Millwork</button>
                     <button id="tab-misc" role="tab" aria-selected="${currentCategory === 'misc_services'}" aria-controls="panel-misc" data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
                 </div>
                 <div id="calc-category-content"></div>`;
@@ -830,9 +833,9 @@
                 <div class="main-grid">
                     <section aria-labelledby="casework-calculator-title">
                         <div class="card" style="margin-bottom: 0;">
-                            <h2 id="casework-calculator-title" class="card__title">Casework Calculator</h2>
+                            <h2 id="casework-calculator-title" class="card__title">Casework & Millwork Calculator</h2>
                              <div class="form-group">
-                                <label for="calc-casework-select" class="form-group__label">1. Select Casework Type</label>
+                                <label for="calc-casework-select" class="form-group__label">1. Select Item Type</label>
                                 <select id="calc-casework-select" class="form-group__select">${caseworkOptionsHTML}</select>
                             </div>
                             <div id="calc-casework-options-container"></div>
@@ -842,7 +845,7 @@
                         <div id="quote-summary" class="card">
                             <h2 id="casework-summary-title" class="card__title">Quote Summary</h2>
                             <div id="quote-details" aria-live="polite">
-                                <p class="quote-summary__placeholder">Select casework type and enter length.</p>
+                                <p class="quote-summary__placeholder">Select an item to begin.</p>
                             </div>
                         </div>
                     </aside>
@@ -857,32 +860,64 @@
             if(!optionsContainer) return;
             const data = DataEngine.getData();
             const caseworkData = data.casework[caseworkKey];
-
-            let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
-                const option = caseworkData.options[optKey];
-                return `<div class="form-group">
-                            <label for="calc-casework-option-${optKey}" class="form-group__label">${option.name}</label>
-                            <select id="calc-casework-option-${optKey}" data-option-key="${optKey}" class="form-group__select calc-input">
-                                ${Object.keys(option.values).map(valKey => `<option value="${valKey}">${option.values[valKey].name}</option>`).join('')}
-                            </select>
-                        </div>`;
-            }).join('');
             
-            let html = `
-                <div class="form-grid" style="margin-top: 24px;">
-                     <fieldset class="form-fieldset">
-                        <legend class="form-fieldset__legend">2. Dimensions</legend>
-                        <div class="form-group">
-                            <label for="calc-length" class="form-group__label">Length (ft)</label>
-                            <input type="number" id="calc-length" class="form-group__input calc-input" placeholder="e.g., 10">
-                        </div>
-                    </fieldset>
-                    <fieldset class="form-fieldset">
-                        <legend class="form-fieldset__legend">3. Selections</legend>
+            let html = '';
+
+            // Standard Casework (per linear foot)
+            if (caseworkData.type === 'standard') {
+                let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
+                    const option = caseworkData.options[optKey];
+                    return `<div class="form-group">
+                                <label for="calc-casework-option-${optKey}" class="form-group__label">${option.name}</label>
+                                <select id="calc-casework-option-${optKey}" data-option-key="${optKey}" class="form-group__select calc-input">
+                                    ${Object.keys(option.values).map(valKey => `<option value="${valKey}">${option.values[valKey].name}</option>`).join('')}
+                                </select>
+                            </div>`;
+                }).join('');
+                
+                html = `
+                    <div class="form-grid" style="margin-top: 24px;">
+                         <fieldset class="form-fieldset">
+                            <legend class="form-fieldset__legend">2. Dimensions</legend>
+                            <div class="form-group">
+                                <label for="calc-length" class="form-group__label">Length (ft)</label>
+                                <input type="number" id="calc-length" class="form-group__input calc-input" placeholder="e.g., 10">
+                            </div>
+                        </fieldset>
+                        <fieldset class="form-fieldset">
+                            <legend class="form-fieldset__legend">3. Selections</legend>
+                            ${optionsHTML}
+                        </fieldset>
+                    </div>
+                `;
+            // Custom Millwork (base unit cost + options)
+            } else if (caseworkData.type === 'custom_millwork') {
+                 let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
+                    const option = caseworkData.options[optKey];
+                    if (option.type === 'select') {
+                        return `<div class="form-group">
+                                <label for="calc-casework-option-${optKey}" class="form-group__label">${option.name}</label>
+                                <select id="calc-casework-option-${optKey}" data-option-key="${optKey}" class="form-group__select calc-input">
+                                    ${Object.keys(option.values).map(valKey => `<option value="${valKey}">${option.values[valKey].name}</option>`).join('')}
+                                </select>
+                            </div>`;
+                    } else if (option.type === 'checkbox') {
+                         return `<div class="form-group--checkbox">
+                                    <input type="checkbox" id="calc-casework-option-${optKey}" data-option-key="${optKey}" class="form-group__checkbox calc-input">
+                                    <label for="calc-casework-option-${optKey}" class="form-group__label">${option.name}</label>
+                                 </div>`;
+                    }
+                    return '';
+                }).join('');
+                
+                html = `
+                    <fieldset class="form-fieldset" style="margin-top: 24px;">
+                        <legend class="form-fieldset__legend">2. Configure Options</legend>
                         ${optionsHTML}
                     </fieldset>
-                </div>
-            `;
+                `;
+            }
+
             optionsContainer.innerHTML = html;
             calculateQuote();
         }
@@ -921,7 +956,7 @@
             const serviceData = data.misc_services[serviceKey];
             let html = '';
 
-            if (serviceKey === 'design') {
+            if (serviceKey === 'design' || serviceKey === 'welding_fab') {
                 html = `
                     <div class="form-grid" style="margin-top: 24px;">
                          <fieldset class="form-fieldset"> <legend class="form-fieldset__legend">2. Enter Hours</legend>
@@ -1033,24 +1068,49 @@
             
             const caseworkData = data.casework[caseworkKey];
             const settings = data.settings;
-            
-            const linearFeet = parseFloat(document.getElementById('calc-length')?.value) || 0;
             const quoteDetailsContainer = document.getElementById('quote-details');
+            let totalCost = 0;
+            let lineItemsHTML = '';
             
-            if (linearFeet === 0) {
-                quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter length to begin.</p>`;
-                return;
+            // Standard Casework Calculation
+            if(caseworkData.type === 'standard') {
+                const linearFeet = parseFloat(document.getElementById('calc-length')?.value) || 0;
+                 if (linearFeet === 0) {
+                    quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter length to begin.</p>`;
+                    return;
+                }
+
+                let optionMultiplier = 1;
+                document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
+                    const optKey = select.dataset.optionKey;
+                    const valKey = select.value;
+                    const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
+                    optionMultiplier *= multiplier;
+                });
+                totalCost = (linearFeet * caseworkData.cost_lnft) * optionMultiplier;
+                lineItemsHTML = `<tr><td class="item-name">${caseworkData.name} (${linearFeet} ln ft)</td><td class="item-cost">${UIController.formatCurrency(totalCost)}</td></tr>`;
+            
+            // Custom Millwork Calculation
+            } else if (caseworkData.type === 'custom_millwork') {
+                let currentCost = caseworkData.base_cost;
+                let lineItems = [{name: 'Base Unit', cost: caseworkData.base_cost}];
+
+                document.querySelectorAll('#calc-casework-options-container .calc-input').forEach(input => {
+                    const optKey = input.dataset.optionKey;
+                    const option = caseworkData.options[optKey];
+                    
+                    if(input.type === 'select-one') {
+                        const valKey = input.value;
+                        currentCost *= option.values[valKey].multiplier;
+                    } else if (input.type === 'checkbox' && input.checked) {
+                        currentCost += option.cost;
+                        lineItems.push({name: option.name, cost: option.cost});
+                    }
+                });
+                totalCost = currentCost;
+                lineItemsHTML = lineItems.map(item => `<tr><td class="item-name">${item.name}</td><td class="item-cost">${UIController.formatCurrency(item.cost)}</td></tr>`).join('');
             }
 
-            let optionMultiplier = 1;
-            document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
-                const optKey = select.dataset.optionKey;
-                const valKey = select.value;
-                const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
-                optionMultiplier *= multiplier;
-            });
-
-            const totalCost = (linearFeet * caseworkData.cost_lnft) * optionMultiplier;
             const subtotal = totalCost;
             const tax = subtotal * settings.taxRate;
             const total = subtotal + tax;
@@ -1058,7 +1118,7 @@
              let summaryHTML = `
                 <table class="quote-summary__table">
                     <tbody>
-                        <tr><td class="item-name">${caseworkData.name} (${linearFeet} ln ft)</td><td class="item-cost">${UIController.formatCurrency(totalCost)}</td></tr>
+                        ${lineItemsHTML}
                         <tr class="subtotal-row"><td>Subtotal</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>
                         <tr><td class="item-name">Tax (${(settings.taxRate * 100).toFixed(2)}%)</td><td class="item-cost">${UIController.formatCurrency(tax)}</td></tr>
                         <tr class="total-row"><td>Total</td><td class="item-cost">${UIController.formatCurrency(total)}</td></tr>
@@ -1078,11 +1138,11 @@
             let subtotal = 0;
             let lineItems = [];
 
-            if (serviceKey === 'design') {
+            if (serviceKey === 'design' || serviceKey === 'welding_fab') {
                 const hours = parseFloat(document.getElementById('calc-hours')?.value) || 0;
                 if (hours > 0) {
                     subtotal = hours * serviceData.rate_hourly;
-                    lineItems.push(`<tr><td class="item-name">Design Services (${hours} hrs)</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>`);
+                    lineItems.push(`<tr><td class="item-name">${serviceData.name} (${hours} hrs)</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>`);
                 }
             } else if (serviceKey === 'cnc_machining') {
                 const machineTime = parseFloat(document.getElementById('calc-machine-time')?.value) || 0;
@@ -1156,15 +1216,10 @@
 
         }
 
-        /**
-         * Attaches event listeners to the main calculator container using event delegation.
-         * This is more efficient than attaching listeners to each individual element, especially
-         * since the form content is re-rendered frequently.
-         */
         function attachListeners() {
             if(!container) return;
             
-            // Listener for clicks (tabs)
+            // Centralized event listener for the entire calculator container.
             container.addEventListener('click', function(e) {
                 const tabButton = e.target.closest('button[data-category]');
                 if (tabButton && container.querySelector('#calc-category-tabs')?.contains(tabButton)) {
@@ -1176,7 +1231,6 @@
                 }
             });
 
-            // Listener for inputs and changes (forms)
             container.addEventListener('input', calculateQuote);
             container.addEventListener('change', (e) => {
                 if(e.target.matches('#calc-material-select')) {
@@ -1410,38 +1464,74 @@
                 return;
             }
 
-            let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
-                const option = caseworkData.options[optKey];
-                return `
-                    <h3 class="admin-section-title">${option.name} Multipliers</h3>
-                    ${Object.keys(option.values).map(valKey => `
-                        <div class="admin-group">
-                             <label for="admin-cw-option-${optKey}-${valKey}" class="admin-group__label">${option.values[valKey].name}</label>
-                             <input type="number" id="admin-cw-option-${optKey}-${valKey}" data-type="option" data-option-key="${optKey}" data-value-key="${valKey}" class="form-group__input" step="0.01" value="${option.values[valKey].multiplier}">
-                        </div>`).join('')}
-                `;
-            }).join('');
+            let html = '';
 
-            let html = `
-                <div class="form-grid">
+            if (caseworkData.type === 'standard') {
+                let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
+                    const option = caseworkData.options[optKey];
+                    return `
+                        <h3 class="admin-section-title">${option.name} Multipliers</h3>
+                        ${Object.keys(option.values).map(valKey => `
+                            <div class="admin-group">
+                                 <label for="admin-cw-option-${optKey}-${valKey}" class="admin-group__label">${option.values[valKey].name}</label>
+                                 <input type="number" id="admin-cw-option-${optKey}-${valKey}" data-type="option" data-option-key="${optKey}" data-value-key="${valKey}" class="form-group__input" step="0.01" value="${option.values[valKey].multiplier}">
+                            </div>`).join('')}
+                    `;
+                }).join('');
+
+                html = `
+                    <div class="form-grid">
+                        <fieldset class="form-fieldset">
+                            <legend class="form-fieldset__legend">Base Costs</legend>
+                            <div class="admin-group">
+                                <label for="admin-cost-lnft" class="admin-group__label">Cost per Ln. Ft.</label>
+                                <input type="number" id="admin-cost-lnft" class="form-group__input" step="0.01" value="${caseworkData.cost_lnft}">
+                            </div>
+                        </fieldset>
+                         <fieldset class="form-fieldset">
+                            <legend class="form-fieldset__legend">Option Multipliers</legend>
+                            <div id="admin-cw-options-wrapper">${optionsHTML}</div>
+                        </fieldset>
+                    </div>`;
+
+            } else if (caseworkData.type === 'custom_millwork') {
+                 let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
+                    const option = caseworkData.options[optKey];
+                    if (option.type === 'select') {
+                        return `<h3 class="admin-section-title">${option.name} Multipliers</h3>
+                                ${Object.keys(option.values).map(valKey => `
+                                <div class="admin-group">
+                                    <label for="admin-cw-option-${optKey}-${valKey}" class="admin-group__label">${option.values[valKey].name}</label>
+                                    <input type="number" id="admin-cw-option-${optKey}-${valKey}" data-type="option-select" data-option-key="${optKey}" data-value-key="${valKey}" class="form-group__input" step="0.01" value="${option.values[valKey].multiplier}">
+                                </div>`).join('')}`;
+                    } else if (option.type === 'checkbox') {
+                         return `<div class="admin-group">
+                                    <label for="admin-cw-option-${optKey}" class="admin-group__label">${option.name}</label>
+                                    <input type="number" id="admin-cw-option-${optKey}" data-type="option-checkbox" data-option-key="${optKey}" class="form-group__input" step="0.01" value="${option.cost}">
+                                 </div>`;
+                    }
+                    return '';
+                }).join('');
+                
+                html = `
                     <fieldset class="form-fieldset">
-                        <legend class="form-fieldset__legend">Base Costs</legend>
+                        <legend class="form-fieldset__legend">Base & Option Costs</legend>
                         <div class="admin-group">
-                            <label for="admin-cost-lnft" class="admin-group__label">Cost per Ln. Ft.</label>
-                            <input type="number" id="admin-cost-lnft" class="form-group__input" step="0.01" value="${caseworkData.cost_lnft}">
+                            <label for="admin-base-cost" class="admin-group__label">Base Unit Cost</label>
+                            <input type="number" id="admin-base-cost" class="form-group__input" step="0.01" value="${caseworkData.base_cost}">
                         </div>
+                        ${optionsHTML}
                     </fieldset>
-                     <fieldset class="form-fieldset">
-                        <legend class="form-fieldset__legend">Option Multipliers</legend>
-                        <div id="admin-cw-options-wrapper">${optionsHTML}</div>
-                    </fieldset>
-                </div>
+                `;
+            }
+
+
+            formContainer.innerHTML = html + `
                 <div class="admin-actions">
                     <span id="save-confirmation" class="hidden" aria-live="polite"></span>
                     <button class="save-button" data-save-type="casework" data-casework-key="${caseworkKey}">Save Changes</button>
                 </div>
             `;
-            formContainer.innerHTML = html;
         }
 
         function renderMiscServicesAdmin(contentContainer) {
@@ -1453,7 +1543,7 @@
                     <h3 class="admin-section-title">${service.name}</h3>
                     ${Object.keys(service).filter(prop => prop !== 'name').map(prop => `
                         <div class="admin-group">
-                            <label for="admin-misc-${key}-${prop}" class="admin-group__label">${prop.replace('_', ' ')}</label>
+                            <label for="admin-misc-${key}-${prop}" class="admin-group__label">${prop.replace(/_/g, ' ')}</label>
                             <input type="number" id="admin-misc-${key}-${prop}" data-service-key="${key}" data-property="${prop}" class="form-group__input" step="0.01" value="${service[prop]}">
                         </div>
                     `).join('')}
@@ -1525,10 +1615,23 @@
             } else if (saveType === 'casework') {
                 const caseworkKey = button.dataset.caseworkKey;
                 const caseworkData = data.casework[caseworkKey];
-                caseworkData.cost_lnft = parseFloat(container.querySelector('#admin-cost-lnft').value);
-                container.querySelectorAll('#admin-cw-options-wrapper input').forEach(input => {
-                    caseworkData.options[input.dataset.optionKey].values[input.dataset.valueKey].multiplier = parseFloat(input.value);
-                });
+                if (caseworkData.type === 'standard') {
+                    caseworkData.cost_lnft = parseFloat(container.querySelector('#admin-cost-lnft').value);
+                     container.querySelectorAll('#admin-cw-options-wrapper input').forEach(input => {
+                        caseworkData.options[input.dataset.optionKey].values[input.dataset.valueKey].multiplier = parseFloat(input.value);
+                    });
+                } else if (caseworkData.type === 'custom_millwork') {
+                    caseworkData.base_cost = parseFloat(container.querySelector('#admin-base-cost').value);
+                     container.querySelectorAll('input[data-type^="option-"]').forEach(input => {
+                        const optKey = input.dataset.optionKey;
+                        if(input.dataset.type === 'option-select') {
+                            const valKey = input.dataset.valueKey;
+                            caseworkData.options[optKey].values[valKey].multiplier = parseFloat(input.value);
+                        } else if (input.dataset.type === 'option-checkbox') {
+                            caseworkData.options[optKey].cost = parseFloat(input.value);
+                        }
+                    });
+                }
             } else if (saveType === 'misc') {
                 container.querySelectorAll('#admin-misc-form-container input').forEach(input => {
                     data.misc_services[input.dataset.serviceKey][input.dataset.property] = parseFloat(input.value);
