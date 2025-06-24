@@ -535,7 +535,7 @@
             };
 
             return {
-                "version": "2.0.0", // Final Version
+                "version": "2.3.0", // Updated version
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -589,6 +589,31 @@
                             size: { name: "Size", type: "select", values: { "48in": {name: "48-inch", multiplier: 1.0}, "60in": {name: "60-inch", multiplier: 1.25}, "72in": {name: "72-inch", multiplier: 1.5} } },
                             lighting: { name: "LED Lighting", type: "checkbox", cost: 400 },
                             locking_doors: { name: "Locking Doors", type: "checkbox", cost: 150 }
+                        }
+                    },
+                    "architectural_wall_panels": {
+                        name: "Architectural Wall Panels",
+                        type: "custom_sqft",
+                        cost_sqft: 25.00,
+                        options: {
+                            style: { 
+                                name: "Style", 
+                                type: "select", 
+                                values: { 
+                                    shiplap: { name: "Shiplap", multiplier: 1.0 }, 
+                                    board_batten: { name: "Board & Batten", multiplier: 1.2 }, 
+                                    raised_panel: { name: "Raised Panel", multiplier: 1.5 } 
+                                } 
+                            },
+                            material: { 
+                                name: "Material", 
+                                type: "select", 
+                                values: { 
+                                    mdf: { name: "MDF", multiplier: 1.0 }, 
+                                    paintable_wood: { name: "Paintable Wood", multiplier: 1.4 },
+                                    veneer: { name: "Wood Veneer", multiplier: 2.0 }
+                                } 
+                            }
                         }
                     }
                 },
@@ -929,6 +954,36 @@
                         ${optionsHTML}
                     </fieldset>
                 `;
+            } else if (caseworkData.type === 'custom_sqft') {
+                let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
+                    const option = caseworkData.options[optKey];
+                    return `<div class="form-group">
+                                <label for="calc-casework-option-${optKey}" class="form-group__label">${option.name}</label>
+                                <select id="calc-casework-option-${optKey}" data-option-key="${optKey}" class="form-group__select calc-input">
+                                    ${Object.keys(option.values).map(valKey => `<option value="${valKey}">${option.values[valKey].name}</option>`).join('')}
+                                </select>
+                            </div>`;
+                }).join('');
+
+                html = `
+                    <div class="form-grid" style="margin-top: 24px;">
+                        <fieldset class="form-fieldset">
+                            <legend class="form-fieldset__legend">2. Dimensions</legend>
+                            <div class="form-group">
+                                <label for="calc-length-ft" class="form-group__label">Panel Width (ft)</label>
+                                <input type="number" id="calc-length-ft" class="form-group__input calc-input" placeholder="e.g., 8">
+                            </div>
+                            <div class="form-group">
+                                <label for="calc-height-ft" class="form-group__label">Panel Height (ft)</label>
+                                <input type="number" id="calc-height-ft" class="form-group__input calc-input" placeholder="e.g., 4">
+                            </div>
+                        </fieldset>
+                        <fieldset class="form-fieldset">
+                            <legend class="form-fieldset__legend">3. Selections</legend>
+                            ${optionsHTML}
+                        </fieldset>
+                    </div>
+                `;
             }
 
             optionsContainer.innerHTML = html;
@@ -937,7 +992,7 @@
 
         function renderMiscServicesCalculator(container) {
             const data = DataEngine.getData();
-            const allMiscServices = data.misc_services || {}; // Ensure it's an object
+            const allMiscServices = data.misc_services || {};
             let serviceOptionsHTML = Object.keys(allMiscServices).map(key => `<option value="${key}">${allMiscServices[key].name}</option>`).join('');
 
              let html = `
@@ -1134,6 +1189,24 @@
 
                 totalCost = finalCost;
                 lineItemsHTML = lineItems.map(item => `<tr><td class="item-name">${item.name}</td><td class="item-cost">${UIController.formatCurrency(item.cost)}</td></tr>`).join('');
+            
+            } else if (caseworkData.type === 'custom_sqft') {
+                const length = parseFloat(document.getElementById('calc-length-ft')?.value) || 0;
+                const height = parseFloat(document.getElementById('calc-height-ft')?.value) || 0;
+                if (length === 0 || height === 0) {
+                    quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter width and height.</p>`;
+                    return;
+                }
+                const sqft = length * height;
+                let optionMultiplier = 1;
+                 document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
+                    const optKey = select.dataset.optionKey;
+                    const valKey = select.value;
+                    const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
+                    optionMultiplier *= multiplier;
+                });
+                totalCost = sqft * caseworkData.cost_sqft * optionMultiplier;
+                lineItemsHTML = `<tr><td class="item-name">${caseworkData.name} (${sqft.toFixed(2)} sq ft)</td><td class="item-cost">${UIController.formatCurrency(totalCost)}</td></tr>`;
             }
 
             const subtotal = totalCost;
@@ -1565,6 +1638,33 @@
                         ${optionsHTML}
                     </fieldset>
                 `;
+            } else if (caseworkData.type === 'custom_sqft') {
+                let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
+                    const option = caseworkData.options[optKey];
+                    return `
+                        <h3 class="admin-section-title">${option.name} Multipliers</h3>
+                        ${Object.keys(option.values).map(valKey => `
+                            <div class="admin-group">
+                                 <label for="admin-cw-option-${optKey}-${valKey}" class="admin-group__label">${option.values[valKey].name}</label>
+                                 <input type="number" id="admin-cw-option-${optKey}-${valKey}" data-type="option" data-option-key="${optKey}" data-value-key="${valKey}" class="form-group__input" step="0.01" value="${option.values[valKey].multiplier}">
+                            </div>`).join('')}
+                    `;
+                }).join('');
+
+                html = `
+                     <div class="form-grid">
+                        <fieldset class="form-fieldset">
+                            <legend class="form-fieldset__legend">Base Costs</legend>
+                            <div class="admin-group">
+                                <label for="admin-cost-sqft" class="admin-group__label">Cost per Sq. Ft.</label>
+                                <input type="number" id="admin-cost-sqft" class="form-group__input" step="0.01" value="${caseworkData.cost_sqft}">
+                            </div>
+                        </fieldset>
+                         <fieldset class="form-fieldset">
+                            <legend class="form-fieldset__legend">Option Multipliers</legend>
+                            <div id="admin-cw-options-wrapper">${optionsHTML}</div>
+                        </fieldset>
+                    </div>`;
             }
 
 
@@ -1659,7 +1759,7 @@
                 const caseworkData = data.casework[caseworkKey];
                 if (caseworkData.type === 'standard') {
                     caseworkData.cost_lnft = parseFloat(container.querySelector('#admin-cost-lnft').value);
-                     container.querySelectorAll('#admin-cw-options-wrapper input').forEach(input => {
+                     container.querySelectorAll('#admin-cw-options-wrapper input[data-type="option"]').forEach(input => {
                         caseworkData.options[input.dataset.optionKey].values[input.dataset.valueKey].multiplier = parseFloat(input.value);
                     });
                 } else if (caseworkData.type === 'custom_millwork') {
@@ -1672,6 +1772,11 @@
                         } else if (input.dataset.type === 'option-checkbox') {
                             caseworkData.options[optKey].cost = parseFloat(input.value);
                         }
+                    });
+                } else if (caseworkData.type === 'custom_sqft') {
+                    caseworkData.cost_sqft = parseFloat(container.querySelector('#admin-cost-sqft').value);
+                     container.querySelectorAll('#admin-cw-options-wrapper input[data-type="option"]').forEach(input => {
+                        caseworkData.options[input.dataset.optionKey].values[input.dataset.valueKey].multiplier = parseFloat(input.value);
                     });
                 }
             } else if (saveType === 'misc') {
