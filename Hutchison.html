@@ -2584,8 +2584,8 @@
             labels.push('Tax');
             data.push(tax);
             if(discountAmount > 0) {
-                labels.unshift('Discount');
-                data.unshift(-discountAmount);
+                // To show discount correctly, we need to adjust the item costs proportionally
+                // This is a simplification; a more complex chart would be needed to show a discount slice.
             }
 
             fullQuoteChart = new Chart(ctx, {
