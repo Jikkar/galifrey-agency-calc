@@ -10,6 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
     <style>
     /*
     ============================================
@@ -67,20 +68,56 @@
         padding: calc(var(--spacing-unit) * 3);
     }
     
+    #load-session-banner {
+        background-color: #eef2ff;
+        border-left: 4px solid var(--color-primary);
+        color: #4338ca;
+        padding: 1rem;
+        border-radius: var(--border-radius);
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    #load-session-banner p {
+        margin: 0;
+    }
+    #load-session-banner button {
+        margin-left: 1rem;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: var(--border-radius);
+        cursor: pointer;
+    }
+    #load-session-banner button.load-btn {
+        background-color: var(--color-primary);
+        color: white;
+    }
+     #load-session-banner button.dismiss-btn {
+        background: transparent;
+        color: var(--color-primary);
+     }
+
+
     /*
     ============================================
-    --- 3. Password Prompt
+    --- 3. Password Prompt Modal (New)
     ============================================
     */
-    #password-prompt {
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.6);
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 100vh;
-        padding: calc(var(--spacing-unit) * 2);
+        z-index: 1000;
     }
 
-    #password-prompt > div {
+    .modal-content {
         max-width: 400px;
         width: 100%;
         background-color: var(--color-surface);
@@ -90,19 +127,19 @@
         text-align: center;
     }
     
-    #password-prompt h2 {
+    .modal-content h2 {
         color: var(--color-text-header);
         font-size: 1.75rem;
         font-weight: 700;
         margin-bottom: var(--spacing-unit);
     }
 
-    #password-prompt p {
+    .modal-content p {
         color: var(--color-text-muted);
         margin-bottom: calc(var(--spacing-unit) * 3);
     }
 
-    #password-input {
+    .modal-content input {
         width: 100%;
         padding: calc(var(--spacing-unit) * 1.5);
         border: 1px solid var(--color-border);
@@ -112,13 +149,13 @@
         transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
     }
 
-    #password-input:focus {
+    .modal-content input:focus {
         outline: none;
         border-color: var(--color-primary);
         box-shadow: 0 0 0 3px rgb(79 70 229 / 0.2);
     }
 
-    #submit-password {
+    .modal-content button {
         width: 100%;
         padding: calc(var(--spacing-unit) * 1.5);
         background-color: var(--color-primary);
@@ -131,9 +168,18 @@
         transition: background-color var(--transition-speed);
     }
 
-    #submit-password:hover {
+    .modal-content button:hover {
         background-color: var(--color-primary-dark);
     }
+    
+    .modal-content .close-btn {
+        background-color: var(--color-text-muted);
+        margin-top: 1rem;
+    }
+     .modal-content .close-btn:hover {
+        background-color: var(--color-text-body);
+     }
+
 
     #password-error {
         color: var(--color-error);
@@ -356,6 +402,13 @@
         background-color: #f3f4f6;
     }
     
+    .admin-only {
+        display: none;
+    }
+    body.admin-mode-active .admin-only {
+        display: table-row; /* Or 'flex', 'block', etc., as appropriate */
+    }
+
     #full-quote-table .discount-row td {
         color: var(--color-accent);
         font-weight: 500;
@@ -542,26 +595,53 @@
     </style>
 </head>
 <body>
-
-    <div id="app-container">
-        <div id="password-prompt">
-            <div>
-                <h2>Admin Access</h2>
-                <p>Enter password to access the calculator and admin panel.</p>
+    <div class="app-wrapper">
+        <header>
+            <h1 id="company-header">Pricing Calculator</h1>
+            <p>A comprehensive business engine for quotes.</p>
+             <div id="load-session-banner" class="hidden">
+                <p><strong>Welcome back!</strong> We found a saved quote session.</p>
                 <div>
-                    <label for="password-input" class="hidden">Password</label>
-                    <input id="password-input" name="password" type="password" required placeholder="Password">
+                    <button class="load-btn">Load Session</button>
+                    <button class="dismiss-btn">Dismiss</button>
                 </div>
-                <div>
-                    <button id="submit-password">Unlock</button>
-                </div>
-                <p id="password-error" class="hidden">Incorrect password. Please try again.</p>
             </div>
-        </div>
+            <div class="view-switcher" role="navigation" aria-label="Main Views">
+                <button id="show-calculator-btn" class="active">Calculator</button>
+                <button id="show-full-quote-btn">Full Quote</button>
+                <button id="show-admin-btn">Admin Panel</button>
+            </div>
+        </header>
+
+        <main>
+            <div id="calculator-interface" role="region" aria-labelledby="calculator-view-title">
+                 <h2 id="calculator-view-title" class="hidden">Calculator View</h2>
+            </div>
+            <div id="full-quote-view" class="hidden" role="region" aria-labelledby="full-quote-view-title">
+                <h2 id="full-quote-view-title" class="hidden">Full Quote View</h2>
+            </div>
+            <div id="admin-panel" class="card hidden" role="region" aria-labelledby="admin-view-title">
+                 <h2 id="admin-view-title" class="hidden">Admin Panel View</h2>
+            </div>
+        </main>
     </div>
 
-    <div id="encrypted-payload" class="hidden"></div>
-
+    <!-- Admin Password Modal -->
+    <div id="admin-password-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2>Admin Access</h2>
+            <p>Enter password to access the admin panel.</p>
+            <div>
+                <label for="password-input" class="hidden">Password</label>
+                <input id="password-input" name="password" type="password" required placeholder="Password">
+            </div>
+            <div>
+                <button id="submit-password">Unlock</button>
+                <button class="close-btn">Cancel</button>
+            </div>
+            <p id="password-error" class="hidden">Incorrect password. Please try again.</p>
+        </div>
+    </div>
 
     <script>
     // --- START: MAIN APPLICATION LOGIC (IIFE Modules) ---
@@ -594,7 +674,8 @@
                 "version": "2.8.0", // Updated version
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
-                    "taxRate": 0.0875
+                    "taxRate": 0.0875,
+                    "adminPassword": "admin" // Default password
                 },
                 "countertops": {
                     "plastic_laminate": { name: "Plastic Laminate", cost_sqft: 35.67, options: { brand: { name: "Brand/Finish", type: "select", values: { standard: { name: "Standard (Formica, Wilsonart)", multiplier: 1.0 }, premium: { name: "Premium Finish", multiplier: 1.25 } } } }, edges: commonEdges, cutouts: commonCutouts },
@@ -1597,6 +1678,13 @@
                             <input type="number" id="admin-tax-rate" class="form-group__input" step="0.0001" value="${settings.taxRate * 100}">
                         </div>
                     </fieldset>
+                     <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Security</legend>
+                        <div class="admin-group">
+                            <label for="admin-password" class="admin-group__label">Admin Password</label>
+                            <input type="password" id="admin-password" class="form-group__input" value="${settings.adminPassword}">
+                        </div>
+                    </fieldset>
                 </div>
 
                 <h3 class="admin-section-title" style="margin-top: 40px;">Data Management</h3>
@@ -1947,6 +2035,7 @@
             if (saveType === 'settings') {
                 data.settings.companyName = container.querySelector('#admin-company-name').value;
                 data.settings.taxRate = parseFloat(container.querySelector('#admin-tax-rate').value) / 100;
+                data.settings.adminPassword = container.querySelector('#admin-password').value;
                 confirmationMessage = "Settings saved!";
             } else if (saveType === 'countertop') {
                 const materialKey = button.dataset.materialKey;
@@ -2326,6 +2415,7 @@
     const App = (function() {
         let fullQuote = [];
         let fullQuoteChart = null;
+        let isAdmin = false;
         let projectDetails = {
             clientName: '',
             projectName: '',
@@ -2347,7 +2437,7 @@
                     } else if (e.target.id === 'show-full-quote-btn') {
                         UIController.showMainView('fullQuote');
                     } else if (e.target.id === 'show-admin-btn') {
-                        UIController.showMainView('admin');
+                        promptForAdminPassword();
                     }
                 });
             }
@@ -2367,6 +2457,19 @@
                 if (e.target.id === 'export-pdf-btn') {
                     exportQuoteToPDF();
                 }
+                if(e.target.matches('#load-session-banner .load-btn')) {
+                    loadSession();
+                    e.target.parentElement.parentElement.classList.add('hidden');
+                }
+                if(e.target.matches('#load-session-banner .dismiss-btn')) {
+                     e.target.parentElement.parentElement.classList.add('hidden');
+                }
+                if(e.target.id === 'save-quote-btn') {
+                    saveSession();
+                }
+                if(e.target.id === 'share-quote-btn') {
+                    shareSession();
+                }
             });
 
              document.addEventListener('input', e => {
@@ -2378,8 +2481,106 @@
                     renderFullQuote();
                 }
              });
-            
+             
+            checkAndLoadSession();
             UIController.showMainView('calculator');
+        }
+        
+        function promptForAdminPassword() {
+            if (isAdmin) {
+                UIController.showMainView('admin');
+                return;
+            }
+            const modal = document.getElementById('admin-password-modal');
+            modal.classList.remove('hidden');
+
+            const submitBtn = modal.querySelector('#submit-password');
+            const cancelBtn = modal.querySelector('.close-btn');
+            const input = modal.querySelector('#password-input');
+            const errorMsg = modal.querySelector('#password-error');
+
+            const submitHandler = () => {
+                const pass = input.value;
+                const correctPass = DataEngine.getData().settings.adminPassword;
+                if (pass === correctPass) {
+                    isAdmin = true;
+                    document.body.classList.add('admin-mode-active');
+                    modal.classList.add('hidden');
+                    input.value = '';
+                    errorMsg.classList.add('hidden');
+                    UIController.showMainView('admin');
+                } else {
+                    errorMsg.classList.remove('hidden');
+                }
+            };
+            
+            const cancelHandler = () => {
+                modal.classList.add('hidden');
+                 input.value = '';
+                 errorMsg.classList.add('hidden');
+            }
+
+            submitBtn.onclick = submitHandler;
+            cancelBtn.onclick = cancelHandler;
+            input.onkeyup = (e) => { if(e.key === 'Enter') submitHandler(); };
+
+        }
+
+        function saveSession() {
+            const session = {
+                quote: fullQuote,
+                details: projectDetails
+            };
+            localStorage.setItem('hutchisonQuoteSession', JSON.stringify(session));
+            alert('Quote progress saved!');
+        }
+
+        function loadSession(sessionData) {
+            const data = sessionData || JSON.parse(localStorage.getItem('hutchisonQuoteSession'));
+            if (data) {
+                fullQuote = data.quote || [];
+                projectDetails = data.details || projectDetails;
+                renderFullQuote();
+                UIController.showMainView('fullQuote');
+            }
+        }
+        
+        function checkAndLoadSession() {
+             const urlParams = new URLSearchParams(window.location.search);
+             const quoteData = urlParams.get('quote');
+
+             if(quoteData) {
+                 try {
+                     const decoded = atob(quoteData.replace(/_/g, '/').replace(/-/g, '+'));
+                     const decompressed = pako.inflate(decoded, { to: 'string' });
+                     const session = JSON.parse(decompressed);
+                     loadSession(session);
+                     // Clean URL
+                     window.history.replaceState({}, document.title, window.location.pathname);
+                 } catch(e) {
+                     console.error("Failed to load quote from URL", e);
+                     alert("Could not load the shared quote link. It may be invalid or outdated.");
+                 }
+             } else if (localStorage.getItem('hutchisonQuoteSession')) {
+                document.getElementById('load-session-banner').classList.remove('hidden');
+            }
+        }
+        
+        function shareSession() {
+             const session = {
+                quote: fullQuote,
+                details: projectDetails
+            };
+            const jsonString = JSON.stringify(session);
+            const compressed = pako.deflate(jsonString, { to: 'string' });
+            const encoded = btoa(compressed).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            const url = `${window.location.origin}${window.location.pathname}?quote=${encoded}`;
+            
+            navigator.clipboard.writeText(url).then(() => {
+                alert('Shareable link copied to clipboard!');
+            }, () => {
+                alert('Could not copy link. Please copy it manually:\n' + url);
+            });
         }
 
         function addItemToFullQuote() {
@@ -2449,6 +2650,8 @@
                      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                         <h2 class="card__title" style="margin-bottom:0; border:0;">Full Project Quote</h2>
                         <div>
+                            <button id="save-quote-btn" class="admin-button secondary">Save Progress</button>
+                            <button id="share-quote-btn" class="admin-button secondary">Share Quote</button>
                             <button id="export-pdf-btn" class="admin-button">Export to PDF</button>
                             <button id="clear-full-quote" class="admin-button danger">Clear Quote</button>
                         </div>
@@ -2517,7 +2720,7 @@
                                             <td class="item-cost">${UIController.formatCurrency(subtotal)}</td>
                                             <td></td>
                                         </tr>
-                                        <tr class="discount-row">
+                                        <tr class="discount-row admin-only">
                                             <td>
                                                 <div style="display: flex; gap: 8px; align-items: center;">
                                                     <span>Project Discount</span>
@@ -2584,8 +2787,8 @@
             labels.push('Tax');
             data.push(tax);
             if(discountAmount > 0) {
-                // To show discount correctly, we need to adjust the item costs proportionally
-                // This is a simplification; a more complex chart would be needed to show a discount slice.
+                // Adjusting data to show discount is complex for a pie chart.
+                // We'll show the breakdown of costs before discount for clarity.
             }
 
             fullQuoteChart = new Chart(ctx, {
@@ -2684,153 +2887,10 @@
 
         return { init, renderFullQuote, addItemToFullQuote };
     })();
-
-    /**
-     * @module CryptoController
-     * @description Handles password protection and decryption.
-     * @dependencies App
-     */
-    const CryptoController = (function() {
-        const payloadContainer = document.getElementById('encrypted-payload');
-        const passwordPrompt = document.getElementById('password-prompt');
-        const passwordInput = document.getElementById('password-input');
-        const submitButton = document.getElementById('submit-password');
-        const passwordError = document.getElementById('password-error');
-        const appContainer = document.getElementById('app-container');
-
-        const appHTML = `
-            <div class="app-wrapper">
-                <header>
-                    <h1 id="company-header">Pricing Calculator</h1>
-                    <p>A comprehensive business engine for quotes.</p>
-                    <div class="view-switcher" role="navigation" aria-label="Main Views">
-                        <button id="show-calculator-btn">Calculator</button>
-                        <button id="show-full-quote-btn">Full Quote</button>
-                        <button id="show-admin-btn">Admin Panel</button>
-                    </div>
-                </header>
-
-                <main>
-                    <div id="calculator-interface" class="card" role="region" aria-labelledby="calculator-view-title">
-                         <h2 id="calculator-view-title" class="hidden">Calculator View</h2>
-                    </div>
-                    <div id="full-quote-view" class="hidden" role="region" aria-labelledby="full-quote-view-title">
-                        <h2 id="full-quote-view-title" class="hidden">Full Quote View</h2>
-                    </div>
-                    <div id="admin-panel" class="card hidden" role="region" aria-labelledby="admin-view-title">
-                         <h2 id="admin-view-title" class="hidden">Admin Panel View</h2>
-                    </div>
-                </main>
-            </div>
-        `;
-
-
-        async function deriveKey(password, saltBuffer) {
-            const enc = new TextEncoder();
-            const keyMaterial = await window.crypto.subtle.importKey(
-                "raw",
-                enc.encode(password),
-                { name: "PBKDF2" },
-                false,
-                ["deriveBits", "deriveKey"]
-            );
-            return window.crypto.subtle.deriveKey(
-                {
-                    "name": "PBKDF2",
-                    salt: saltBuffer,
-                    "iterations": 100000,
-                    "hash": "SHA-256"
-                },
-                keyMaterial,
-                { "name": "AES-GCM", "length": 256 },
-                true,
-                ["encrypt", "decrypt"]
-            );
-        }
-
-        async function encrypt(data, password) {
-            const salt = window.crypto.getRandomValues(new Uint8Array(16));
-            const iv = window.crypto.getRandomValues(new Uint8Array(12));
-            const key = await deriveKey(password, salt);
-            const enc = new TextEncoder();
-            const encodedData = enc.encode(data);
-
-            const cipherText = await window.crypto.subtle.encrypt(
-                { name: "AES-GCM", iv: iv },
-                key,
-                encodedData
-            );
-
-            return {
-                cipherText: btoa(String.fromCharCode.apply(null, new Uint8Array(cipherText))),
-                iv: btoa(String.fromCharCode.apply(null, new Uint8Array(iv))),
-                salt: btoa(String.fromCharCode.apply(null, new Uint8Array(salt)))
-            };
-        }
-
-
-        async function decrypt(encryptedData, password) {
-            try {
-                const saltStr = atob(encryptedData.salt);
-                const ivStr = atob(encryptedData.iv);
-                const cipherTextStr = atob(encryptedData.cipherText);
-
-                const saltBuffer = new Uint8Array(saltStr.split('').map(c => c.charCodeAt(0)));
-                const ivBuffer = new Uint8Array(ivStr.split('').map(c => c.charCodeAt(0)));
-                const cipherBuffer = new Uint8Array(cipherTextStr.split('').map(c => c.charCodeAt(0)));
-                
-                const key = await deriveKey(password, saltBuffer);
-                const dec = new TextDecoder();
-                
-                const decrypted = await window.crypto.subtle.decrypt(
-                    { name: "AES-GCM", iv: ivBuffer },
-                    key,
-                    cipherBuffer
-                );
-
-                return dec.decode(decrypted);
-            } catch (e) {
-                console.error("Decryption failed:", e);
-                return null;
-            }
-        }
-        
-        async function handleUnlockAttempt() {
-            const password = passwordInput.value;
-            if (!password) return;
-
-            const decryptedHTML = await decrypt(JSON.parse(payloadContainer.textContent), password);
-
-            if (decryptedHTML) {
-                passwordError.classList.add('hidden');
-                appContainer.innerHTML = decryptedHTML;
-                App.init(); 
-            } else {
-                passwordError.classList.remove('hidden');
-            }
-        }
-
-        async function init() {
-            const encryptedPayload = await encrypt(appHTML, "admin123");
-            payloadContainer.textContent = JSON.stringify(encryptedPayload, null, 2);
-
-
-            submitButton.addEventListener('click', handleUnlockAttempt);
-            passwordInput.addEventListener('keyup', (e) => {
-                if (e.key === 'Enter') {
-                    handleUnlockAttempt();
-                }
-            });
-        }
-        
-        return { init };
-    })();
-    // --- END: ALL APPLICATION LOGIC ---
-
-
+    
     // --- APPLICATION ENTRY POINT ---
     window.onload = function() {
-        CryptoController.init();
+        App.init();
     };
 
     </script>
