@@ -578,7 +578,7 @@
             };
 
             return {
-                "version": "2.5.0", // Updated version
+                "version": "2.6.0", // Updated version
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -673,6 +673,24 @@
                     "welding_fab": {
                         "name": "Light Welding & Fabrication",
                         "rate_hourly": 65
+                    },
+                    "custom_cabinet_fabrication": {
+                        name: "Custom Cabinet Fabrication",
+                        type: "custom_cabinet",
+                        cost_cubic_ft: 50, // Base cost per cubic foot
+                        materials: {
+                            mdf: { name: "MDF", cost_sqft: 2.50 },
+                            plywood: { name: "Plywood", cost_sqft: 4.00 },
+                            solid_wood: { name: "Solid Wood", cost_sqft: 8.00 }
+                        },
+                        finishes: {
+                            paint: { name: "Paint", cost: 300 },
+                            stain: { name: "Stain & Varnish", cost: 450 }
+                        },
+                        hardware: {
+                            standard: { name: "Standard", cost: 50 },
+                            premium: { name: "Premium Soft-Close", cost: 150 }
+                        }
                     }
                 }
             };
@@ -1077,7 +1095,48 @@
             const serviceData = data.misc_services[serviceKey];
             let html = '';
 
-            if (serviceKey === 'design' || serviceKey === 'welding_fab') {
+            if (serviceData.type === 'custom_cabinet') {
+                html = `
+                    <div class="form-grid" style="margin-top: 24px;">
+                        <fieldset class="form-fieldset">
+                             <legend class="form-fieldset__legend">2. Dimensions (in)</legend>
+                             <div class="form-group">
+                                <label for="calc-cabinet-width" class="form-group__label">Width</label>
+                                <input type="number" id="calc-cabinet-width" class="form-group__input calc-input" placeholder="e.g., 36">
+                            </div>
+                             <div class="form-group">
+                                <label for="calc-cabinet-height" class="form-group__label">Height</label>
+                                <input type="number" id="calc-cabinet-height" class="form-group__input calc-input" placeholder="e.g., 34.5">
+                            </div>
+                             <div class="form-group">
+                                <label for="calc-cabinet-depth" class="form-group__label">Depth</label>
+                                <input type="number" id="calc-cabinet-depth" class="form-group__input calc-input" placeholder="e.g., 24">
+                            </div>
+                        </fieldset>
+                        <fieldset class="form-fieldset">
+                             <legend class="form-fieldset__legend">3. Selections</legend>
+                             <div class="form-group">
+                                <label for="calc-cabinet-material" class="form-group__label">Material</label>
+                                <select id="calc-cabinet-material" class="form-group__select calc-input">
+                                    ${Object.keys(serviceData.materials).map(key => `<option value="${key}">${serviceData.materials[key].name}</option>`).join('')}
+                                </select>
+                             </div>
+                             <div class="form-group">
+                                <label for="calc-cabinet-finish" class="form-group__label">Finish</label>
+                                <select id="calc-cabinet-finish" class="form-group__select calc-input">
+                                     ${Object.keys(serviceData.finishes).map(key => `<option value="${key}">${serviceData.finishes[key].name}</option>`).join('')}
+                                </select>
+                             </div>
+                              <div class="form-group">
+                                <label for="calc-cabinet-hardware" class="form-group__label">Hardware</label>
+                                <select id="calc-cabinet-hardware" class="form-group__select calc-input">
+                                     ${Object.keys(serviceData.hardware).map(key => `<option value="${key}">${serviceData.hardware[key].name}</option>`).join('')}
+                                </select>
+                             </div>
+                        </fieldset>
+                    </div>
+                `;
+            } else if (serviceKey === 'design' || serviceKey === 'welding_fab') {
                 html = `
                     <div class="form-grid" style="margin-top: 24px;">
                          <fieldset class="form-fieldset"> <legend class="form-fieldset__legend">2. Enter Hours</legend>
@@ -1301,7 +1360,39 @@
             let lineItems = [];
             let itemDescription = [];
 
-            if (serviceKey === 'design' || serviceKey === 'welding_fab') {
+            if (serviceData.type === 'custom_cabinet') {
+                const width = parseFloat(document.getElementById('calc-cabinet-width')?.value) || 0;
+                const height = parseFloat(document.getElementById('calc-cabinet-height')?.value) || 0;
+                const depth = parseFloat(document.getElementById('calc-cabinet-depth')?.value) || 0;
+
+                if (width === 0 || height === 0 || depth === 0) {
+                    quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter all dimensions.</p><button class="add-to-quote-btn" disabled>Add to Quote</button>`;
+                    return;
+                }
+                const cubicFeet = (width * height * depth) / 1728;
+                const surfaceArea = 2 * (width * height + width * depth + height * depth) / 144;
+
+                const materialKey = document.getElementById('calc-cabinet-material').value;
+                const finishKey = document.getElementById('calc-cabinet-finish').value;
+                const hardwareKey = document.getElementById('calc-cabinet-hardware').value;
+                
+                const materialCost = surfaceArea * serviceData.materials[materialKey].cost_sqft;
+                const laborCost = cubicFeet * serviceData.cost_cubic_ft;
+                const finishCost = serviceData.finishes[finishKey].cost;
+                const hardwareCost = serviceData.hardware[hardwareKey].cost;
+                
+                subtotal = laborCost + materialCost + finishCost + hardwareCost;
+                lineItems.push({name: 'Labor Cost', cost: laborCost});
+                lineItems.push({name: 'Material Cost', cost: materialCost});
+                lineItems.push({name: 'Finish Cost', cost: finishCost});
+                lineItems.push({name: 'Hardware Cost', cost: hardwareCost});
+
+                itemDescription.push(`${width}"x${height}"x${depth}"`);
+                itemDescription.push(serviceData.materials[materialKey].name);
+                itemDescription.push(serviceData.finishes[finishKey].name);
+                itemDescription.push(serviceData.hardware[hardwareKey].name);
+
+            } else if (serviceKey === 'design' || serviceKey === 'welding_fab') {
                 const hours = parseFloat(document.getElementById('calc-hours')?.value) || 0;
                 if (hours > 0) {
                     subtotal = hours * serviceData.rate_hourly;
@@ -1754,6 +1845,33 @@
             
             let servicesHTML = Object.keys(miscServices).map(key => {
                 const service = miscServices[key];
+                if (service.type === 'custom_cabinet') {
+                    return `
+                        <h3 class="admin-section-title">${service.name}</h3>
+                        <div class="admin-group">
+                            <label for="admin-misc-${key}-cost_cubic_ft" class="admin-group__label">Cost per Cubic Ft</label>
+                            <input type="number" id="admin-misc-${key}-cost_cubic_ft" data-service-key="${key}" data-property="cost_cubic_ft" class="form-group__input" step="0.01" value="${service.cost_cubic_ft}">
+                        </div>
+                        <h4 class="admin-section-title" style="font-size: 1rem; margin-top: 1rem;">Materials (Cost/SqFt)</h4>
+                        ${Object.keys(service.materials).map(mKey => `
+                            <div class="admin-group">
+                                <label for="admin-misc-${key}-mat-${mKey}" class="admin-group__label">${service.materials[mKey].name}</label>
+                                <input type="number" id="admin-misc-${key}-mat-${mKey}" data-service-key="${key}" data-property="materials.${mKey}.cost_sqft" class="form-group__input" step="0.01" value="${service.materials[mKey].cost_sqft}">
+                            </div>`).join('')}
+                        <h4 class="admin-section-title" style="font-size: 1rem; margin-top: 1rem;">Finishes (Fixed Cost)</h4>
+                         ${Object.keys(service.finishes).map(fKey => `
+                            <div class="admin-group">
+                                <label for="admin-misc-${key}-fin-${fKey}" class="admin-group__label">${service.finishes[fKey].name}</label>
+                                <input type="number" id="admin-misc-${key}-fin-${fKey}" data-service-key="${key}" data-property="finishes.${fKey}.cost" class="form-group__input" step="0.01" value="${service.finishes[fKey].cost}">
+                            </div>`).join('')}
+                        <h4 class="admin-section-title" style="font-size: 1rem; margin-top: 1rem;">Hardware (Fixed Cost)</h4>
+                         ${Object.keys(service.hardware).map(hKey => `
+                            <div class="admin-group">
+                                <label for="admin-misc-${key}-hdwr-${hKey}" class="admin-group__label">${service.hardware[hKey].name}</label>
+                                <input type="number" id="admin-misc-${key}-hdwr-${hKey}" data-service-key="${key}" data-property="hardware.${hKey}.cost" class="form-group__input" step="0.01" value="${service.hardware[hKey].cost}">
+                            </div>`).join('')}
+                    `;
+                }
                 return `
                     <h3 class="admin-section-title">${service.name}</h3>
                     ${Object.keys(service).filter(prop => prop !== 'name').map(prop => `
@@ -1854,7 +1972,14 @@
                 }
             } else if (saveType === 'misc') {
                 container.querySelectorAll('#admin-misc-form-container input').forEach(input => {
-                    data.misc_services[input.dataset.serviceKey][input.dataset.property] = parseFloat(input.value);
+                    const serviceKey = input.dataset.serviceKey;
+                    const propPath = input.dataset.property.split('.');
+                    
+                    let target = data.misc_services[serviceKey];
+                    for (let i = 0; i < propPath.length - 1; i++) {
+                        target = target[propPath[i]];
+                    }
+                    target[propPath[propPath.length - 1]] = parseFloat(input.value);
                 });
             }
 
