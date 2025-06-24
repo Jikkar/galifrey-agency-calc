@@ -435,6 +435,14 @@
         transition: opacity 0.3s ease-in-out;
     }
 
+    #admin-help-content ul {
+        list-style-position: inside;
+        padding-left: var(--spacing-unit);
+    }
+    #admin-help-content li {
+        margin-bottom: var(--spacing-unit);
+    }
+
     /*
     ============================================
     --- 8. Responsive Design
@@ -464,14 +472,13 @@
 </head>
 <body>
 
-    <!-- Container for the entire application. Will be populated after decryption. -->
     <div id="app-container">
-        <!-- Password prompt will be shown here initially -->
         <div id="password-prompt">
             <div>
                 <h2>Admin Access</h2>
                 <p>Enter password to access the calculator and admin panel.</p>
                 <div>
+                    <label for="password-input" class="hidden">Password</label>
                     <input id="password-input" name="password" type="password" required placeholder="Password">
                 </div>
                 <div>
@@ -482,8 +489,6 @@
         </div>
     </div>
 
-    <!-- The main application content is stored here, encrypted. -->
-    <!-- It will be decrypted and injected into #app-container. -->
     <div id="encrypted-payload" class="hidden"></div>
 
 
@@ -672,10 +677,10 @@
              container = container || document.getElementById('calculator-interface');
              if(!container) return; // Exit if calculator element doesn't exist
              let html = `
-                <div id="calc-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
-                    <button data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
-                    <button data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
-                    <button data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
+                <div id="calc-category-tabs" role="tablist" aria-label="Service Categories" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
+                    <button id="tab-countertops" role="tab" aria-selected="${currentCategory === 'countertops'}" aria-controls="panel-countertops" data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
+                    <button id="tab-casework" role="tab" aria-selected="${currentCategory === 'casework'}" aria-controls="panel-casework" data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
+                    <button id="tab-misc" role="tab" aria-selected="${currentCategory === 'misc_services'}" aria-controls="panel-misc" data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
                 </div>
                 <div id="calc-category-content"></div>`;
             container.innerHTML = html;
@@ -688,11 +693,23 @@
             const contentContainer = container.querySelector('#calc-category-content');
             if (!contentContainer) return;
             
+            // Clear previous content and set ARIA attributes
+            contentContainer.innerHTML = ''; 
+            
             if (category === 'countertops') {
+                contentContainer.id = 'panel-countertops';
+                contentContainer.setAttribute('role', 'tabpanel');
+                contentContainer.setAttribute('aria-labelledby', 'tab-countertops');
                 renderCountertopCalculator(contentContainer);
             } else if (category === 'casework') {
+                contentContainer.id = 'panel-casework';
+                contentContainer.setAttribute('role', 'tabpanel');
+                contentContainer.setAttribute('aria-labelledby', 'tab-casework');
                 renderCaseworkCalculator(contentContainer);
             } else if (category === 'misc_services') {
+                 contentContainer.id = 'panel-misc';
+                 contentContainer.setAttribute('role', 'tabpanel');
+                 contentContainer.setAttribute('aria-labelledby', 'tab-misc');
                 renderMiscServicesCalculator(contentContainer);
             }
         }
@@ -706,27 +723,27 @@
 
             let html = `
                 <div class="main-grid">
-                    <div>
+                    <section aria-labelledby="calculator-title">
                         <div class="card" style="margin-bottom: 0;">
-                            <h2 class="card__title">Countertop Calculator</h2>
+                            <h2 id="calculator-title" class="card__title">Countertop Calculator</h2>
                             <div class="form-group">
                                 <label for="calc-material-select" class="form-group__label">1. Select Material</label>
                                 <select id="calc-material-select" class="form-group__select">${materialOptionsHTML}</select>
                             </div>
                             <div id="calc-options-container"></div>
                         </div>
-                    </div>
-                    <div>
+                    </section>
+                    <aside aria-labelledby="summary-title">
                         <div id="quote-summary" class="card">
-                            <h2 class="card__title">Quote Summary</h2>
-                            <div id="quote-details">
+                            <h2 id="summary-title" class="card__title">Quote Summary</h2>
+                            <div id="quote-details" aria-live="polite">
                                 <p class="quote-summary__placeholder">Select material and enter dimensions.</p>
                             </div>
                              <div id="quote-chart-container" class="hidden">
-                                <canvas id="quote-chart"></canvas>
+                                <canvas id="quote-chart" role="img" aria-label="Cost breakdown pie chart"></canvas>
                             </div>
                         </div>
-                    </div>
+                    </aside>
                 </div>`;
              container.innerHTML = html;
              
@@ -800,24 +817,24 @@
 
              let html = `
                 <div class="main-grid">
-                    <div>
+                    <section aria-labelledby="casework-calculator-title">
                         <div class="card" style="margin-bottom: 0;">
-                            <h2 class="card__title">Casework Calculator</h2>
+                            <h2 id="casework-calculator-title" class="card__title">Casework Calculator</h2>
                              <div class="form-group">
                                 <label for="calc-casework-select" class="form-group__label">1. Select Casework Type</label>
                                 <select id="calc-casework-select" class="form-group__select">${caseworkOptionsHTML}</select>
                             </div>
                             <div id="calc-casework-options-container"></div>
                         </div>
-                    </div>
-                    <div>
+                    </section>
+                    <aside aria-labelledby="casework-summary-title">
                         <div id="quote-summary" class="card">
-                            <h2 class="card__title">Quote Summary</h2>
-                            <div id="quote-details">
+                            <h2 id="casework-summary-title" class="card__title">Quote Summary</h2>
+                            <div id="quote-details" aria-live="polite">
                                 <p class="quote-summary__placeholder">Select casework type and enter length.</p>
                             </div>
                         </div>
-                    </div>
+                    </aside>
                 </div>
              `;
              container.innerHTML = html;
@@ -870,21 +887,21 @@
 
              let html = `
                 <div class="main-grid">
-                    <div>
+                    <section aria-labelledby="misc-calculator-title">
                          <div class="form-group">
-                            <label for="calc-misc-select" class="form-group__label">1. Select Service</label>
+                            <label id="misc-calculator-title" for="calc-misc-select" class="form-group__label">1. Select Service</label>
                             <select id="calc-misc-select" class="form-group__select">${serviceOptionsHTML}</select>
                         </div>
                         <div id="calc-misc-options-container"></div>
-                    </div>
-                    <div>
+                    </section>
+                    <aside aria-labelledby="misc-summary-title">
                         <div id="quote-summary" class="card">
-                            <h2 class="card__title">Quote Summary</h2>
-                            <div id="quote-details">
+                            <h2 id="misc-summary-title" class="card__title">Quote Summary</h2>
+                            <div id="quote-details" aria-live="polite">
                                 <p class="quote-summary__placeholder">Select a service to begin.</p>
                             </div>
                         </div>
-                    </div>
+                    </aside>
                 </div>`;
              container.innerHTML = html;
 
@@ -920,7 +937,7 @@
                             </div>
                              <div class="form-group">
                                 <label for="calc-setup-fee" class="form-group__label">Setup Fee</label>
-                                <input type="number" id="calc-setup-fee" class="form-group__input calc-input" value="${serviceData.setup_fee}" disabled>
+                                <input type="number" id="calc-setup-fee" class="form-group__input calc-input" value="${serviceData.setup_fee}" readonly aria-readonly="true">
                             </div>
                         </fieldset>
                     </div>`;
@@ -1108,7 +1125,7 @@
                     labels: ['Material', 'Edge Treatment', 'Cutouts / Add-ons', 'Tax'],
                     datasets: [{
                         label: 'Cost Breakdown',
-                        data: costData,
+                        data: costData.map(c => Math.max(0, c)), // Ensure no negative values from calculation errors
                         backgroundColor: [
                             'rgba(79, 70, 229, 0.7)',
                             'rgba(30, 64, 175, 0.7)',
@@ -1146,8 +1163,8 @@
                 tabs.addEventListener('click', e => {
                     if (e.target.tagName === 'BUTTON') {
                         const category = e.target.dataset.category;
-                        container.querySelectorAll('#calc-category-tabs button').forEach(btn => btn.classList.remove('active'));
-                        e.target.classList.add('active');
+                        container.querySelectorAll('#calc-category-tabs button').forEach(btn => btn.setAttribute('aria-selected', 'false'));
+                        e.target.setAttribute('aria-selected', 'true');
                         renderCategoryContent(category);
                     }
                 });
@@ -1172,7 +1189,7 @@
      */
     const AdminPanel = (function() {
         let container = null;
-        let currentCategory = 'countertops';
+        let currentCategory = 'settings';
 
         function init() {
             // Initial render is triggered by UIController.showMainView, so this can be empty.
@@ -1183,13 +1200,14 @@
             if(!container) return; // Exit if the admin panel element isn't on the page
             
             let html = `
-                <div id="admin-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
-                    <button data-category="settings" class="${currentCategory === 'settings' ? 'active' : ''}">Settings</button>
-                    <button data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
-                    <button data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
-                    <button data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
+                <div id="admin-category-tabs" role="tablist" aria-label="Admin Sections" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
+                    <button id="admin-tab-settings" role="tab" aria-selected="${currentCategory === 'settings'}" data-category="settings" class="${currentCategory === 'settings' ? 'active' : ''}">Settings & Data</button>
+                    <button id="admin-tab-countertops" role="tab" aria-selected="${currentCategory === 'countertops'}" data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
+                    <button id="admin-tab-casework" role="tab" aria-selected="${currentCategory === 'casework'}" data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
+                    <button id="admin-tab-misc" role="tab" aria-selected="${currentCategory === 'misc_services'}" data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
+                    <button id="admin-tab-help" role="tab" aria-selected="${currentCategory === 'help'}" data-category="help" class="${currentCategory === 'help' ? 'active' : ''}">Help</button>
                 </div>
-                <div id="admin-category-content"></div>`;
+                <div id="admin-category-content" role="region" aria-live="polite"></div>`;
             container.innerHTML = html;
             renderCategoryContent(currentCategory);
             attachNavListeners();
@@ -1200,6 +1218,9 @@
             const contentContainer = container.querySelector('#admin-category-content');
             if(!contentContainer) return;
 
+            contentContainer.id = `admin-panel-${category}`;
+            contentContainer.setAttribute('aria-labelledby', `admin-tab-${category}`);
+            
             if(category === 'settings') {
                 renderSettingsAdmin(contentContainer);
             } else if(category === 'countertops') {
@@ -1208,6 +1229,8 @@
                  renderCaseworkAdmin(contentContainer);
             } else if (category === 'misc_services') {
                 renderMiscServicesAdmin(contentContainer);
+            } else if (category === 'help') {
+                renderHelpAdmin(contentContainer);
             }
         }
 
@@ -1247,12 +1270,13 @@
 
 
                 <div class="admin-actions">
-                    <span id="save-confirmation" class="hidden">Changes saved!</span>
+                    <span id="save-confirmation" class="hidden" aria-live="polite"></span>
                     <button class="save-button" data-save-type="settings">Save Settings</button>
                 </div>
             `;
             contentContainer.innerHTML = html;
             attachDataManagementListeners();
+            attachFormListeners();
         }
         
         function renderCountertopAdmin(contentContainer) {
@@ -1335,7 +1359,7 @@
                     </fieldset>
                 </div>
                 <div class="admin-actions">
-                    <span id="save-confirmation" class="hidden">Changes saved!</span>
+                    <span id="save-confirmation" class="hidden" aria-live="polite"></span>
                     <button class="save-button" data-save-type="countertop" data-material-key="${materialKey}">Save Changes</button>
                 </div>`;
             formContainer.innerHTML = html;
@@ -1401,7 +1425,7 @@
                     </fieldset>
                 </div>
                 <div class="admin-actions">
-                    <span id="save-confirmation" class="hidden">Changes saved!</span>
+                    <span id="save-confirmation" class="hidden" aria-live="polite"></span>
                     <button class="save-button" data-save-type="casework" data-casework-key="${caseworkKey}">Save Changes</button>
                 </div>
             `;
@@ -1430,7 +1454,7 @@
                     ${servicesHTML}
                 </div>
                 <div class="admin-actions">
-                    <span id="save-confirmation" class="hidden">Changes saved!</span>
+                    <span id="save-confirmation" class="hidden" aria-live="polite"></span>
                     <button class="save-button" data-save-type="misc">Save Changes</button>
                 </div>
             `;
@@ -1438,13 +1462,40 @@
             attachFormListeners();
         }
 
+        function renderHelpAdmin(contentContainer) {
+             let html = `
+                <h2 class="card__title">Help & Documentation</h2>
+                <div id="admin-help-content">
+                    <h3 class="admin-section-title">Using the Calculator</h3>
+                    <p>The main calculator interface is divided into tabs for each major service category: Countertops, Casework, and Misc Services. Select the appropriate tab and fill in the fields to generate a real-time quote. The quote summary on the right will update automatically as you make changes.</p>
+                    
+                    <h3 class="admin-section-title">Managing Prices in the Admin Panel</h3>
+                    <p>This admin panel gives you full control over the pricing logic.</p>
+                    <ul>
+                        <li><strong>Editing Prices:</strong> Navigate to the appropriate tab (e.g., "Countertops"). Select the item you wish to edit from the dropdown, change the values in the form fields, and click "Save Changes". The new prices will be active immediately.</li>
+                        <li><strong>Global Settings:</strong> In the "Settings & Data" tab, you can change the company name displayed on the header and the global tax rate applied to all quotes.</li>
+                    </ul>
+
+                    <h3 class="admin-section-title">Importing & Exporting Data</h3>
+                    <p>You can back up and restore your entire pricing configuration using JSON files. This is useful for saving different pricing models or for recovery.</p>
+                    <ul>
+                        <li><strong>Export:</strong> Click the "Export All (JSON)" button in the "Settings & Data" tab. A file named <code>hutchison_calculator_backup.json</code> will be downloaded. Keep this file in a safe place.</li>
+                        <li><strong>Import:</strong> Click the "Import from JSON" button and select a valid backup file. Your current data will be overwritten with the data from the file. The application will validate the file to prevent corruption.</li>
+                    </ul>
+                </div>
+            `;
+            contentContainer.innerHTML = html;
+        }
+
         function saveChanges(button) {
             const saveType = button.dataset.saveType;
             const data = DataEngine.getData();
+            let confirmationMessage = "Changes saved!";
 
             if (saveType === 'settings') {
                 data.settings.companyName = container.querySelector('#admin-company-name').value;
                 data.settings.taxRate = parseFloat(container.querySelector('#admin-tax-rate').value) / 100;
+                confirmationMessage = "Settings saved!";
             } else if (saveType === 'countertop') {
                 const materialKey = button.dataset.materialKey;
                 const materialData = data.countertops[materialKey];
@@ -1474,12 +1525,13 @@
             DataEngine.saveData(data);
             
             const confirmation = container.querySelector('#save-confirmation');
+            confirmation.textContent = confirmationMessage;
             confirmation.classList.remove('hidden');
             setTimeout(() => { confirmation.classList.add('hidden'); }, 3000);
             
             // Re-render both calculator and admin panel to reflect changes
             Calculator.render();
-            AdminPanel.render(); 
+            // AdminPanel.render(); // Re-rendering the admin panel can be jarring, only re-render if necessary
         }
 
         // --- Data Management Functions ---
@@ -1530,8 +1582,8 @@
                 tabs.addEventListener('click', e => {
                     if (e.target.tagName === 'BUTTON') {
                         const category = e.target.dataset.category;
-                        container.querySelectorAll('#admin-category-tabs button').forEach(btn => btn.classList.remove('active'));
-                        e.target.classList.add('active');
+                        container.querySelectorAll('#admin-category-tabs button').forEach(btn => btn.setAttribute('aria-selected', 'false'));
+                        e.target.setAttribute('aria-selected', 'true');
                         renderCategoryContent(category);
                     }
                 });
@@ -1604,19 +1656,19 @@
                 <header>
                     <h1 id="company-header">Pricing Calculator</h1>
                     <p>A comprehensive business engine for quotes.</p>
-                    <div class="view-switcher">
+                    <div class="view-switcher" role="navigation" aria-label="Main Views">
                         <button id="show-calculator-btn">Calculator</button>
                         <button id="show-admin-btn">Admin Panel</button>
                     </div>
                 </header>
 
                 <main>
-                    <div id="calculator-interface" class="card">
-                        <!-- Calculator content is rendered here by its module -->
-                    </div>
-                    <div id="admin-panel" class="card hidden">
-                        <!-- Admin Panel content is rendered here by its module -->
-                    </div>
+                    <div id="calculator-interface" class="card" role="region" aria-labelledby="calculator-view-title">
+                         <h2 id="calculator-view-title" class="hidden">Calculator View</h2>
+                        </div>
+                    <div id="admin-panel" class="card hidden" role="region" aria-labelledby="admin-view-title">
+                         <h2 id="admin-view-title" class="hidden">Admin Panel View</h2>
+                        </div>
                 </main>
             </div>
         `;
