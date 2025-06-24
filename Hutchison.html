@@ -535,7 +535,7 @@
             };
 
             return {
-                "version": "1.9.1", // Incremented for new data and fixes
+                "version": "2.0.0", // Final Version
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -610,8 +610,6 @@
             };
         }
 
-        // CORRECTED: More robust init and getData functions to prevent errors
-        // from outdated or incomplete localStorage data.
         function init() {
             const currentData = getData();
             saveData(currentData);
@@ -624,12 +622,9 @@
                 const storedDataString = localStorage.getItem(DB_KEY);
                 if (storedDataString) {
                     const storedData = JSON.parse(storedDataString);
-                    // This merge ensures that all top-level keys from the default data are present,
-                    // preventing errors if the stored data is from an older version.
                     const mergedData = {
                         ...defaultData,
                         ...storedData,
-                        // Explicitly merge nested objects
                         settings: { ...defaultData.settings, ...(storedData.settings || {}) },
                         countertops: { ...defaultData.countertops, ...(storedData.countertops || {}) },
                         casework: { ...defaultData.casework, ...(storedData.casework || {}) },
@@ -840,7 +835,6 @@
             calculateQuote();
         }
 
-        // CORRECTED: This function now generates the dropdown menu.
         function renderCaseworkCalculator(container) {
             const data = DataEngine.getData();
             const allCasework = data.casework || {}; // Ensure it's an object
@@ -869,7 +863,6 @@
                 </div>
              `;
              container.innerHTML = html;
-             // Only proceed if there are options to render
              if (Object.keys(allCasework).length > 0) {
                 renderCaseworkOptions(document.getElementById('calc-casework-select').value);
              } else {
@@ -885,7 +878,6 @@
             
             let html = '';
 
-            // Standard Casework (per linear foot)
             if (caseworkData.type === 'standard') {
                 let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
                     const option = caseworkData.options[optKey];
@@ -912,7 +904,6 @@
                         </fieldset>
                     </div>
                 `;
-            // Custom Millwork (base unit cost + options)
             } else if (caseworkData.type === 'custom_millwork') {
                  let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
                     const option = caseworkData.options[optKey];
@@ -944,7 +935,6 @@
             calculateQuote();
         }
 
-        // CORRECTED: This function now generates the dropdown menu.
         function renderMiscServicesCalculator(container) {
             const data = DataEngine.getData();
             const allMiscServices = data.misc_services || {}; // Ensure it's an object
@@ -972,7 +962,6 @@
                     </aside>
                 </div>`;
              container.innerHTML = html;
-             // Only proceed if there are options to render
              if (Object.keys(allMiscServices).length > 0) {
                 renderMiscServiceOptions(document.getElementById('calc-misc-select').value);
              } else {
@@ -1103,7 +1092,6 @@
             let totalCost = 0;
             let lineItemsHTML = '';
             
-            // Standard Casework Calculation
             if(caseworkData.type === 'standard') {
                 const linearFeet = parseFloat(document.getElementById('calc-length')?.value) || 0;
                  if (linearFeet === 0) {
@@ -1121,7 +1109,6 @@
                 totalCost = (linearFeet * caseworkData.cost_lnft) * optionMultiplier;
                 lineItemsHTML = `<tr><td class="item-name">${caseworkData.name} (${linearFeet} ln ft)</td><td class="item-cost">${UIController.formatCurrency(totalCost)}</td></tr>`;
             
-            // Custom Millwork Calculation
             } else if (caseworkData.type === 'custom_millwork') {
                 let baseCost = caseworkData.base_cost;
                 let finalCost = baseCost;
@@ -1222,7 +1209,7 @@
                     labels: ['Material', 'Edge Treatment', 'Cutouts / Add-ons', 'Tax'],
                     datasets: [{
                         label: 'Cost Breakdown',
-                        data: costData.map(c => Math.max(0, c)), // Ensure no negative values from calculation errors
+                        data: costData.map(c => Math.max(0, c)), // Ensure no negative values
                         backgroundColor: [
                             'rgba(79, 70, 229, 0.7)',
                             'rgba(30, 64, 175, 0.7)',
@@ -1257,7 +1244,6 @@
         function attachListeners() {
             if(!container) return;
             
-            // Centralized event listener for the entire calculator container.
             container.addEventListener('click', function(e) {
                 const tabButton = e.target.closest('button[data-category]');
                 if (tabButton && container.querySelector('#calc-category-tabs')?.contains(tabButton)) {
@@ -1361,20 +1347,38 @@
                 </div>
 
                 <h3 class="admin-section-title" style="margin-top: 40px;">Data Management</h3>
+                <p style="color: var(--color-text-muted); font-size: 0.9rem; max-width: 80ch; margin-bottom: 16px;">
+                    Use JSON to backup and restore the entire application's configuration. Use CSV to export a specific data category (like Countertops) for bulk editing in a spreadsheet program like Excel or Google Sheets.
+                </p>
                 <div class="data-management-grid">
                     <div class="data-management-card">
-                        <h4>Export Data</h4>
-                        <p>Save your current pricing configuration to a file.</p>
-                        <button id="export-json-btn" class="admin-button">Export All (JSON)</button>
+                        <h4>Full Backup (JSON)</h4>
+                        <p>Save or load the entire application config.</p>
+                        <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+                            <button id="export-json-btn" class="admin-button">Export JSON</button>
+                            <label for="import-json-file" class="admin-button secondary">Import JSON</label>
+                            <input type="file" id="import-json-file" class="hidden" accept=".json">
+                        </div>
                     </div>
-                     <div class="data-management-card">
-                        <h4>Import Data</h4>
-                        <p>Load a configuration from a JSON backup file.</p>
-                        <label for="import-json-file" class="admin-button secondary">Import from JSON</label>
-                        <input type="file" id="import-json-file" class="hidden" accept=".json">
+                    <div class="data-management-card">
+                        <h4>Countertops (CSV)</h4>
+                        <p>Export/Import countertop pricing for spreadsheet editing.</p>
+                        <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+                            <button id="export-countertops-csv-btn" class="admin-button">Export CSV</button>
+                            <label for="import-countertops-csv-file" class="admin-button secondary">Import CSV</label>
+                            <input type="file" id="import-countertops-csv-file" class="hidden" accept=".csv">
+                        </div>
+                    </div>
+                    <div class="data-management-card">
+                        <h4>Casework (CSV)</h4>
+                        <p>Export/Import casework pricing for spreadsheet editing.</p>
+                        <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+                            <button id="export-casework-csv-btn" class="admin-button">Export CSV</button>
+                            <label for="import-casework-csv-file" class="admin-button secondary">Import CSV</label>
+                            <input type="file" id="import-casework-csv-file" class="hidden" accept=".csv">
+                        </div>
                     </div>
                 </div>
-
 
                 <div class="admin-actions">
                     <span id="save-confirmation" class="hidden" aria-live="polite"></span>
@@ -1700,6 +1704,54 @@
             URL.revokeObjectURL(url);
         }
 
+        function exportServicesToCSV(category) {
+            const data = DataEngine.getData();
+            const collection = data[category];
+            if (!collection) {
+                showAdminMessage(`Category "${category}" not found for export.`, 'error');
+                return;
+            }
+
+            const dataToExport = Object.keys(collection).map(key => {
+                const item = collection[key];
+                const flatItem = {
+                    id: key,
+                    name: item.name,
+                    type: item.type || '',
+                    cost_sqft: item.cost_sqft || 0,
+                    cost_lnft: item.cost_lnft || 0,
+                    base_cost: item.base_cost || 0,
+                    rate_hourly: item.rate_hourly || 0,
+                    setup_fee: item.setup_fee || 0,
+                    options_json: JSON.stringify(item.options || {}),
+                    edges_json: JSON.stringify(item.edges || {}),
+                    cutouts_json: JSON.stringify(item.cutouts || {})
+                };
+                return flatItem;
+            });
+            
+            if (dataToExport.length === 0) {
+                showAdminMessage(`No data to export for ${category}.`, 'info');
+                return;
+            }
+
+            try {
+                const csv = Papa.unparse(dataToExport);
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `hutchison_${category}_backup.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showAdminMessage(`Successfully exported ${category} to CSV.`, 'info');
+            } catch(e) {
+                showAdminMessage('Failed to generate CSV file.', 'error');
+                console.error("CSV Export Error:", e);
+            }
+        }
+
+
         function importDataFromJSON(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -1723,6 +1775,76 @@
                 }
             };
             reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function importServicesFromCSV(event, category) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (results.errors.length > 0) {
+                        showAdminMessage(`Errors found in CSV file. See console for details.`, 'error');
+                        console.error("CSV Parsing Errors:", results.errors);
+                        return;
+                    }
+                    if (!results.data || results.data.length === 0) {
+                        showAdminMessage('CSV file is empty or invalid.', 'error');
+                        return;
+                    }
+
+                    if (!confirm(`Found ${results.data.length} items for "${category}". This will OVERWRITE existing items with the same ID and add new ones. Continue?`)) {
+                        event.target.value = '';
+                        return;
+                    }
+                    
+                    const data = DataEngine.getData();
+                    let updatedCount = 0;
+                    let addedCount = 0;
+
+                    results.data.forEach(row => {
+                        const id = row.id;
+                        if (!id) {
+                            console.warn('Skipping row with no ID:', row);
+                            return;
+                        }
+
+                        const newItem = {
+                            name: row.name,
+                            type: row.type || undefined,
+                            cost_sqft: parseFloat(row.cost_sqft) || undefined,
+                            cost_lnft: parseFloat(row.cost_lnft) || undefined,
+                            base_cost: parseFloat(row.base_cost) || undefined,
+                            rate_hourly: parseFloat(row.rate_hourly) || undefined,
+                            setup_fee: parseFloat(row.setup_fee) || undefined,
+                        };
+                        
+                        try { newItem.options = JSON.parse(row.options_json || '{}'); } catch(e) { newItem.options = {}; }
+                        try { newItem.edges = JSON.parse(row.edges_json || '{}'); } catch(e) { newItem.edges = {}; }
+                        try { newItem.cutouts = JSON.parse(row.cutouts_json || '{}'); } catch(e) { newItem.cutouts = {}; }
+
+                        Object.keys(newItem).forEach(key => newItem[key] === undefined && delete newItem[key]);
+
+                        if (data[category][id]) {
+                            updatedCount++;
+                        } else {
+                            addedCount++;
+                        }
+                        data[category][id] = newItem;
+                    });
+                    
+                    DataEngine.saveData(data);
+                    showAdminMessage(`${updatedCount} items updated, ${addedCount} added in "${category}". Data saved.`, 'info');
+                    AdminPanel.render();
+                    Calculator.render();
+                },
+                error: function(err) {
+                    showAdminMessage(`Failed to read CSV file: ${err.message}`, 'error');
+                }
+            });
             event.target.value = '';
         }
         
@@ -1822,17 +1944,13 @@
                 render();
             }
         }
-
-        /**
-         * Attaches event listeners to the admin panel using event delegation.
-         */
+        
         function attachListeners() {
             if (!container) return;
             
             container.addEventListener('click', (e) => {
                 const target = e.target;
                 
-                // Handle tab switching
                 const tabButton = target.closest('button[data-category]');
                  if (tabButton && container.querySelector('#admin-category-tabs').contains(tabButton)) {
                     const category = tabButton.dataset.category;
@@ -1840,10 +1958,9 @@
                         currentCategory = category;
                         render();
                     }
-                    return; // Prevent other actions from firing
+                    return;
                 }
 
-                // Handle other buttons
                 if (target.classList.contains('save-button')) {
                     saveChanges(target);
                 } else if (target.id === 'add-new-material-btn') {
@@ -1856,6 +1973,10 @@
                     deleteSelectedItem('casework');
                 } else if (target.id === 'export-json-btn') {
                      exportDataToJSON();
+                } else if (target.id === 'export-countertops-csv-btn') {
+                     exportServicesToCSV('countertops');
+                } else if (target.id === 'export-casework-csv-btn') {
+                     exportServicesToCSV('casework');
                 }
             });
             
@@ -1863,7 +1984,11 @@
                 const target = e.target;
                  if (target.id === 'import-json-file') {
                     importDataFromJSON(e);
-                } else if(target.id === 'admin-material-select') {
+                 } else if (target.id === 'import-countertops-csv-file') {
+                    importServicesFromCSV(e, 'countertops');
+                 } else if (target.id === 'import-casework-csv-file') {
+                    importServicesFromCSV(e, 'casework');
+                 } else if(target.id === 'admin-material-select') {
                     renderCountertopAdminForm(target.value);
                 } else if (target.id === 'admin-casework-select') {
                     renderCaseworkAdminForm(target.value);
@@ -1915,11 +2040,6 @@
         const passwordError = document.getElementById('password-error');
         const appContainer = document.getElementById('app-container');
 
-        // This is the encrypted content of the application.
-        // The default password is "admin123"
-        let encryptedData = {};
-
-        // The actual HTML content of the application that will be encrypted.
         const appHTML = `
             <div class="app-wrapper">
                 <header>
@@ -1993,7 +2113,6 @@
                 const ivStr = atob(encryptedData.iv);
                 const cipherTextStr = atob(encryptedData.cipherText);
 
-                // Convert raw binary strings back to Uint8Arrays
                 const saltBuffer = new Uint8Array(saltStr.split('').map(c => c.charCodeAt(0)));
                 const ivBuffer = new Uint8Array(ivStr.split('').map(c => c.charCodeAt(0)));
                 const cipherBuffer = new Uint8Array(cipherTextStr.split('').map(c => c.charCodeAt(0)));
@@ -2023,7 +2142,6 @@
             if (decryptedHTML) {
                 passwordError.classList.add('hidden');
                 appContainer.innerHTML = decryptedHTML;
-                // This call is now safe because App is defined before CryptoController
                 App.init(); 
             } else {
                 passwordError.classList.remove('hidden');
@@ -2031,8 +2149,6 @@
         }
 
         async function init() {
-            // In a real build process, the payload would be pre-encrypted.
-            // For this demo, we encrypt it now with a default password.
             const encryptedPayload = await encrypt(appHTML, "admin123");
             payloadContainer.textContent = JSON.stringify(encryptedPayload, null, 2);
 
@@ -2051,7 +2167,6 @@
 
 
     // --- APPLICATION ENTRY POINT ---
-    // This starts the password check process when the page loads.
     window.onload = function() {
         CryptoController.init();
     };
