@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
     /*
     ============================================
@@ -354,6 +355,11 @@
         color: var(--color-primary);
         background-color: #f3f4f6;
     }
+    
+    #full-quote-table .discount-row td {
+        color: var(--color-accent);
+        font-weight: 500;
+    }
 
     #quote-chart-container, #full-quote-chart-container {
         margin-top: calc(var(--spacing-unit) * 4);
@@ -509,7 +515,8 @@
     */
     @media (max-width: 992px) {
         #calculator-interface .main-grid,
-        #admin-panel .main-grid {
+        #admin-panel .main-grid,
+        #full-quote-view .main-grid {
             grid-template-columns: 1fr;
         }
     }
@@ -584,7 +591,7 @@
             };
 
             return {
-                "version": "2.7.0", // Updated version
+                "version": "2.8.0", // Updated version
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -790,7 +797,7 @@
     const Calculator = (function() {
         let container = null;
         let currentCategory = 'countertops';
-        let itemQuoteChart = null; // Renamed to avoid confusion with full quote chart
+        let itemQuoteChart = null; 
 
         function init() {
             container = document.getElementById('calculator-interface');
@@ -1446,13 +1453,13 @@
             itemQuoteChart = new Chart(ctx, {
                 type: 'pie',
                 data: {
-                    labels: ['Material/Base', 'Options/Addons', 'Tax'],
+                    labels: ['Base/Material', 'Options/Addons', 'Tax'],
                     datasets: [{
                         label: 'Cost Breakdown',
                         data: costData.reduce((acc, c, i) => {
-                            if (i === 0) acc.push(c); // Base/Material
-                            else if (i < costData.length -1) acc[1] = (acc[1] || 0) + c; // Addons
-                            else acc.push(c); // Tax
+                            if (i === 0) acc.push(c);
+                            else if (i < costData.length -1) acc[1] = (acc[1] || 0) + c;
+                            else acc.push(c);
                             return acc;
                         }, []),
                         backgroundColor: [
@@ -2319,6 +2326,12 @@
     const App = (function() {
         let fullQuote = [];
         let fullQuoteChart = null;
+        let projectDetails = {
+            clientName: '',
+            projectName: '',
+            discountType: 'percent',
+            discountValue: 0,
+        };
 
         function init() {
             DataEngine.init();
@@ -2351,7 +2364,20 @@
                     fullQuote.splice(index, 1);
                     renderFullQuote();
                 }
+                if (e.target.id === 'export-pdf-btn') {
+                    exportQuoteToPDF();
+                }
             });
+
+             document.addEventListener('input', e => {
+                if(e.target.matches('#client-name, #project-name, #project-discount-value, #project-discount-type')) {
+                    projectDetails.clientName = document.getElementById('client-name').value;
+                    projectDetails.projectName = document.getElementById('project-name').value;
+                    projectDetails.discountType = document.getElementById('project-discount-type').value;
+                    projectDetails.discountValue = parseFloat(document.getElementById('project-discount-value').value) || 0;
+                    renderFullQuote();
+                }
+             });
             
             UIController.showMainView('calculator');
         }
@@ -2420,9 +2446,25 @@
 
             let contentHTML = `
                 <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                         <h2 class="card__title" style="margin-bottom:0; border:0;">Full Project Quote</h2>
-                        <button id="clear-full-quote" class="admin-button danger">Clear Quote</button>
+                        <div>
+                            <button id="export-pdf-btn" class="admin-button">Export to PDF</button>
+                            <button id="clear-full-quote" class="admin-button danger">Clear Quote</button>
+                        </div>
+                    </div>
+                </div>
+                 <div class="card">
+                    <h3 class="card__title" style="font-size: 1.25rem; margin-bottom: 1rem;">Client & Project Details</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="client-name" class="form-group__label">Client Name</label>
+                            <input type="text" id="client-name" class="form-group__input" value="${projectDetails.clientName}">
+                        </div>
+                        <div class="form-group">
+                            <label for="project-name" class="form-group__label">Project Name / Reference</label>
+                            <input type="text" id="project-name" class="form-group__input" value="${projectDetails.projectName}">
+                        </div>
                     </div>
                 </div>
             `;
@@ -2430,52 +2472,81 @@
             if (fullQuote.length === 0) {
                 contentHTML += `<div class="card"><p class="quote-summary__placeholder">No items have been added to the quote yet. Go to the Calculator to add items.</p></div>`;
             } else {
-                const subtotal = fullQuote.reduce((sum, item) => sum + item.subtotal, 0);
-                const tax = subtotal * settings.taxRate;
-                const total = subtotal + tax;
+                let subtotal = fullQuote.reduce((sum, item) => sum + item.subtotal, 0);
+                
+                let discountAmount = 0;
+                if (projectDetails.discountValue > 0) {
+                    if (projectDetails.discountType === 'percent') {
+                        discountAmount = subtotal * (projectDetails.discountValue / 100);
+                    } else {
+                        discountAmount = projectDetails.discountValue;
+                    }
+                }
+                
+                const discountedSubtotal = subtotal - discountAmount;
+                const tax = discountedSubtotal * settings.taxRate;
+                const total = discountedSubtotal + tax;
 
                 contentHTML += `
                     <div class="card">
-                        <table id="full-quote-table">
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th style="text-align: right;">Cost</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${fullQuote.map((item, index) => `
-                                    <tr>
-                                        <td>
-                                            <div class="item-name">${item.name}</div>
-                                            <div class="item-details">${item.details.join(', ')}</div>
-                                        </td>
-                                        <td class="item-cost">${UIController.formatCurrency(item.subtotal)}</td>
-                                        <td class="item-actions">
-                                            <button class="delete-item-btn" data-index="${index}" title="Remove Item">&times;</button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                                <tr class="subtotal-row">
-                                    <td>Subtotal</td>
-                                    <td class="item-cost">${UIController.formatCurrency(subtotal)}</td>
-                                    <td></td>
-                                </tr>
-                                <tr>
-                                    <td>Tax (${(settings.taxRate * 100).toFixed(2)}%)</td>
-                                    <td class="item-cost">${UIController.formatCurrency(tax)}</td>
-                                    <td></td>
-                                </tr>
-                                <tr class="total-row">
-                                    <td>Grand Total</td>
-                                    <td class="item-cost">${UIController.formatCurrency(total)}</td>
-                                    <td></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div id="full-quote-chart-container">
-                            <canvas id="full-quote-chart" role="img" aria-label="Full quote cost breakdown pie chart"></canvas>
+                        <div class="main-grid">
+                            <div>
+                                <table id="full-quote-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Item</th>
+                                            <th style="text-align: right;">Cost</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${fullQuote.map((item, index) => `
+                                            <tr>
+                                                <td>
+                                                    <div class="item-name">${item.name}</div>
+                                                    <div class="item-details">${item.details.join(', ')}</div>
+                                                </td>
+                                                <td class="item-cost">${UIController.formatCurrency(item.subtotal)}</td>
+                                                <td class="item-actions">
+                                                    <button class="delete-item-btn" data-index="${index}" title="Remove Item">&times;</button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                        <tr class="subtotal-row">
+                                            <td>Subtotal</td>
+                                            <td class="item-cost">${UIController.formatCurrency(subtotal)}</td>
+                                            <td></td>
+                                        </tr>
+                                        <tr class="discount-row">
+                                            <td>
+                                                <div style="display: flex; gap: 8px; align-items: center;">
+                                                    <span>Project Discount</span>
+                                                    <select id="project-discount-type" class="form-group__select" style="width: 120px; padding: 4px;">
+                                                        <option value="percent" ${projectDetails.discountType === 'percent' ? 'selected' : ''}>Percent (%)</option>
+                                                        <option value="fixed" ${projectDetails.discountType === 'fixed' ? 'selected' : ''}>Fixed ($)</option>
+                                                    </select>
+                                                    <input type="number" id="project-discount-value" class="form-group__input" style="width: 100px; padding: 4px;" value="${projectDetails.discountValue}">
+                                                </div>
+                                            </td>
+                                            <td class="item-cost">-${UIController.formatCurrency(discountAmount)}</td>
+                                            <td></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Tax (${(settings.taxRate * 100).toFixed(2)}%)</td>
+                                            <td class="item-cost">${UIController.formatCurrency(tax)}</td>
+                                            <td></td>
+                                        </tr>
+                                        <tr class="total-row">
+                                            <td>Grand Total</td>
+                                            <td class="item-cost">${UIController.formatCurrency(total)}</td>
+                                            <td></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="full-quote-chart-container">
+                                <canvas id="full-quote-chart" role="img" aria-label="Full quote cost breakdown pie chart"></canvas>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -2497,12 +2568,25 @@
             
             const labels = fullQuote.map(item => item.name);
             const data = fullQuote.map(item => item.subtotal);
-
-            // Add tax as its own category in the chart
-            const subtotal = fullQuote.reduce((sum, item) => sum + item.subtotal, 0);
-            const tax = subtotal * DataEngine.getData().settings.taxRate;
+            
+            let subtotal = fullQuote.reduce((sum, item) => sum + item.subtotal, 0);
+            let discountAmount = 0;
+            if (projectDetails.discountValue > 0) {
+                 if (projectDetails.discountType === 'percent') {
+                    discountAmount = subtotal * (projectDetails.discountValue / 100);
+                } else {
+                    discountAmount = projectDetails.discountValue;
+                }
+            }
+            const discountedSubtotal = subtotal - discountAmount;
+            const tax = discountedSubtotal * DataEngine.getData().settings.taxRate;
+            
             labels.push('Tax');
             data.push(tax);
+            if(discountAmount > 0) {
+                labels.unshift('Discount');
+                data.unshift(-discountAmount);
+            }
 
             fullQuoteChart = new Chart(ctx, {
                 type: 'pie',
@@ -2512,15 +2596,9 @@
                         label: 'Cost Breakdown',
                         data: data,
                         backgroundColor: [
-                            'rgba(79, 70, 229, 0.7)',
-                            'rgba(30, 64, 175, 0.7)',
-                            'rgba(165, 180, 252, 0.7)',
-                            'rgba(34, 197, 94, 0.7)',
-                            'rgba(245, 158, 11, 0.7)',
-                            'rgba(239, 68, 68, 0.7)',
-                            'rgba(147, 51, 234, 0.7)',
-                            'rgba(217, 70, 239, 0.7)',
-                        ],
+                            'rgba(79, 70, 229, 0.7)', 'rgba(30, 64, 175, 0.7)', 'rgba(165, 180, 252, 0.7)', 'rgba(34, 197, 94, 0.7)', 'rgba(245, 158, 11, 0.7)',
+                            'rgba(147, 51, 234, 0.7)', 'rgba(217, 70, 239, 0.7)', 'rgba(255, 99, 132, 0.7)'
+                        ].slice(0, data.length),
                         borderWidth: 1
                     }]
                 },
@@ -2532,6 +2610,76 @@
                     }
                 }
             });
+        }
+        
+        function exportQuoteToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const settings = DataEngine.getData().settings;
+            
+            doc.setFontSize(22);
+            doc.text(settings.companyName, 20, 30);
+            doc.setFontSize(16);
+            doc.text("Project Quote", 20, 40);
+            
+            doc.setFontSize(12);
+            doc.text(`Client: ${projectDetails.clientName || 'N/A'}`, 20, 60);
+            doc.text(`Project: ${projectDetails.projectName || 'N/A'}`, 20, 70);
+            doc.text(`Date: ${new Date().toLocaleDateString()}`, 150, 70);
+
+            let y = 90;
+            fullQuote.forEach(item => {
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'bold');
+                doc.text(item.name, 20, y);
+                doc.setFont(undefined, 'normal');
+                doc.text(UIController.formatCurrency(item.subtotal), 180, y, {align: 'right'});
+                y+= 5;
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                const details = doc.splitTextToSize(item.details.join(', '), 150);
+                doc.text(details, 22, y);
+                y += details.length * 3.5 + 5;
+                 doc.setTextColor(0);
+            });
+            
+            const subtotal = fullQuote.reduce((sum, item) => sum + item.subtotal, 0);
+            let discountAmount = 0;
+            if (projectDetails.discountValue > 0) {
+                 if (projectDetails.discountType === 'percent') {
+                    discountAmount = subtotal * (projectDetails.discountValue / 100);
+                } else {
+                    discountAmount = projectDetails.discountValue;
+                }
+            }
+            const discountedSubtotal = subtotal - discountAmount;
+            const tax = discountedSubtotal * settings.taxRate;
+            const total = discountedSubtotal + tax;
+            
+            y+= 10;
+            doc.line(20, y, 190, y);
+            y+=10
+            
+            doc.setFontSize(10);
+            doc.text('Subtotal:', 140, y);
+            doc.text(UIController.formatCurrency(subtotal), 180, y, {align: 'right'});
+            y+=7;
+
+             if(discountAmount > 0) {
+                doc.text(`Discount (${projectDetails.discountValue}${projectDetails.discountType === 'percent' ? '%' : '$'}):`, 140, y);
+                doc.text(`-${UIController.formatCurrency(discountAmount)}`, 180, y, {align: 'right'});
+                y+=7;
+            }
+
+            doc.text(`Tax (${(settings.taxRate * 100).toFixed(2)}%):`, 140, y);
+            doc.text(UIController.formatCurrency(tax), 180, y, {align: 'right'});
+            y+=10;
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text('Total:', 140, y);
+            doc.text(UIController.formatCurrency(total), 180, y, {align: 'right'});
+            
+            doc.save(`${projectDetails.projectName || 'quote'}_${new Date().toISOString().slice(0,10)}.pdf`);
         }
 
         return { init, renderFullQuote, addItemToFullQuote };
