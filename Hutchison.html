@@ -303,36 +303,52 @@
         padding: calc(var(--spacing-unit) * 8) 0;
     }
 
-    .quote-summary__table {
+    .quote-summary__table, #full-quote-table {
         width: 100%;
         border-collapse: collapse;
     }
     
-    .quote-summary__table td {
+    .quote-summary__table td, #full-quote-table td, #full-quote-table th {
         padding: calc(var(--spacing-unit) * 1.5) var(--spacing-unit);
         border-bottom: 1px solid var(--color-border);
     }
+    
+    #full-quote-table th {
+        text-align: left;
+        font-size: 0.875rem;
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        border-bottom-width: 2px;
+    }
 
-    .quote-summary__table tr:last-child td {
+    .quote-summary__table tr:last-child td, #full-quote-table tr:last-child td {
         border-bottom: none;
     }
 
-    .quote-summary__table .item-name {
+    .quote-summary__table .item-name, #full-quote-table .item-name {
         font-weight: 500;
     }
+    #full-quote-table .item-details {
+        font-size: 0.875rem;
+        color: var(--color-text-muted);
+    }
     
-    .quote-summary__table .item-cost {
+    .quote-summary__table .item-cost, #full-quote-table .item-cost {
+        text-align: right;
+    }
+    
+    #full-quote-table .item-actions {
         text-align: right;
     }
 
-    .quote-summary__table .subtotal-row td {
+    .quote-summary__table .subtotal-row td, #full-quote-table .subtotal-row td {
         font-weight: 600;
         color: var(--color-text-header);
         border-top: 2px solid var(--color-border);
         padding-top: calc(var(--spacing-unit) * 2);
     }
     
-    .quote-summary__table .total-row td {
+    .quote-summary__table .total-row td, #full-quote-table .total-row td {
         font-size: 1.25rem;
         font-weight: 700;
         color: var(--color-primary);
@@ -344,7 +360,27 @@
         padding-top: calc(var(--spacing-unit) * 3);
         border-top: 1px solid var(--color-border);
     }
-
+    
+    .add-to-quote-btn {
+        width: 100%;
+        padding: calc(var(--spacing-unit) * 1.5);
+        background-color: var(--color-accent);
+        color: var(--color-surface);
+        border: none;
+        border-radius: var(--border-radius);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color var(--transition-speed);
+        margin-top: calc(var(--spacing-unit) * 3);
+    }
+    .add-to-quote-btn:hover {
+        background-color: #0d9488;
+    }
+    .add-to-quote-btn:disabled {
+        background-color: var(--color-text-muted);
+        cursor: not-allowed;
+    }
 
     /*
     ============================================
@@ -433,9 +469,16 @@
     .admin-button.danger {
         background-color: var(--color-error);
     }
-
     .admin-button.danger:hover {
         background-color: #c82333;
+    }
+
+    .delete-item-btn {
+        background: none;
+        border: none;
+        color: var(--color-error);
+        cursor: pointer;
+        font-size: 1rem;
     }
 
 
@@ -535,7 +578,7 @@
             };
 
             return {
-                "version": "2.4.0", // Updated version
+                "version": "2.5.0", // Updated version
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -686,10 +729,12 @@
         function init() {
             mainViews = {
                 calculator: document.getElementById('calculator-interface'),
+                fullQuote: document.getElementById('full-quote-view'), // New view
                 admin: document.getElementById('admin-panel')
             };
             mainButtons = {
                 calculator: document.getElementById('show-calculator-btn'),
+                fullQuote: document.getElementById('show-full-quote-btn'), // New button
                 admin: document.getElementById('show-admin-btn')
             };
         }
@@ -702,6 +747,7 @@
             });
             
             if(viewName === 'calculator') Calculator.render();
+            if(viewName === 'fullQuote') App.renderFullQuote();
             if(viewName === 'admin') AdminPanel.render();
         }
 
@@ -1086,7 +1132,7 @@
             const quoteChartContainer = document.getElementById('quote-chart-container');
 
             if (length === 0 || width === 0) {
-                 quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter dimensions to begin.</p>`;
+                 quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter dimensions to begin.</p><button class="add-to-quote-btn" disabled>Add to Quote</button>`;
                  if (quoteChartContainer) quoteChartContainer.classList.add('hidden');
                  return;
             }
@@ -1095,15 +1141,18 @@
             const linearFeet = (length * 2 + width * 2) / 12;
 
             let optionMultiplier = 1;
+            let optionDetails = [];
             document.querySelectorAll('#calc-options-container select[data-option-key]').forEach(select => {
                 const optKey = select.dataset.optionKey;
                 const valKey = select.value;
                 optionMultiplier *= materialData.options[optKey].values[valKey].multiplier;
+                optionDetails.push(materialData.options[optKey].values[valKey].name);
             });
             
             const totalMaterialCost = squareFeet * materialData.cost_sqft * optionMultiplier;
             
             const selectedEdgeKey = document.getElementById('calc-edge').value;
+            const edgeName = materialData.edges[selectedEdgeKey].name;
             const edgeCost = linearFeet * materialData.edges[selectedEdgeKey].cost_lnft;
 
             let cutoutCost = 0;
@@ -1122,14 +1171,15 @@
             let summaryHTML = `
                 <table class="quote-summary__table">
                     <tbody>
-                        <tr><td class="item-name">Material (${squareFeet.toFixed(2)} sq ft)</td><td class="item-cost">${UIController.formatCurrency(totalMaterialCost)}</td></tr>
-                        <tr><td class="item-name">Edge (${linearFeet.toFixed(2)} ln ft)</td><td class="item-cost">${UIController.formatCurrency(edgeCost)}</td></tr>
+                        <tr><td class="item-name">${materialData.name}</td><td class="item-cost">${UIController.formatCurrency(totalMaterialCost)}</td></tr>
+                        <tr><td class="item-name">Edge: ${edgeName}</td><td class="item-cost">${UIController.formatCurrency(edgeCost)}</td></tr>
                         ${cutoutItems.map(item => `<tr><td class="item-name">${item.name}</td><td class="item-cost">${UIController.formatCurrency(item.cost)}</td></tr>`).join('')}
                         <tr class="subtotal-row"><td>Subtotal</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>
                         <tr><td class="item-name">Tax (${(settings.taxRate * 100).toFixed(2)}%)</td><td class="item-cost">${UIController.formatCurrency(tax)}</td></tr>
                         <tr class="total-row"><td>Total</td><td class="item-cost">${UIController.formatCurrency(total)}</td></tr>
                     </tbody>
-                </table>`;
+                </table>
+                <button id="add-to-quote" class="add-to-quote-btn">Add to Quote</button>`;
 
             quoteDetailsContainer.innerHTML = summaryHTML;
             renderQuoteChart([totalMaterialCost, edgeCost, cutoutCost, tax]);
@@ -1139,40 +1189,41 @@
         function calculateCaseworkQuote() {
             const data = DataEngine.getData();
             const caseworkKey = document.getElementById('calc-casework-select')?.value;
-            if (!caseworkKey) return;
-        
+            if(!caseworkKey) return;
+            
             const caseworkData = data.casework[caseworkKey];
             const settings = data.settings;
             const quoteDetailsContainer = document.getElementById('quote-details');
             let totalCost = 0;
-            let lineItemsHTML = '';
-        
-            if (caseworkData.type === 'standard') {
+            let lineItems = [];
+            let itemDescription = [];
+            
+            if(caseworkData.type === 'standard') {
                 const linearFeet = parseFloat(document.getElementById('calc-length')?.value) || 0;
-                if (linearFeet === 0) {
-                    quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter length to begin.</p>`;
+                 if (linearFeet === 0) {
+                    quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter length to begin.</p><button class="add-to-quote-btn" disabled>Add to Quote</button>`;
                     return;
                 }
-        
+                itemDescription.push(`${linearFeet} ln ft`);
+
                 let optionMultiplier = 1;
                 document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
                     const optKey = select.dataset.optionKey;
                     const valKey = select.value;
-                    // FIX: Added checks to prevent error
                     if (caseworkData.options && caseworkData.options[optKey] && caseworkData.options[optKey].values && caseworkData.options[optKey].values[valKey]) {
                         const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
                         optionMultiplier *= multiplier;
+                        itemDescription.push(caseworkData.options[optKey].values[valKey].name);
                     }
                 });
                 totalCost = (linearFeet * caseworkData.cost_lnft) * optionMultiplier;
-                lineItemsHTML = `<tr><td class="item-name">${caseworkData.name} (${linearFeet} ln ft)</td><td class="item-cost">${UIController.formatCurrency(totalCost)}</td></tr>`;
-        
+                lineItems.push({ name: caseworkData.name, cost: totalCost });
+            
             } else if (caseworkData.type === 'custom_millwork') {
                 let baseCost = caseworkData.base_cost;
                 let finalCost = baseCost;
-                let lineItems = [{ name: `${caseworkData.name} Base Unit`, cost: baseCost }];
-        
-                // FIX: Added checks to prevent error
+                lineItems.push({ name: `${caseworkData.name} Base Unit`, cost: baseCost });
+
                 document.querySelectorAll('#calc-casework-options-container .calc-input').forEach(input => {
                     const optKey = input.dataset.optionKey;
                     if (caseworkData.options && caseworkData.options[optKey]) {
@@ -1181,6 +1232,7 @@
                             const valKey = input.value;
                             const selectedOptionValue = option.values[valKey];
                             if (selectedOptionValue) {
+                                itemDescription.push(selectedOptionValue.name);
                                 const multiplier = selectedOptionValue.multiplier;
                                 if (multiplier && multiplier !== 1) {
                                     finalCost *= multiplier;
@@ -1189,50 +1241,51 @@
                         } else if (input.type === 'checkbox' && input.checked) {
                             finalCost += option.cost || 0;
                             lineItems.push({ name: option.name, cost: option.cost || 0 });
+                            itemDescription.push(option.name);
                         }
                     }
                 });
-        
+                
                 lineItems[0].cost = finalCost - lineItems.slice(1).reduce((sum, item) => sum + item.cost, 0);
-        
                 totalCost = finalCost;
-                lineItemsHTML = lineItems.map(item => `<tr><td class="item-name">${item.name}</td><td class="item-cost">${UIController.formatCurrency(item.cost)}</td></tr>`).join('');
-        
+            
             } else if (caseworkData.type === 'custom_sqft') {
                 const length = parseFloat(document.getElementById('calc-length-ft')?.value) || 0;
                 const height = parseFloat(document.getElementById('calc-height-ft')?.value) || 0;
                 if (length === 0 || height === 0) {
-                    quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter width and height.</p>`;
+                    quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter width and height.</p><button class="add-to-quote-btn" disabled>Add to Quote</button>`;
                     return;
                 }
                 const sqft = length * height;
+                itemDescription.push(`${sqft.toFixed(2)} sq ft`);
                 let optionMultiplier = 1;
-                // FIX: Added checks to prevent error
-                document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
+                 document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
                     const optKey = select.dataset.optionKey;
                     const valKey = select.value;
                     if (caseworkData.options && caseworkData.options[optKey] && caseworkData.options[optKey].values && caseworkData.options[optKey].values[valKey]) {
                         const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
                         optionMultiplier *= multiplier;
+                        itemDescription.push(caseworkData.options[optKey].values[valKey].name);
                     }
                 });
                 totalCost = sqft * caseworkData.cost_sqft * optionMultiplier;
-                lineItemsHTML = `<tr><td class="item-name">${caseworkData.name} (${sqft.toFixed(2)} sq ft)</td><td class="item-cost">${UIController.formatCurrency(totalCost)}</td></tr>`;
+                lineItems.push({name: caseworkData.name, cost: totalCost});
             }
-        
+
             const subtotal = totalCost;
             const tax = subtotal * settings.taxRate;
             const total = subtotal + tax;
-        
-            let summaryHTML = `
+
+             let summaryHTML = `
                 <table class="quote-summary__table">
                     <tbody>
-                        ${lineItemsHTML}
+                        ${lineItems.map(item => `<tr><td class="item-name">${item.name}</td><td class="item-cost">${UIController.formatCurrency(item.cost)}</td></tr>`).join('')}
                         <tr class="subtotal-row"><td>Subtotal</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>
                         <tr><td class="item-name">Tax (${(settings.taxRate * 100).toFixed(2)}%)</td><td class="item-cost">${UIController.formatCurrency(tax)}</td></tr>
                         <tr class="total-row"><td>Total</td><td class="item-cost">${UIController.formatCurrency(total)}</td></tr>
                     </tbody>
-                </table>`;
+                </table>
+                <button id="add-to-quote" class="add-to-quote-btn">Add to Quote</button>`;
             quoteDetailsContainer.innerHTML = summaryHTML;
         }
 
@@ -1246,24 +1299,29 @@
             const quoteDetailsContainer = document.getElementById('quote-details');
             let subtotal = 0;
             let lineItems = [];
+            let itemDescription = [];
 
             if (serviceKey === 'design' || serviceKey === 'welding_fab') {
                 const hours = parseFloat(document.getElementById('calc-hours')?.value) || 0;
                 if (hours > 0) {
                     subtotal = hours * serviceData.rate_hourly;
-                    lineItems.push(`<tr><td class="item-name">${serviceData.name} (${hours} hrs)</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>`);
+                    lineItems.push({name: serviceData.name, cost: subtotal});
+                    itemDescription.push(`${hours} hrs`);
                 }
             } else if (serviceKey === 'cnc_machining') {
                 const machineTime = parseFloat(document.getElementById('calc-machine-time')?.value) || 0;
                 const setupFee = serviceData.setup_fee;
                 const machineCost = machineTime * serviceData.rate_hourly;
                 subtotal = machineCost + setupFee;
-                if (setupFee > 0) lineItems.push(`<tr><td class="item-name">Setup Fee</td><td class="item-cost">${UIController.formatCurrency(setupFee)}</td></tr>`);
-                if (machineTime > 0) lineItems.push(`<tr><td class="item-name">Machine Time (${machineTime} hrs)</td><td class="item-cost">${UIController.formatCurrency(machineCost)}</td></tr>`);
+                if (setupFee > 0) lineItems.push({name: `Setup Fee`, cost: setupFee});
+                if (machineTime > 0) {
+                    lineItems.push({name: `Machine Time`, cost: machineCost});
+                    itemDescription.push(`${machineTime} hrs`);
+                }
             }
             
             if (subtotal === 0) {
-                quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter details to generate a quote.</p>`;
+                quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter details to generate a quote.</p><button class="add-to-quote-btn" disabled>Add to Quote</button>`;
                 return;
             }
 
@@ -1271,11 +1329,12 @@
             const total = subtotal + tax;
             
             let summaryHTML = `<table class="quote-summary__table"><tbody>
-                        ${lineItems.join('')}
+                        ${lineItems.map(item => `<tr><td class="item-name">${item.name}</td><td class="item-cost">${UIController.formatCurrency(item.cost)}</td></tr>`).join('')}
                         <tr class="subtotal-row"><td>Subtotal</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>
                         <tr><td class="item-name">Tax (${(settings.taxRate * 100).toFixed(2)}%)</td><td class="item-cost">${UIController.formatCurrency(tax)}</td></tr>
                         <tr class="total-row"><td>Total</td><td class="item-cost">${UIController.formatCurrency(total)}</td></tr>
-                    </tbody></table>`;
+                    </tbody></table>
+                    <button id="add-to-quote" class="add-to-quote-btn">Add to Quote</button>`;
             quoteDetailsContainer.innerHTML = summaryHTML;
         }
         
@@ -1336,6 +1395,9 @@
                         currentCategory = category;
                         render();
                     }
+                }
+                if (e.target.id === 'add-to-quote') {
+                    App.addItemToFullQuote();
                 }
             });
 
@@ -2121,6 +2183,8 @@
      * @dependencies DataEngine, UIController, Calculator, AdminPanel
      */
     const App = (function() {
+        let fullQuote = [];
+
         function init() {
             DataEngine.init();
             UIController.init();
@@ -2132,15 +2196,150 @@
                 header.addEventListener('click', (e) => {
                     if (e.target.id === 'show-calculator-btn') {
                         UIController.showMainView('calculator');
+                    } else if (e.target.id === 'show-full-quote-btn') {
+                        UIController.showMainView('fullQuote');
                     } else if (e.target.id === 'show-admin-btn') {
                         UIController.showMainView('admin');
                     }
                 });
             }
+
+            document.addEventListener('click', e => {
+                if (e.target.id === 'clear-full-quote') {
+                    if (confirm('Are you sure you want to clear the entire quote?')) {
+                        fullQuote = [];
+                        renderFullQuote();
+                    }
+                }
+                if (e.target.matches('.delete-item-btn')) {
+                    const index = parseInt(e.target.dataset.index, 10);
+                    fullQuote.splice(index, 1);
+                    renderFullQuote();
+                }
+            });
             
             UIController.showMainView('calculator');
         }
-        return { init };
+
+        function addItemToFullQuote() {
+            const quoteDetailsNode = document.querySelector('#quote-details');
+            if (!quoteDetailsNode || quoteDetailsNode.querySelector('.quote-summary__placeholder')) {
+                alert("Please calculate a valid item before adding to the quote.");
+                return;
+            }
+            
+            const item = {
+                id: Date.now(),
+                name: "New Item",
+                details: [],
+                subtotal: 0
+            };
+            
+            const category = document.querySelector('#calc-category-tabs .active').dataset.category;
+            
+            if (category === 'countertops') {
+                const materialSelect = document.getElementById('calc-material-select');
+                item.name = materialSelect.options[materialSelect.selectedIndex].text;
+                const length = document.getElementById('calc-length').value;
+                const width = document.getElementById('calc-width').value;
+                item.details.push(`${length}" x ${width}"`);
+                document.querySelectorAll('#calc-options-container select').forEach(s => item.details.push(s.options[s.selectedIndex].text));
+                document.querySelectorAll('.calc-cutout:checked').forEach(c => item.details.push(c.nextElementSibling.textContent));
+            } else if (category === 'casework') {
+                 const caseworkSelect = document.getElementById('calc-casework-select');
+                 item.name = caseworkSelect.options[caseworkSelect.selectedIndex].text;
+                 document.querySelectorAll('#calc-casework-options-container .calc-input').forEach(input => {
+                     if (input.tagName === 'SELECT') item.details.push(input.options[input.selectedIndex].text);
+                     else if (input.type === 'checkbox' && input.checked) item.details.push(input.nextElementSibling.textContent);
+                     else if (input.type === 'number' && input.value > 0) item.details.push(`${input.previousElementSibling.textContent}: ${input.value}`);
+                 });
+            } else if (category === 'misc_services') {
+                const serviceSelect = document.getElementById('calc-misc-select');
+                item.name = serviceSelect.options[serviceSelect.selectedIndex].text;
+                document.querySelectorAll('#calc-misc-options-container .calc-input').forEach(input => {
+                    if (input.value > 0) item.details.push(`${input.previousElementSibling.textContent}: ${input.value}`);
+                });
+            }
+
+            // Get subtotal from the summary table
+            const subtotalRow = quoteDetailsNode.querySelector('.subtotal-row td:last-child');
+            if (subtotalRow) {
+                 item.subtotal = parseFloat(subtotalRow.textContent.replace(/[^0-9.-]+/g,""));
+            }
+
+            fullQuote.push(item);
+            alert(`"${item.name}" has been added to the full quote.`);
+            renderFullQuote();
+        }
+
+        function renderFullQuote() {
+            const view = document.getElementById('full-quote-view');
+            const settings = DataEngine.getData().settings;
+            if (!view) return;
+
+            let contentHTML = `
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h2 class="card__title" style="margin-bottom:0; border:0;">Full Project Quote</h2>
+                        <button id="clear-full-quote" class="admin-button danger">Clear Quote</button>
+                    </div>
+                </div>
+            `;
+
+            if (fullQuote.length === 0) {
+                contentHTML += `<div class="card"><p class="quote-summary__placeholder">No items have been added to the quote yet. Go to the Calculator to add items.</p></div>`;
+            } else {
+                const subtotal = fullQuote.reduce((sum, item) => sum + item.subtotal, 0);
+                const tax = subtotal * settings.taxRate;
+                const total = subtotal + tax;
+
+                contentHTML += `
+                    <div class="card">
+                        <table id="full-quote-table">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th style="text-align: right;">Cost</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${fullQuote.map((item, index) => `
+                                    <tr>
+                                        <td>
+                                            <div class="item-name">${item.name}</div>
+                                            <div class="item-details">${item.details.join(', ')}</div>
+                                        </td>
+                                        <td class="item-cost">${UIController.formatCurrency(item.subtotal)}</td>
+                                        <td class="item-actions">
+                                            <button class="delete-item-btn" data-index="${index}" title="Remove Item">&times;</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                                <tr class="subtotal-row">
+                                    <td>Subtotal</td>
+                                    <td class="item-cost">${UIController.formatCurrency(subtotal)}</td>
+                                    <td></td>
+                                </tr>
+                                <tr>
+                                    <td>Tax (${(settings.taxRate * 100).toFixed(2)}%)</td>
+                                    <td class="item-cost">${UIController.formatCurrency(tax)}</td>
+                                    <td></td>
+                                </tr>
+                                <tr class="total-row">
+                                    <td>Grand Total</td>
+                                    <td class="item-cost">${UIController.formatCurrency(total)}</td>
+                                    <td></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            view.innerHTML = contentHTML;
+        }
+
+        return { init, renderFullQuote, addItemToFullQuote };
     })();
 
     /**
@@ -2163,6 +2362,7 @@
                     <p>A comprehensive business engine for quotes.</p>
                     <div class="view-switcher" role="navigation" aria-label="Main Views">
                         <button id="show-calculator-btn">Calculator</button>
+                        <button id="show-full-quote-btn">Full Quote</button>
                         <button id="show-admin-btn">Admin Panel</button>
                     </div>
                 </header>
@@ -2170,10 +2370,13 @@
                 <main>
                     <div id="calculator-interface" class="card" role="region" aria-labelledby="calculator-view-title">
                          <h2 id="calculator-view-title" class="hidden">Calculator View</h2>
-                        </div>
+                    </div>
+                    <div id="full-quote-view" class="hidden" role="region" aria-labelledby="full-quote-view-title">
+                        <h2 id="full-quote-view-title" class="hidden">Full Quote View</h2>
+                    </div>
                     <div id="admin-panel" class="card hidden" role="region" aria-labelledby="admin-view-title">
                          <h2 id="admin-view-title" class="hidden">Admin Panel View</h2>
-                        </div>
+                    </div>
                 </main>
             </div>
         `;
