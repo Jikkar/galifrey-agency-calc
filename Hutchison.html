@@ -151,7 +151,7 @@
     }
 
     #company-header {
-        font-size: 2.5rem;
+        font-size: 2rem;
         font-weight: 700;
         color: var(--color-text-header);
         margin-bottom: var(--spacing-unit);
@@ -165,7 +165,8 @@
     header .view-switcher {
         display: flex;
         justify-content: center;
-        gap: calc(var(--spacing-unit) * 2);
+        flex-wrap: wrap;
+        gap: var(--spacing-unit);
         margin-top: calc(var(--spacing-unit) * 3);
     }
     
@@ -428,6 +429,15 @@
     .admin-button.secondary:hover {
         background-color: var(--color-text-body);
     }
+    
+    .admin-button.danger {
+        background-color: var(--color-error);
+    }
+
+    .admin-button.danger:hover {
+        background-color: #c82333;
+    }
+
 
     #save-confirmation {
         color: var(--color-accent);
@@ -466,6 +476,11 @@
 
         .app-wrapper {
              padding: calc(var(--spacing-unit) * 2);
+        }
+    }
+    @media (min-width: 768px) {
+        #company-header {
+            font-size: 2.5rem;
         }
     }
     </style>
@@ -521,7 +536,7 @@
             };
 
             return {
-                "version": "1.5.0", // Incremented for new data management features
+                "version": "1.7.0", // Incremented for new admin features
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -693,7 +708,6 @@
             const contentContainer = container.querySelector('#calc-category-content');
             if (!contentContainer) return;
             
-            // Clear previous content and set ARIA attributes
             contentContainer.innerHTML = ''; 
             
             if (category === 'countertops') {
@@ -714,7 +728,6 @@
             }
         }
         
-        // Renders the specific UI for the Countertop calculator
         function renderCountertopCalculator(container) {
             const data = DataEngine.getData();
             const allMaterials = data.countertops;
@@ -809,7 +822,6 @@
             calculateQuote();
         }
 
-        // Renders the new UI for the Casework calculator
         function renderCaseworkCalculator(container) {
             const data = DataEngine.getData();
             const allCasework = data.casework;
@@ -879,7 +891,6 @@
             calculateQuote();
         }
 
-        // Renders Misc Services calculator
         function renderMiscServicesCalculator(container) {
             const data = DataEngine.getData();
             const allMiscServices = data.misc_services;
@@ -946,9 +957,11 @@
             calculateQuote();
         }
 
-        // Generic quote calculation dispatcher
         function calculateQuote() {
-            if(!container) return; // Don't calculate if the calculator isn't rendered
+            if(!container) return; 
+            const calcContent = container.querySelector('#calc-category-content');
+            if(!calcContent) return;
+
             if (currentCategory === 'countertops') {
                 calculateCountertopQuote();
             } else if (currentCategory === 'casework') {
@@ -966,8 +979,8 @@
             const materialData = data.countertops[materialKey];
             const settings = data.settings;
 
-            const length = parseFloat(document.getElementById('calc-length').value) || 0;
-            const width = parseFloat(document.getElementById('calc-width').value) || 0;
+            const length = parseFloat(document.getElementById('calc-length')?.value) || 0;
+            const width = parseFloat(document.getElementById('calc-width')?.value) || 0;
             const quoteDetailsContainer = document.getElementById('quote-details');
             const quoteChartContainer = document.getElementById('quote-chart-container');
 
@@ -1030,7 +1043,7 @@
             const caseworkData = data.casework[caseworkKey];
             const settings = data.settings;
             
-            const linearFeet = parseFloat(document.getElementById('calc-length').value) || 0;
+            const linearFeet = parseFloat(document.getElementById('calc-length')?.value) || 0;
             const quoteDetailsContainer = document.getElementById('quote-details');
             
             if (linearFeet === 0) {
@@ -1039,19 +1052,14 @@
             }
 
             let optionMultiplier = 1;
-            let lineItems = [];
             document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
                 const optKey = select.dataset.optionKey;
                 const valKey = select.value;
                 const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
                 optionMultiplier *= multiplier;
-                if (multiplier !== 1) {
-                    lineItems.push(`${caseworkData.options[optKey].values[valKey].name} Finish`);
-                }
             });
 
-            const baseCost = linearFeet * caseworkData.cost_lnft;
-            const totalCost = baseCost * optionMultiplier;
+            const totalCost = (linearFeet * caseworkData.cost_lnft) * optionMultiplier;
             const subtotal = totalCost;
             const tax = subtotal * settings.taxRate;
             const total = subtotal + tax;
@@ -1080,13 +1088,13 @@
             let lineItems = [];
 
             if (serviceKey === 'design') {
-                const hours = parseFloat(document.getElementById('calc-hours').value) || 0;
+                const hours = parseFloat(document.getElementById('calc-hours')?.value) || 0;
                 if (hours > 0) {
                     subtotal = hours * serviceData.rate_hourly;
                     lineItems.push(`<tr><td class="item-name">Design Services (${hours} hrs)</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>`);
                 }
             } else if (serviceKey === 'cnc_machining') {
-                const machineTime = parseFloat(document.getElementById('calc-machine-time').value) || 0;
+                const machineTime = parseFloat(document.getElementById('calc-machine-time')?.value) || 0;
                 const setupFee = serviceData.setup_fee;
                 const machineCost = machineTime * serviceData.rate_hourly;
                 subtotal = machineCost + setupFee;
@@ -1163,7 +1171,11 @@
                 tabs.addEventListener('click', e => {
                     if (e.target.tagName === 'BUTTON') {
                         const category = e.target.dataset.category;
-                        container.querySelectorAll('#calc-category-tabs button').forEach(btn => btn.setAttribute('aria-selected', 'false'));
+                        container.querySelectorAll('#calc-category-tabs button').forEach(btn => {
+                            btn.classList.remove('active');
+                            btn.setAttribute('aria-selected', 'false');
+                        });
+                        e.target.classList.add('active');
                         e.target.setAttribute('aria-selected', 'true');
                         renderCategoryContent(category);
                     }
@@ -1218,6 +1230,7 @@
             const contentContainer = container.querySelector('#admin-category-content');
             if(!contentContainer) return;
 
+            contentContainer.innerHTML = '';
             contentContainer.id = `admin-panel-${category}`;
             contentContainer.setAttribute('aria-labelledby', `admin-tab-${category}`);
             
@@ -1289,7 +1302,11 @@
                 <h2 class="card__title">Edit Countertop Pricing</h2>
                 <div class="form-group">
                     <label for="admin-material-select" class="form-group__label">Select a Material to Edit</label>
-                    <select id="admin-material-select" class="form-group__select">${materialOptionsHTML}</select>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="admin-material-select" class="form-group__select" style="flex-grow: 1;">${materialOptionsHTML}</select>
+                        <button id="add-new-material-btn" class="admin-button secondary">Add New</button>
+                        <button id="delete-material-btn" class="admin-button danger">Delete</button>
+                    </div>
                 </div>
                 <div id="admin-material-form-container" class="mt-4"></div>
             `;
@@ -1375,7 +1392,11 @@
                 <h2 class="card__title">Edit Casework Pricing</h2>
                 <div class="form-group">
                     <label for="admin-casework-select" class="form-group__label">Select a Casework Type to Edit</label>
-                    <select id="admin-casework-select" class="form-group__select">${caseworkOptionsHTML}</select>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="admin-casework-select" class="form-group__select" style="flex-grow: 1;">${caseworkOptionsHTML}</select>
+                        <button id="add-new-casework-btn" class="admin-button secondary">Add New</button>
+                        <button id="delete-casework-btn" class="admin-button danger">Delete</button>
+                    </div>
                 </div>
                 <div id="admin-casework-form-container" class="mt-4"></div>
             `;
@@ -1473,6 +1494,8 @@
                     <p>This admin panel gives you full control over the pricing logic.</p>
                     <ul>
                         <li><strong>Editing Prices:</strong> Navigate to the appropriate tab (e.g., "Countertops"). Select the item you wish to edit from the dropdown, change the values in the form fields, and click "Save Changes". The new prices will be active immediately.</li>
+                        <li><strong>Adding New Items:</strong> Use the "Add New" button next to the dropdown in the "Countertops" or "Casework" sections to add a new material or type. You will be prompted for a name, and a new item will be created by copying the properties of an existing item.</li>
+                        <li><strong>Deleting Items:</strong> Select an item from the dropdown and click the "Delete" button. You will be asked to confirm this action.</li>
                         <li><strong>Global Settings:</strong> In the "Settings & Data" tab, you can change the company name displayed on the header and the global tax rate applied to all quotes.</li>
                     </ul>
 
@@ -1529,12 +1552,9 @@
             confirmation.classList.remove('hidden');
             setTimeout(() => { confirmation.classList.add('hidden'); }, 3000);
             
-            // Re-render both calculator and admin panel to reflect changes
             Calculator.render();
-            // AdminPanel.render(); // Re-rendering the admin panel can be jarring, only re-render if necessary
         }
 
-        // --- Data Management Functions ---
         function exportDataToJSON() {
             const data = DataEngine.getData();
             const dataStr = JSON.stringify(data, null, 2);
@@ -1555,35 +1575,135 @@
             reader.onload = function(e) {
                 try {
                     const importedData = JSON.parse(e.target.result);
-                    // Basic validation
                     if (importedData.version && importedData.settings && importedData.countertops) {
                         if(confirm("Are you sure you want to overwrite all existing data with this file? This action cannot be undone.")) {
                             DataEngine.saveData(importedData);
-                            alert("Data imported successfully!");
-                            // Re-render everything
-                            Calculator.render();
+                            showAdminMessage("Data imported successfully!", 'info');
                             AdminPanel.render();
+                            Calculator.render();
                         }
                     } else {
-                        alert("Error: Invalid or corrupted JSON file.");
+                        showAdminMessage("Error: Invalid or corrupted JSON file.", 'error');
                     }
                 } catch (error) {
-                    alert("Error parsing JSON file: " + error.message);
+                    showAdminMessage("Error parsing JSON file: " + error.message, 'error');
                 }
             };
             reader.readAsText(file);
-             // Reset file input to allow re-uploading the same file
             event.target.value = '';
         }
+        
+        function showAdminMessage(message, type = 'info') {
+            const contentContainer = container.querySelector('#admin-category-content');
+            if (!contentContainer) return;
+            
+            let messageEl = contentContainer.querySelector('.admin-message');
+            if (!messageEl) {
+                messageEl = document.createElement('div');
+                messageEl.className = 'admin-message';
+                messageEl.style.padding = '12px';
+                messageEl.style.borderRadius = 'var(--border-radius)';
+                messageEl.style.marginBottom = '16px';
+                messageEl.style.fontWeight = '600';
+                messageEl.style.transition = 'opacity 0.5s';
+                messageEl.setAttribute('role', 'alert');
+                contentContainer.prepend(messageEl);
+            }
+            
+            messageEl.textContent = message;
+            messageEl.style.opacity = '1';
+            
+            if (type === 'error') {
+                 messageEl.style.backgroundColor = '#f8d7da';
+                 messageEl.style.color = '#721c24';
+                 messageEl.style.borderColor = '#f5c6cb';
+            } else { // info
+                 messageEl.style.backgroundColor = '#d1ecf1';
+                 messageEl.style.color = '#0c5460';
+                 messageEl.style.borderColor = '#bee5eb';
+            }
+            
+            setTimeout(() => {
+                messageEl.style.opacity = '0';
+                setTimeout(() => {
+                    messageEl.remove();
+                }, 500);
+            }, 4000);
+        }
+
+        function addNewItem(itemType) {
+            const newName = prompt(`Enter the name for the new ${itemType}:`);
+            if (!newName || newName.trim() === '') {
+                showAdminMessage(`${itemType} name cannot be empty.`, 'error');
+                return;
+            }
+
+            const data = DataEngine.getData();
+            const dataCategory = itemType === 'material' ? 'countertops' : 'casework';
+            const collection = data[dataCategory];
+
+            const newKey = newName.trim().toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+            
+            const nameExists = Object.values(collection).some(m => m.name.toLowerCase() === newName.trim().toLowerCase());
+            if (nameExists) {
+                showAdminMessage(`An item named "${newName}" already exists in this category.`, 'error');
+                return;
+            }
+
+            const firstItemKey = Object.keys(collection)[0];
+            const newItemData = JSON.parse(JSON.stringify(collection[firstItemKey]));
+            newItemData.name = newName.trim();
+            
+            collection[newKey] = newItemData;
+            DataEngine.saveData(data);
+
+            showAdminMessage(`${itemType} "${newName}" added successfully. You can now edit its properties.`, 'info');
+            currentCategory = dataCategory;
+            render(); 
+        }
+
+        function deleteSelectedItem(itemType) {
+            const dataCategory = itemType === 'material' ? 'countertops' : 'casework';
+            const selectElement = document.getElementById(`admin-${itemType}-select`);
+            const itemKeyToDelete = selectElement.value;
+
+            if (!itemKeyToDelete) {
+                showAdminMessage('No item selected to delete.', 'error');
+                return;
+            }
+
+            const data = DataEngine.getData();
+            const collection = data[dataCategory];
+            const itemName = collection[itemKeyToDelete].name;
+            
+            if (Object.keys(collection).length <= 1) {
+                showAdminMessage(`Cannot delete the last item. Add a new one before deleting "${itemName}".`, 'error');
+                return;
+            }
+
+            if (confirm(`Are you sure you want to permanently delete "${itemName}"? This cannot be undone.`)) {
+                delete collection[itemKeyToDelete];
+                DataEngine.saveData(data);
+                showAdminMessage(`"${itemName}" has been deleted.`, 'info');
+                currentCategory = dataCategory;
+                render();
+            }
+        }
+
 
         function attachNavListeners() {
             const tabs = container.querySelector('#admin-category-tabs');
             if (tabs) {
                 tabs.addEventListener('click', e => {
-                    if (e.target.tagName === 'BUTTON') {
-                        const category = e.target.dataset.category;
-                        container.querySelectorAll('#admin-category-tabs button').forEach(btn => btn.setAttribute('aria-selected', 'false'));
-                        e.target.setAttribute('aria-selected', 'true');
+                    const button = e.target.closest('button');
+                    if (button) {
+                        const category = button.dataset.category;
+                        container.querySelectorAll('#admin-category-tabs button').forEach(btn => {
+                            btn.classList.remove('active');
+                            btn.setAttribute('aria-selected', 'false');
+                        });
+                        button.classList.add('active');
+                        button.setAttribute('aria-selected', 'true');
                         renderCategoryContent(category);
                     }
                 });
@@ -1591,12 +1711,20 @@
         }
         
         function attachFormListeners() {
-            // Use event delegation for save buttons in all admin forms
             const contentContainer = container.querySelector('#admin-category-content');
             if(contentContainer) {
                 contentContainer.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('save-button')) {
-                        saveChanges(e.target);
+                    const target = e.target;
+                    if (target.classList.contains('save-button')) {
+                        saveChanges(target);
+                    } else if (target.id === 'add-new-material-btn') {
+                        addNewItem('material');
+                    } else if (target.id === 'add-new-casework-btn') {
+                        addNewItem('casework');
+                    } else if (target.id === 'delete-material-btn') {
+                        deleteSelectedItem('material');
+                    } else if (target.id === 'delete-casework-btn') {
+                        deleteSelectedItem('casework');
                     }
                 });
             }
@@ -1623,11 +1751,17 @@
             DataEngine.init();
             UIController.init();
             
-            // Wire up main view switcher (Calculator vs Admin)
-            document.getElementById('show-calculator-btn').addEventListener('click', () => UIController.showMainView('calculator'));
-            document.getElementById('show-admin-btn').addEventListener('click', () => UIController.showMainView('admin'));
+            const header = document.querySelector('header');
+            if (header) {
+                header.addEventListener('click', (e) => {
+                    if (e.target.id === 'show-calculator-btn') {
+                        UIController.showMainView('calculator');
+                    } else if (e.target.id === 'show-admin-btn') {
+                        UIController.showMainView('admin');
+                    }
+                });
+            }
             
-            // Show the calculator view by default, which will trigger its own render
             UIController.showMainView('calculator');
         }
         return { init };
