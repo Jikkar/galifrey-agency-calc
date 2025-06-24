@@ -535,7 +535,7 @@
             };
 
             return {
-                "version": "2.3.0", // Updated version
+                "version": "2.4.0", // Updated version
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -1139,57 +1139,65 @@
         function calculateCaseworkQuote() {
             const data = DataEngine.getData();
             const caseworkKey = document.getElementById('calc-casework-select')?.value;
-            if(!caseworkKey) return;
-            
+            if (!caseworkKey) return;
+        
             const caseworkData = data.casework[caseworkKey];
             const settings = data.settings;
             const quoteDetailsContainer = document.getElementById('quote-details');
             let totalCost = 0;
             let lineItemsHTML = '';
-            
-            if(caseworkData.type === 'standard') {
+        
+            if (caseworkData.type === 'standard') {
                 const linearFeet = parseFloat(document.getElementById('calc-length')?.value) || 0;
-                 if (linearFeet === 0) {
+                if (linearFeet === 0) {
                     quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter length to begin.</p>`;
                     return;
                 }
-
+        
                 let optionMultiplier = 1;
                 document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
                     const optKey = select.dataset.optionKey;
                     const valKey = select.value;
-                    const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
-                    optionMultiplier *= multiplier;
+                    // FIX: Added checks to prevent error
+                    if (caseworkData.options && caseworkData.options[optKey] && caseworkData.options[optKey].values && caseworkData.options[optKey].values[valKey]) {
+                        const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
+                        optionMultiplier *= multiplier;
+                    }
                 });
                 totalCost = (linearFeet * caseworkData.cost_lnft) * optionMultiplier;
                 lineItemsHTML = `<tr><td class="item-name">${caseworkData.name} (${linearFeet} ln ft)</td><td class="item-cost">${UIController.formatCurrency(totalCost)}</td></tr>`;
-            
+        
             } else if (caseworkData.type === 'custom_millwork') {
                 let baseCost = caseworkData.base_cost;
                 let finalCost = baseCost;
-                let lineItems = [{name: `${caseworkData.name} Base Unit`, cost: baseCost}];
-
+                let lineItems = [{ name: `${caseworkData.name} Base Unit`, cost: baseCost }];
+        
+                // FIX: Added checks to prevent error
                 document.querySelectorAll('#calc-casework-options-container .calc-input').forEach(input => {
                     const optKey = input.dataset.optionKey;
-                    const option = caseworkData.options[optKey];
-                    
-                    if(input.type === 'select-one') {
-                        const valKey = input.value;
-                        const multiplier = option.values[valKey].multiplier;
-                        if (multiplier !== 1) {
-                            finalCost *= multiplier;
+                    if (caseworkData.options && caseworkData.options[optKey]) {
+                        const option = caseworkData.options[optKey];
+                        if (input.type === 'select-one' && option.values) {
+                            const valKey = input.value;
+                            const selectedOptionValue = option.values[valKey];
+                            if (selectedOptionValue) {
+                                const multiplier = selectedOptionValue.multiplier;
+                                if (multiplier && multiplier !== 1) {
+                                    finalCost *= multiplier;
+                                }
+                            }
+                        } else if (input.type === 'checkbox' && input.checked) {
+                            finalCost += option.cost || 0;
+                            lineItems.push({ name: option.name, cost: option.cost || 0 });
                         }
-                    } else if (input.type === 'checkbox' && input.checked) {
-                        finalCost += option.cost;
-                        lineItems.push({name: option.name, cost: option.cost});
                     }
                 });
-                
+        
                 lineItems[0].cost = finalCost - lineItems.slice(1).reduce((sum, item) => sum + item.cost, 0);
-
+        
                 totalCost = finalCost;
                 lineItemsHTML = lineItems.map(item => `<tr><td class="item-name">${item.name}</td><td class="item-cost">${UIController.formatCurrency(item.cost)}</td></tr>`).join('');
-            
+        
             } else if (caseworkData.type === 'custom_sqft') {
                 const length = parseFloat(document.getElementById('calc-length-ft')?.value) || 0;
                 const height = parseFloat(document.getElementById('calc-height-ft')?.value) || 0;
@@ -1199,21 +1207,24 @@
                 }
                 const sqft = length * height;
                 let optionMultiplier = 1;
-                 document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
+                // FIX: Added checks to prevent error
+                document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
                     const optKey = select.dataset.optionKey;
                     const valKey = select.value;
-                    const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
-                    optionMultiplier *= multiplier;
+                    if (caseworkData.options && caseworkData.options[optKey] && caseworkData.options[optKey].values && caseworkData.options[optKey].values[valKey]) {
+                        const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
+                        optionMultiplier *= multiplier;
+                    }
                 });
                 totalCost = sqft * caseworkData.cost_sqft * optionMultiplier;
                 lineItemsHTML = `<tr><td class="item-name">${caseworkData.name} (${sqft.toFixed(2)} sq ft)</td><td class="item-cost">${UIController.formatCurrency(totalCost)}</td></tr>`;
             }
-
+        
             const subtotal = totalCost;
             const tax = subtotal * settings.taxRate;
             const total = subtotal + tax;
-
-             let summaryHTML = `
+        
+            let summaryHTML = `
                 <table class="quote-summary__table">
                     <tbody>
                         ${lineItemsHTML}
