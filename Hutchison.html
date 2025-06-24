@@ -766,6 +766,7 @@
         
         function renderCountertopOptions(materialKey) {
             const optionsContainer = document.getElementById('calc-options-container');
+            if(!optionsContainer) return;
             const data = DataEngine.getData();
             const materialData = data.countertops[materialKey];
             
@@ -853,6 +854,7 @@
 
         function renderCaseworkOptions(caseworkKey) {
             const optionsContainer = document.getElementById('calc-casework-options-container');
+            if(!optionsContainer) return;
             const data = DataEngine.getData();
             const caseworkData = data.casework[caseworkKey];
 
@@ -914,6 +916,7 @@
 
         function renderMiscServiceOptions(serviceKey) {
             const optionsContainer = document.getElementById('calc-misc-options-container');
+             if(!optionsContainer) return;
             const data = DataEngine.getData();
             const serviceData = data.misc_services[serviceKey];
             let html = '';
@@ -1164,7 +1167,7 @@
             // Listener for clicks (tabs)
             container.addEventListener('click', function(e) {
                 const tabButton = e.target.closest('button[data-category]');
-                if (tabButton && container.querySelector('#calc-category-tabs').contains(tabButton)) {
+                if (tabButton && container.querySelector('#calc-category-tabs')?.contains(tabButton)) {
                     const category = tabButton.dataset.category;
                     if (category !== currentCategory) {
                         currentCategory = category;
