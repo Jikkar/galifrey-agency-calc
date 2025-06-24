@@ -389,6 +389,7 @@
     #save-confirmation {
         color: var(--color-accent);
         font-weight: 600;
+        transition: opacity 0.3s ease-in-out;
     }
 
     /*
@@ -398,6 +399,9 @@
     */
     @media (max-width: 992px) {
         #calculator-interface .main-grid {
+            grid-template-columns: 1fr;
+        }
+        #calculator-interface, #admin-panel {
             grid-template-columns: 1fr;
         }
     }
@@ -470,13 +474,11 @@
                 </header>
 
                 <main>
-                    <div class="card">
-                        <div id="service-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
-                            <!-- Tabs will be generated here -->
-                        </div>
-                        <div id="service-category-content">
-                            <!-- Content for the active service will be injected here -->
-                        </div>
+                    <div id="calculator-interface" class="card">
+                        <!-- Calculator content is rendered here by its module -->
+                    </div>
+                    <div id="admin-panel" class="card hidden">
+                        <!-- Admin Panel content is rendered here by its module -->
                     </div>
                 </main>
             </div>
@@ -521,8 +523,8 @@
 
             return {
                 cipherText: btoa(String.fromCharCode.apply(null, new Uint8Array(cipherText))),
-                iv: btoa(String.fromCharCode.apply(null, iv)),
-                salt: btoa(String.fromCharCode.apply(null, salt))
+                iv: btoa(String.fromCharCode.apply(null, new Uint8Array(iv))),
+                salt: btoa(String.fromCharCode.apply(null, new Uint8Array(salt)))
             };
         }
 
@@ -635,7 +637,7 @@
             };
 
             return {
-                "version": "1.2.0", // Incremented version
+                "version": "1.3.0", // Incremented version for Admin Panel changes
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
@@ -778,42 +780,220 @@
 
         function render() {
             container = container || document.getElementById('admin-panel');
+            if(!container) return; // Exit if the admin panel element isn't on the page
+            
             let html = `
-                <div id="service-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
+                <div id="admin-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
                     <button data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
                     <button data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
                     <button data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
                 </div>
-                <div id="service-category-content"></div>`;
+                <div id="admin-category-content"></div>`;
             container.innerHTML = html;
-            renderCategory(currentCategory);
-            attachListeners();
+            renderCategoryContent(currentCategory);
+            attachNavListeners();
         }
         
-        function renderCategory(category) {
+        function renderCategoryContent(category) {
             currentCategory = category;
-            const contentContainer = document.getElementById('service-category-content');
+            const contentContainer = container.querySelector('#admin-category-content');
+            if(!contentContainer) return;
+
             if(category === 'countertops') {
-                contentContainer.innerHTML = '<h2>Countertop Admin - Coming Soon</h2>'; // Placeholder
+                renderCountertopAdmin(contentContainer);
             } else if (category === 'casework') {
-                 contentContainer.innerHTML = '<h2>Casework Admin - Coming Soon</h2>'; // Placeholder
+                 contentContainer.innerHTML = '<h2 class="card__title">Casework Admin - Coming Soon</h2>'; // Placeholder
             } else if (category === 'misc_services') {
-                contentContainer.innerHTML = '<h2>Misc Services Admin - To be implemented</h2>';
+                contentContainer.innerHTML = '<h2 class="card__title">Misc Services Admin - To be implemented</h2>';
             }
-             // NOTE: Full admin implementation for each category will be added in subsequent steps.
-             // This structure prepares for that. For now, we confirm the tabbing works.
+        }
+        
+        /**
+         * Renders the main admin view for the Countertops category.
+         * This includes the material selector dropdown.
+         */
+        function renderCountertopAdmin(contentContainer) {
+            const data = DataEngine.getData();
+            const allMaterials = data.countertops;
+            
+            let materialOptionsHTML = Object.keys(allMaterials).map(key => `<option value="${key}">${allMaterials[key].name}</option>`).join('');
+
+            let html = `
+                <h2 class="card__title">Edit Countertop Pricing</h2>
+                <div class="form-group">
+                    <label for="admin-material-select" class="form-group__label">Select a Material to Edit</label>
+                    <select id="admin-material-select" class="form-group__select">${materialOptionsHTML}</select>
+                </div>
+                <div id="admin-material-form-container" class="mt-4">
+                    <!-- Dynamic form for the selected material will be injected here -->
+                </div>
+            `;
+            contentContainer.innerHTML = html;
+            
+            const materialSelect = contentContainer.querySelector('#admin-material-select');
+            materialSelect.addEventListener('change', () => renderCountertopAdminForm(materialSelect.value));
+            
+            // Initial render of the form for the first material in the list
+            renderCountertopAdminForm(materialSelect.value);
         }
 
-        function attachListeners() {
-            container.querySelector('#service-category-tabs').addEventListener('click', e => {
-                if (e.target.tagName === 'BUTTON') {
-                    const category = e.target.dataset.category;
-                    // Update active button state
-                    container.querySelectorAll('#service-category-tabs button').forEach(btn => btn.classList.remove('active'));
-                    e.target.classList.add('active');
-                    renderCategory(category);
-                }
+        /**
+         * Renders the dynamic form for a specific countertop material.
+         */
+        function renderCountertopAdminForm(materialKey) {
+            const formContainer = container.querySelector('#admin-material-form-container');
+            if(!formContainer) return;
+
+            const data = DataEngine.getData();
+            const materialData = data.countertops[materialKey];
+            if(!materialData) {
+                formContainer.innerHTML = '<p class="text-error">Could not load material data.</p>';
+                return;
+            }
+
+            // Generate HTML for option multipliers
+            let optionsHTML = materialData.options ? Object.keys(materialData.options).map(optKey => {
+                const option = materialData.options[optKey];
+                return `
+                    <h3 class="admin-section-title">${option.name} Multipliers</h3>
+                    ${Object.keys(option.values).map(valKey => {
+                        const valueData = option.values[valKey];
+                        return `
+                        <div class="admin-group">
+                             <label for="admin-option-${optKey}-${valKey}" class="admin-group__label">${valueData.name}</label>
+                             <input type="number" id="admin-option-${optKey}-${valKey}" data-type="option" data-option-key="${optKey}" data-value-key="${valKey}" class="form-group__input" step="0.01" value="${valueData.multiplier}">
+                        </div>`;
+                    }).join('')}
+                `;
+            }).join('') : '';
+
+            // Generate HTML for edge costs
+            let edgesHTML = materialData.edges ? Object.keys(materialData.edges).map(edgeKey => {
+                 const edgeData = materialData.edges[edgeKey];
+                 return `
+                    <div class="admin-group">
+                        <label for="admin-edge-${edgeKey}" class="admin-group__label">${edgeData.name}</label>
+                        <input type="number" id="admin-edge-${edgeKey}" data-type="edge" data-key="${edgeKey}" class="form-group__input" step="0.01" value="${edgeData.cost_lnft}">
+                    </div>
+                 `;
+            }).join('') : '';
+
+            // Generate HTML for cutout costs
+            let cutoutsHTML = materialData.cutouts ? Object.keys(materialData.cutouts).map(cutoutKey => {
+                const cutoutData = materialData.cutouts[cutoutKey];
+                return `
+                   <div class="admin-group">
+                       <label for="admin-cutout-${cutoutKey}" class="admin-group__label">${cutoutData.name}</label>
+                       <input type="number" id="admin-cutout-${cutoutKey}" data-type="cutout" data-key="${cutoutKey}" class="form-group__input" step="0.01" value="${cutoutData.cost}">
+                   </div>
+                `;
+           }).join('') : '';
+
+            // The complete form structure
+            let html = `
+                <div class="form-grid">
+                    <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Base Costs</legend>
+                        <div class="admin-group">
+                            <label for="admin-cost-sqft" class="admin-group__label">Cost per Sq. Ft.</label>
+                            <input type="number" id="admin-cost-sqft" class="form-group__input" step="0.01" value="${materialData.cost_sqft}">
+                        </div>
+                    </fieldset>
+                    
+                     <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Option Multipliers</legend>
+                        ${optionsHTML}
+                    </fieldset>
+
+                    <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Edge Costs (per Ln. Ft.)</legend>
+                        ${edgesHTML}
+                    </fieldset>
+
+                    <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">Cutout Costs</legend>
+                        ${cutoutsHTML}
+                    </fieldset>
+                </div>
+                
+                <div class="admin-actions">
+                    <span id="save-confirmation" class="hidden">Changes saved!</span>
+                    <button id="save-admin-changes" data-material-key="${materialKey}">Save Changes</button>
+                </div>
+            `;
+
+            formContainer.innerHTML = html;
+            attachFormListeners();
+        }
+
+        /**
+         * Saves the changes made in the countertop admin form to localStorage.
+         */
+        function saveCountertopChanges(materialKey) {
+            const data = DataEngine.getData();
+            const materialData = data.countertops[materialKey];
+            if(!materialData) {
+                console.error("Could not find material to save:", materialKey);
+                return;
+            }
+
+            // Update cost_sqft
+            materialData.cost_sqft = parseFloat(container.querySelector('#admin-cost-sqft').value);
+
+            // Update option multipliers
+            container.querySelectorAll('input[data-type="option"]').forEach(input => {
+                const optKey = input.dataset.optionKey;
+                const valKey = input.dataset.valueKey;
+                materialData.options[optKey].values[valKey].multiplier = parseFloat(input.value);
             });
+
+            // Update edge costs
+            container.querySelectorAll('input[data-type="edge"]').forEach(input => {
+                const key = input.dataset.key;
+                materialData.edges[key].cost_lnft = parseFloat(input.value);
+            });
+
+            // Update cutout costs
+            container.querySelectorAll('input[data-type="cutout"]').forEach(input => {
+                const key = input.dataset.key;
+                materialData.cutouts[key].cost = parseFloat(input.value);
+            });
+            
+            // Save the entire updated data object
+            DataEngine.saveData(data);
+            
+            // Provide user feedback
+            const confirmation = container.querySelector('#save-confirmation');
+            confirmation.classList.remove('hidden');
+            setTimeout(() => { confirmation.classList.add('hidden'); }, 3000);
+
+            // Refresh the calculator to reflect the new prices
+            Calculator.render();
+        }
+
+
+        function attachNavListeners() {
+            const tabs = container.querySelector('#admin-category-tabs');
+            if (tabs) {
+                tabs.addEventListener('click', e => {
+                    if (e.target.tagName === 'BUTTON') {
+                        const category = e.target.dataset.category;
+                        // Update active button state
+                        container.querySelectorAll('#admin-category-tabs button').forEach(btn => btn.classList.remove('active'));
+                        e.target.classList.add('active');
+                        renderCategoryContent(category);
+                    }
+                });
+            }
+        }
+        
+        function attachFormListeners() {
+            const saveButton = container.querySelector('#save-admin-changes');
+            if(saveButton) {
+                saveButton.addEventListener('click', (e) => {
+                    saveCountertopChanges(e.target.dataset.materialKey);
+                });
+            }
         }
 
         function init() {
@@ -829,21 +1009,24 @@
 
         function render() {
              container = container || document.getElementById('calculator-interface');
+             if(!container) return; // Exit if calculator element doesn't exist
              let html = `
-                <div id="service-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
+                <div id="calc-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
                     <button data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
                     <button data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
                     <button data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
                 </div>
-                <div id="service-category-content"></div>`;
+                <div id="calc-category-content"></div>`;
             container.innerHTML = html;
-            renderCategory(currentCategory);
-            attachListeners();
+            renderCategoryContent(currentCategory);
+            attachNavListeners();
         }
 
-        function renderCategory(category) {
+        function renderCategoryContent(category) {
             currentCategory = category;
-            const contentContainer = document.getElementById('service-category-content');
+            const contentContainer = container.querySelector('#calc-category-content');
+            if (!contentContainer) return;
+            
             if (category === 'countertops') {
                 renderCountertopCalculator(contentContainer);
             } else if (category === 'casework') {
@@ -886,7 +1069,8 @@
              
              const materialSelect = document.getElementById('calc-material-select');
              materialSelect.addEventListener('change', () => renderCountertopOptions(materialSelect.value));
-             renderCountertopOptions(materialSelect.value);
+             renderCountertopOptions(materialSelect.value); // Initial render
+             attachFormListeners();
         }
         
         function renderCountertopOptions(materialKey) {
@@ -978,7 +1162,8 @@
 
              const caseworkSelect = document.getElementById('calc-casework-select');
              caseworkSelect.addEventListener('change', () => renderCaseworkOptions(caseworkSelect.value));
-             renderCaseworkOptions(caseworkSelect.value);
+             renderCaseworkOptions(caseworkSelect.value); // Initial render
+             attachFormListeners();
         }
 
         function renderCaseworkOptions(caseworkKey) {
@@ -1015,6 +1200,74 @@
             calculateQuote();
         }
 
+        // Renders Misc Services calculator
+        function renderMiscServicesCalculator(container) {
+            const data = DataEngine.getData();
+            const allMiscServices = data.misc_services;
+            let serviceOptionsHTML = Object.keys(allMiscServices).map(key => `<option value="${key}">${allMiscServices[key].name}</option>`).join('');
+
+             let html = `
+                <div class="main-grid">
+                    <div>
+                         <div class="form-group">
+                            <label for="calc-misc-select" class="form-group__label">1. Select Service</label>
+                            <select id="calc-misc-select" class="form-group__select">${serviceOptionsHTML}</select>
+                        </div>
+                        <div id="calc-misc-options-container"></div>
+                    </div>
+                    <div>
+                        <div id="quote-summary" class="card">
+                            <h2 class="card__title">Quote Summary</h2>
+                            <div id="quote-details">
+                                <p class="quote-summary__placeholder">Select a service to begin.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+             container.innerHTML = html;
+
+             const miscSelect = document.getElementById('calc-misc-select');
+             miscSelect.addEventListener('change', () => renderMiscServiceOptions(miscSelect.value));
+             renderMiscServiceOptions(miscSelect.value); // Initial Render
+             attachFormListeners();
+        }
+
+        function renderMiscServiceOptions(serviceKey) {
+            const optionsContainer = document.getElementById('calc-misc-options-container');
+            const data = DataEngine.getData();
+            const serviceData = data.misc_services[serviceKey];
+            let html = '';
+
+            if (serviceKey === 'design') {
+                html = `
+                    <div class="form-grid" style="margin-top: 24px;">
+                         <fieldset class="form-fieldset"> <legend class="form-fieldset__legend">2. Enter Hours</legend>
+                            <div class="form-group">
+                                <label for="calc-hours" class="form-group__label">Estimated Hours</label>
+                                <input type="number" id="calc-hours" class="form-group__input calc-input" placeholder="e.g., 5">
+                            </div>
+                        </fieldset>
+                    </div>`;
+            } else if (serviceKey === 'cnc_machining') {
+                html = `
+                     <div class="form-grid" style="margin-top: 24px;">
+                         <fieldset class="form-fieldset"> <legend class="form-fieldset__legend">2. Enter Details</legend>
+                            <div class="form-group">
+                                <label for="calc-machine-time" class="form-group__label">Machine Time (Hours)</label>
+                                <input type="number" id="calc-machine-time" class="form-group__input calc-input" placeholder="e.g., 2.5">
+                            </div>
+                             <div class="form-group">
+                                <label for="calc-setup-fee" class="form-group__label">Setup Fee</label>
+                                <input type="number" id="calc-setup-fee" class="form-group__input calc-input" value="${serviceData.setup_fee}" disabled>
+                            </div>
+                        </fieldset>
+                    </div>`;
+            }
+            optionsContainer.innerHTML = html;
+            calculateQuote();
+        }
+
+        // Generic quote calculation dispatcher
         function calculateQuote() {
             if (currentCategory === 'countertops') {
                 calculateCountertopQuote();
@@ -1026,9 +1279,10 @@
         }
 
         function calculateCountertopQuote() {
-            // This is the old calculateQuote function, renamed
             const data = DataEngine.getData();
-            const materialKey = document.getElementById('calc-material-select').value;
+            const materialKey = document.getElementById('calc-material-select')?.value;
+            if(!materialKey) return; // Exit if element doesn't exist
+            
             const materialData = data.countertops[materialKey];
             const settings = data.settings;
 
@@ -1086,7 +1340,9 @@
 
         function calculateCaseworkQuote() {
             const data = DataEngine.getData();
-            const caseworkKey = document.getElementById('calc-casework-select').value;
+            const caseworkKey = document.getElementById('calc-casework-select')?.value;
+            if(!caseworkKey) return;
+            
             const caseworkData = data.casework[caseworkKey];
             const settings = data.settings;
             
@@ -1129,74 +1385,11 @@
             quoteDetailsContainer.innerHTML = summaryHTML;
         }
 
-        function renderMiscServicesCalculator(container) {
-            const data = DataEngine.getData();
-            const allMiscServices = data.misc_services;
-            let serviceOptionsHTML = Object.keys(allMiscServices).map(key => `<option value="${key}">${allMiscServices[key].name}</option>`).join('');
-
-             let html = `
-                <div class="main-grid">
-                    <div>
-                         <div class="form-group">
-                            <label for="calc-misc-select" class="form-group__label">1. Select Service</label>
-                            <select id="calc-misc-select" class="form-group__select">${serviceOptionsHTML}</select>
-                        </div>
-                        <div id="calc-misc-options-container"></div>
-                    </div>
-                    <div>
-                        <div id="quote-summary" class="card" style="padding: 0; box-shadow: none;">
-                            <h2 class="card__title" style="padding: 24px; margin-bottom: 0;">Quote Summary</h2>
-                            <div id="quote-details">
-                                <p class="quote-summary__placeholder">Select a service to begin.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-             container.innerHTML = html;
-
-             const miscSelect = document.getElementById('calc-misc-select');
-             miscSelect.addEventListener('change', () => renderMiscServiceOptions(miscSelect.value));
-             renderMiscServiceOptions(miscSelect.value);
-        }
-
-        function renderMiscServiceOptions(serviceKey) {
-            const optionsContainer = document.getElementById('calc-misc-options-container');
-            const data = DataEngine.getData();
-            const serviceData = data.misc_services[serviceKey];
-            let html = '';
-
-            if (serviceKey === 'design') {
-                html = `
-                    <div class="form-grid" style="margin-top: 24px;">
-                         <fieldset class="form-fieldset"> <legend class="form-fieldset__legend">2. Enter Hours</legend>
-                            <div class="form-group">
-                                <label for="calc-hours" class="form-group__label">Estimated Hours</label>
-                                <input type="number" id="calc-hours" class="form-group__input calc-input" placeholder="e.g., 5">
-                            </div>
-                        </fieldset>
-                    </div>`;
-            } else if (serviceKey === 'cnc_machining') {
-                html = `
-                     <div class="form-grid" style="margin-top: 24px;">
-                         <fieldset class="form-fieldset"> <legend class="form-fieldset__legend">2. Enter Details</legend>
-                            <div class="form-group">
-                                <label for="calc-machine-time" class="form-group__label">Machine Time (Hours)</label>
-                                <input type="number" id="calc-machine-time" class="form-group__input calc-input" placeholder="e.g., 2.5">
-                            </div>
-                             <div class="form-group">
-                                <label for="calc-setup-fee" class="form-group__label">Setup Fee</label>
-                                <input type="number" id="calc-setup-fee" class="form-group__input calc-input" value="${serviceData.setup_fee}" disabled>
-                            </div>
-                        </fieldset>
-                    </div>`;
-            }
-            optionsContainer.innerHTML = html;
-            calculateQuote();
-        }
-
         function calculateMiscServicesQuote() {
             const data = DataEngine.getData();
-            const serviceKey = document.getElementById('calc-misc-select').value;
+            const serviceKey = document.getElementById('calc-misc-select')?.value;
+            if(!serviceKey) return;
+
             const serviceData = data.misc_services[serviceKey];
             const settings = data.settings;
             const quoteDetailsContainer = document.getElementById('quote-details');
@@ -1235,19 +1428,26 @@
             quoteDetailsContainer.innerHTML = summaryHTML;
         }
 
-        function attachListeners() {
-            container.addEventListener('input', calculateQuote);
-            container.addEventListener('change', calculateQuote);
+        function attachNavListeners() {
+            const tabs = container.querySelector('#calc-category-tabs');
+             if (tabs) {
+                tabs.addEventListener('click', e => {
+                    if (e.target.tagName === 'BUTTON') {
+                        const category = e.target.dataset.category;
+                        container.querySelectorAll('#calc-category-tabs button').forEach(btn => btn.classList.remove('active'));
+                        e.target.classList.add('active');
+                        renderCategoryContent(category);
+                    }
+                });
+            }
+        }
 
-            container.querySelector('#service-category-tabs').addEventListener('click', e => {
-                if (e.target.tagName === 'BUTTON') {
-                    const category = e.target.dataset.category;
-                    // Update active button state
-                    container.querySelectorAll('#service-category-tabs button').forEach(btn => btn.classList.remove('active'));
-                    e.target.classList.add('active');
-                    renderCategory(category);
-                }
-            });
+        function attachFormListeners() {
+             const calcContent = container.querySelector('#calc-category-content');
+             if(calcContent) {
+                calcContent.addEventListener('input', calculateQuote);
+                calcContent.addEventListener('change', calculateQuote);
+             }
         }
         
         function init() {
