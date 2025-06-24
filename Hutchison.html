@@ -4,80 +4,435 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Business Pricing Calculator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* Base Styling & BEM Convention */
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6; /* gray-100 */
+    /*
+    ============================================
+    --- 1. CSS Variables & Root Setup
+    ============================================
+    Defines the core design tokens (colors, spacing, fonts) for the application.
+    */
+    :root {
+        --color-primary: #4f46e5; /* Indigo 600 */
+        --color-primary-dark: #4338ca; /* Indigo 700 */
+        --color-accent: #10b981; /* Emerald 500 */
+        --color-bg: #f8f9fa; /* Lighter Gray */
+        --color-surface: #ffffff;
+        --color-text-header: #212529;
+        --color-text-body: #495057;
+        --color-text-muted: #6c757d;
+        --color-border: #dee2e6;
+        --color-input-bg: #f1f3f5;
+        --color-error: #dc3545;
+        --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        --spacing-unit: 8px;
+        --border-radius: 0.5rem; /* 8px */
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+        --transition-speed: 0.2s;
+    }
+
+    /*
+    ============================================
+    --- 2. Base & Global Styles
+    ============================================
+    Applies foundational styles and resets.
+    */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    body {
+        font-family: var(--font-family-base);
+        background-color: var(--color-bg);
+        color: var(--color-text-body);
+        line-height: 1.6;
+        font-size: 16px;
+    }
+
+    .hidden {
+        display: none !important;
+    }
+
+    .app-wrapper {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: calc(var(--spacing-unit) * 3);
+    }
+    
+    /*
+    ============================================
+    --- 3. Password Prompt
+    ============================================
+    */
+    #password-prompt {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: calc(var(--spacing-unit) * 2);
+    }
+
+    #password-prompt > div {
+        max-width: 400px;
+        width: 100%;
+        background-color: var(--color-surface);
+        padding: calc(var(--spacing-unit) * 5);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-lg);
+        text-align: center;
+    }
+    
+    #password-prompt h2 {
+        color: var(--color-text-header);
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: var(--spacing-unit);
+    }
+
+    #password-prompt p {
+        color: var(--color-text-muted);
+        margin-bottom: calc(var(--spacing-unit) * 3);
+    }
+
+    #password-input {
+        width: 100%;
+        padding: calc(var(--spacing-unit) * 1.5);
+        border: 1px solid var(--color-border);
+        border-radius: var(--border-radius);
+        font-size: 1rem;
+        margin-bottom: calc(var(--spacing-unit) * 2);
+        transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+    }
+
+    #password-input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgb(79 70 229 / 0.2);
+    }
+
+    #submit-password {
+        width: 100%;
+        padding: calc(var(--spacing-unit) * 1.5);
+        background-color: var(--color-primary);
+        color: var(--color-surface);
+        border: none;
+        border-radius: var(--border-radius);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color var(--transition-speed);
+    }
+
+    #submit-password:hover {
+        background-color: var(--color-primary-dark);
+    }
+
+    #password-error {
+        color: var(--color-error);
+        margin-top: var(--spacing-unit);
+        font-size: 0.875rem;
+    }
+
+    /*
+    ============================================
+    --- 4. Main Application Layout & Header
+    ============================================
+    */
+    header {
+        text-align: center;
+        margin-bottom: calc(var(--spacing-unit) * 5);
+    }
+
+    #company-header {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--color-text-header);
+        margin-bottom: var(--spacing-unit);
+    }
+
+    header > p {
+        color: var(--color-text-muted);
+        font-size: 1.125rem;
+    }
+
+    header .view-switcher {
+        display: flex;
+        justify-content: center;
+        gap: calc(var(--spacing-unit) * 2);
+        margin-top: calc(var(--spacing-unit) * 3);
+    }
+    
+    header .view-switcher button {
+        padding: calc(var(--spacing-unit) * 1.25) calc(var(--spacing-unit) * 3);
+        border: 1px solid var(--color-border);
+        border-radius: var(--border-radius);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color var(--transition-speed), color var(--transition-speed);
+    }
+
+    header .view-switcher button.active {
+        background-color: var(--color-primary);
+        color: var(--color-surface);
+        border-color: var(--color-primary);
+    }
+    
+    header .view-switcher button:not(.active) {
+        background-color: var(--color-surface);
+        color: var(--color-text-body);
+    }
+    
+    header .view-switcher button:not(.active):hover {
+        background-color: var(--color-bg);
+    }
+
+
+    /*
+    ============================================
+    --- 5. General Card & Form Styles
+    ============================================
+    Shared styles for calculator, admin, and quote summary cards.
+    */
+    .card {
+        background-color: var(--color-surface);
+        border-radius: var(--border-radius);
+        padding: calc(var(--spacing-unit) * 4);
+        box-shadow: var(--shadow-md);
+        margin-bottom: calc(var(--spacing-unit) * 3);
+    }
+    
+    .card__title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--color-text-header);
+        margin-bottom: calc(var(--spacing-unit) * 3);
+        padding-bottom: calc(var(--spacing-unit) * 2);
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: calc(var(--spacing-unit) * 4);
+    }
+
+    .form-fieldset {
+        border: none;
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--spacing-unit) * 2);
+    }
+
+    .form-fieldset__legend {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--color-text-header);
+        margin-bottom: var(--spacing-unit);
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group__label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--color-text-body);
+        margin-bottom: var(--spacing-unit);
+    }
+
+    .form-group__input,
+    .form-group__select {
+        width: 100%;
+        padding: calc(var(--spacing-unit) * 1.25);
+        border: 1px solid var(--color-border);
+        border-radius: calc(var(--border-radius) / 1.5);
+        font-size: 1rem;
+        background-color: var(--color-surface);
+        transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+    }
+
+    .form-group__input:focus,
+    .form-group__select:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgb(79 70 229 / 0.2);
+    }
+    
+    .form-group--checkbox {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: var(--spacing-unit);
+    }
+
+    .form-group__checkbox {
+        height: 1.25em;
+        width: 1.25em;
+        accent-color: var(--color-primary);
+    }
+
+    /*
+    ============================================
+    --- 6. Calculator Interface Specifics
+    ============================================
+    */
+    #calculator-interface .main-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: calc(var(--spacing-unit) * 4);
+    }
+
+    #quote-summary.card {
+        position: sticky;
+        top: calc(var(--spacing-unit) * 3);
+    }
+    
+    .quote-summary__placeholder {
+        text-align: center;
+        color: var(--color-text-muted);
+        padding: calc(var(--spacing-unit) * 8) 0;
+    }
+
+    .quote-summary__table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .quote-summary__table td {
+        padding: calc(var(--spacing-unit) * 1.5) var(--spacing-unit);
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .quote-summary__table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .quote-summary__table .item-name {
+        font-weight: 500;
+    }
+    
+    .quote-summary__table .item-cost {
+        text-align: right;
+    }
+
+    .quote-summary__table .subtotal-row td {
+        font-weight: 600;
+        color: var(--color-text-header);
+        border-top: 2px solid var(--color-border);
+        padding-top: calc(var(--spacing-unit) * 2);
+    }
+    
+    .quote-summary__table .total-row td {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--color-primary);
+        background-color: #f3f4f6;
+    }
+
+
+    /*
+    ============================================
+    --- 7. Admin Panel Specifics
+    ============================================
+    */
+    #admin-panel .admin-group {
+        display: grid;
+        grid-template-columns: 1fr 200px;
+        gap: calc(var(--spacing-unit) * 2);
+        align-items: center;
+        margin-bottom: var(--spacing-unit);
+    }
+    
+    #admin-panel .admin-group__label {
+        font-weight: 500;
+    }
+
+    #admin-panel .admin-section-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        margin-top: calc(var(--spacing-unit) * 4);
+        margin-bottom: calc(var(--spacing-unit) * 2);
+        padding-bottom: var(--spacing-unit);
+        border-bottom: 1px solid var(--color-border);
+    }
+    
+    .admin-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: calc(var(--spacing-unit) * 2);
+        margin-top: calc(var(--spacing-unit) * 4);
+    }
+    
+    #save-admin-changes {
+        padding: calc(var(--spacing-unit) * 1.25) calc(var(--spacing-unit) * 3);
+        background-color: var(--color-primary);
+        color: var(--color-surface);
+        border: none;
+        border-radius: var(--border-radius);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color var(--transition-speed);
+    }
+    
+    #save-admin-changes:hover {
+        background-color: var(--color-primary-dark);
+    }
+
+    #save-confirmation {
+        color: var(--color-accent);
+        font-weight: 600;
+    }
+
+    /*
+    ============================================
+    --- 8. Responsive Design
+    ============================================
+    */
+    @media (max-width: 992px) {
+        #calculator-interface .main-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        #admin-panel .admin-group {
+            grid-template-columns: 1fr;
+            gap: var(--spacing-unit);
         }
 
-        /* Helper class to hide elements */
-        .hidden {
-            display: none;
+        .app-wrapper {
+             padding: calc(var(--spacing-unit) * 2);
         }
-
-        /* Scoped styles to prevent leakage between calculator and admin panel */
-        #calculator-interface .calculator__input, #admin-panel .admin-panel__input {
-            @apply w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500;
-        }
-
-        #calculator-interface .calculator__label, #admin-panel .admin-panel__label {
-            @apply block text-sm font-medium text-gray-700 mb-1;
-        }
-
-        #calculator-interface .calculator__button, #admin-panel .admin-panel__button {
-            @apply px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50;
-        }
-
-        #calculator-interface .calculator__card, #admin-panel .admin-panel__card {
-            @apply bg-white p-6 rounded-lg shadow-md mb-6;
-        }
-
-        #quote-summary .quote-summary__table {
-            @apply min-w-full divide-y divide-gray-200;
-        }
-        #quote-summary .quote-summary__cell {
-            @apply px-4 py-3 text-sm;
-        }
-        #quote-summary .quote-summary__header {
-            @apply px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
-        }
+    }
     </style>
 </head>
-<body class="bg-gray-100">
+<body>
 
     <!-- Container for the entire application. Will be populated after decryption. -->
     <div id="app-container">
         <!-- Password prompt will be shown here initially -->
-        <div id="password-prompt" class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div class="max-w-md w-full space-y-8 bg-white p-10 rounded-xl shadow-lg">
+        <div id="password-prompt">
+            <div>
+                <h2>Admin Access</h2>
+                <p>Enter password to access the calculator and admin panel.</p>
                 <div>
-                    <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                        Admin Access
-                    </h2>
-                    <p class="mt-2 text-center text-sm text-gray-600">
-                        Enter password to access the calculator and admin panel.
-                    </p>
+                    <input id="password-input" name="password" type="password" required placeholder="Password">
                 </div>
-                <div class="mt-8 space-y-6">
-                    <div class="rounded-md shadow-sm -space-y-px">
-                        <div>
-                            <label for="password" class="sr-only">Password</label>
-                            <input id="password-input" name="password" type="password" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm" placeholder="Password">
-                        </div>
-                    </div>
-
-                    <div>
-                        <button id="submit-password" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                            Unlock
-                        </button>
-                    </div>
-                     <p id="password-error" class="mt-2 text-center text-sm text-red-600 hidden">Incorrect password. Please try again.</p>
+                <div>
+                    <button id="submit-password">Unlock</button>
                 </div>
+                <p id="password-error" class="hidden">Incorrect password. Please try again.</p>
             </div>
         </div>
     </div>
@@ -99,37 +454,30 @@
         const appContainer = document.getElementById('app-container');
 
         // This is the encrypted content of the application.
-        // In a real scenario, an offline tool would be used to encrypt the HTML.
-        // For this demo, we will encrypt it dynamically on first load if not already set.
         // The default password is "admin123"
-        let encryptedData = {
-            "iv": "z5dC0j4gqY8nL2xP",
-            "salt": "a1b2c3d4e5f6g7h8",
-            "cipherText": "U2FsdGVkX1+zQhE5n/iN0G5bL3oD2jR8mF7kG4pS6fQ... (example)"
-        };
+        let encryptedData = {};
 
         // The actual HTML content of the application that will be encrypted.
         const appHTML = `
-            <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-                <header class="mb-8">
-                    <h1 id="company-header" class="text-4xl font-bold text-gray-800 text-center">Pricing Calculator</h1>
-                    <p class="text-center text-gray-500 mt-2">A comprehensive business engine for quotes.</p>
-                    <div class="flex justify-center mt-4 space-x-2">
-                        <button id="show-calculator-btn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-md">Calculator</button>
-                        <button id="show-admin-btn" class="px-4 py-2 bg-gray-600 text-white font-semibold rounded-md shadow-md">Admin Panel</button>
+            <div class="app-wrapper">
+                <header>
+                    <h1 id="company-header">Pricing Calculator</h1>
+                    <p>A comprehensive business engine for quotes.</p>
+                    <div class="view-switcher">
+                        <button id="show-calculator-btn">Calculator</button>
+                        <button id="show-admin-btn">Admin Panel</button>
                     </div>
                 </header>
 
                 <main>
-                    <!-- Calculator Interface -->
-                    <section id="calculator-interface">
-                        <!-- Content generated by JavaScript -->
-                    </section>
-
-                    <!-- Admin Panel -->
-                    <section id="admin-panel" class="hidden">
-                         <!-- Content generated by JavaScript -->
-                    </section>
+                    <div class="card">
+                        <div id="service-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
+                            <!-- Tabs will be generated here -->
+                        </div>
+                        <div id="service-category-content">
+                            <!-- Content for the active service will be injected here -->
+                        </div>
+                    </div>
                 </main>
             </div>
         `;
@@ -250,26 +598,16 @@
      */
     const App = (function() {
         function init() {
-            console.log("Application Initialized.");
-            
-            // Initialize modules that don't depend on the decrypted DOM first
             DataEngine.init();
-
-            // Initialize UI Controller to grab elements from the now-existing DOM
-            UIController.init();
-
-            // Set up view switching now that buttons are available
-            document.getElementById('show-calculator-btn').addEventListener('click', () => UIController.showView('calculator'));
-            document.getElementById('show-admin-btn').addEventListener('click', () => UIController.showView('admin'));
+            UIController.init(); // Init grabs the main containers
             
-            // Initialize modules that render into the DOM
-            AdminPanel.init();
-            Calculator.init();
-
-            // Show calculator by default
-            UIController.showView('calculator');
+            // Wire up main view switcher (Calculator vs Admin)
+            document.getElementById('show-calculator-btn').addEventListener('click', () => UIController.showMainView('calculator'));
+            document.getElementById('show-admin-btn').addEventListener('click', () => UIController.showMainView('admin'));
+            
+            // Show the calculator view by default, which will trigger its own render
+            UIController.showMainView('calculator');
         }
-
         return { init };
     })();
 
@@ -282,40 +620,87 @@
 
         // Default data schema as per the blueprint
         function getDefaultData() {
+            const commonCutouts = {
+                undermount_sink: { name: "Undermount Sink", cost: 300 },
+                dropin_sink: { name: "Drop-in Sink", cost: 150 },
+                cooktop: { name: "Cooktop", cost: 200 },
+                faucet_hole: { name: "Faucet Hole", cost: 20 }
+            };
+
+            const commonEdges = {
+                eased: { name: "Eased (Standard)", cost_lnft: 0 },
+                bevel: { name: "Bevel", cost_lnft: 10 },
+                bullnose: { name: "Bullnose", cost_lnft: 15},
+                ogee: { name: "Ogee", cost_lnft: 25 }
+            };
+
             return {
-                "version": "1.0.0",
+                "version": "1.2.0", // Incremented version
                 "settings": {
                     "companyName": "Hutchison Custom Fabrication",
                     "taxRate": 0.0875
                 },
                 "countertops": {
-                    "granite": {
-                        "name": "Granite",
-                        "cost_sqft": 80.63,
-                        "grades": {
-                            "level_1": { "name": "Level 1 (Standard)", "multiplier": 1.0 },
-                            "level_2": { "name": "Level 2 (Mid-Grade)", "multiplier": 1.2 },
-                            "exotic": { "name": "Exotic", "multiplier": 1.5 }
-                        },
-                        "edges": {
-                            "eased": { "name": "Eased (Standard)", "cost_lnft": 0 },
-                            "bevel": { "name": "Bevel", "cost_lnft": 10 },
-                            "ogee": { "name": "Ogee", "cost_lnft": 25 }
-                        },
-                        "cutouts": {
-                            "undermount_sink": { "name": "Undermount Sink", "cost": 300 },
-                            "dropin_sink": { "name": "Drop-in Sink", "cost": 150 },
-                            "cooktop": { "name": "Cooktop", "cost": 200 },
-                            "faucet_hole": { "name": "Faucet Hole", "cost": 20 }
-                        }
-                    }
-                    // Other countertop types will be added in Phase 2
+                    "plastic_laminate": { name: "Plastic Laminate", cost_sqft: 35.67, options: { brand: { name: "Brand/Finish", type: "select", values: { standard: { name: "Standard (Formica, Wilsonart)", multiplier: 1.0 }, premium: { name: "Premium Finish", multiplier: 1.25 } } } }, edges: commonEdges, cutouts: commonCutouts },
+                    "granite": { name: "Granite", cost_sqft: 80.63, options: { grade: { name: "Grade", type: "select", values: { level_1: { name: "Level 1 (Standard)", multiplier: 1.0 }, level_2: { name: "Level 2 (Mid-Grade)", multiplier: 1.2 }, exotic: { name: "Exotic", multiplier: 1.5 } } } }, edges: commonEdges, cutouts: commonCutouts },
+                    "quartz": { name: "Quartz", cost_sqft: 73.16, options: { brand: { name: "Brand", type: "select", values: { standard: { name: "Standard (e.g., Silestone)", multiplier: 1.0 }, premium: { name: "Premium (e.g., Cambria)", multiplier: 1.3 } } } }, edges: commonEdges, cutouts: commonCutouts },
+                    "epoxy_resin": { name: "Epoxy Resin", cost_sqft: 100.00, options: { design: { name: "Design Complexity", type: "select", values: { simple: { name: "Simple (1-2 Colors)", multiplier: 1.0 }, complex: { name: "Complex (Metallics, Veining)", multiplier: 1.5 } } } }, edges: { square: { name: "Square Edge", cost_lnft: 0 } }, cutouts: commonCutouts },
+                    "solid_surface": { name: "Solid Surface", cost_sqft: 49.27, options: { color: { name: "Color/Pattern", type: "select", values: { standard: { name: "Standard Color", multiplier: 1.0 }, premium: { name: "Premium Pattern", multiplier: 1.2 } } } }, edges: commonEdges, cutouts: { ...commonCutouts, integral_sink: { name: "Integral Sink", cost: 450 } } }
                 },
                 "casework": {
-                    // To be implemented in Phase 2
+                    "base_cabinets": { 
+                        name: "Base Cabinets", 
+                        cost_lnft: 250, // Base cost per linear foot for standard base cabinets
+                        options: {
+                            awi_grade: {
+                                name: "AWI Grade",
+                                type: "select",
+                                values: {
+                                    economy: { name: "Economy", multiplier: 1.0 },
+                                    custom: { name: "Custom", multiplier: 1.4 },
+                                    premium: { name: "Premium", multiplier: 2.0 }
+                                }
+                            },
+                            material: {
+                                name: "Material",
+                                type: "select",
+                                values: {
+                                    p_laminate: { name: "Plastic Laminate", multiplier: 1.0 },
+                                    wood_veneer: { name: "Wood Veneer", multiplier: 1.8 }
+                                }
+                            },
+                            construction: {
+                                name: "Construction",
+                                type: "select",
+                                values: {
+                                    frameless: { name: "Frameless", multiplier: 1.0 },
+                                    face_frame: { name: "Face Frame", multiplier: 1.15 },
+                                    inset: { name: "Inset", multiplier: 1.35 }
+                                }
+                            }
+                        }
+                    },
+                    "wall_cabinets": {
+                        name: "Wall Cabinets",
+                        cost_lnft: 200, // Wall cabinets are typically less expensive
+                        // Options are the same as base cabinets, they can be reused or customized
+                        options: {
+                             awi_grade: { name: "AWI Grade", type: "select", values: { economy: { name: "Economy", multiplier: 1.0 }, custom: { name: "Custom", multiplier: 1.4 }, premium: { name: "Premium", multiplier: 2.0 } } },
+                             material: { name: "Material", type: "select", values: { p_laminate: { name: "Plastic Laminate", multiplier: 1.0 }, wood_veneer: { name: "Wood Veneer", multiplier: 1.8 } } },
+                             construction: { name: "Construction", type: "select", values: { frameless: { name: "Frameless", multiplier: 1.0 }, face_frame: { name: "Face Frame", multiplier: 1.15 } } }
+                        }
+                    }
                 },
                 "misc_services": {
-                    // To be implemented in Phase 2
+                    "design": {
+                        "name": "Design Services",
+                        "rate_hourly": 75
+                    },
+                    "cnc_machining": {
+                        "name": "CNC Machining",
+                        "rate_hourly": 90,
+                        "setup_fee": 50
+                    }
                 }
             };
         }
@@ -355,318 +740,518 @@
      * @description Manages DOM manipulation and view switching.
      */
     const UIController = (function() {
-        // Declare variables in the outer scope. They will be assigned in init().
-        let views = {};
-        let buttons = {};
+        let mainViews = {};
+        let mainButtons = {};
 
         function init() {
-            // Assign elements now that the DOM is populated.
-            views = {
+            mainViews = {
                 calculator: document.getElementById('calculator-interface'),
                 admin: document.getElementById('admin-panel')
             };
-            buttons = {
+            mainButtons = {
                 calculator: document.getElementById('show-calculator-btn'),
                 admin: document.getElementById('show-admin-btn')
             };
         }
 
-        function showView(viewName) {
-            Object.keys(views).forEach(key => {
-                if (key === viewName) {
-                    views[key].classList.remove('hidden');
-                    buttons[key].classList.remove('bg-gray-600');
-                    buttons[key].classList.add('bg-indigo-600');
-                } else {
-                    views[key].classList.add('hidden');
-                    buttons[key].classList.add('bg-gray-600');
-                    buttons[key].classList.remove('bg-indigo-600');
-                }
+        function showMainView(viewName) {
+            Object.keys(mainViews).forEach(key => {
+                const isActive = key === viewName;
+                if (mainViews[key]) mainViews[key].classList.toggle('hidden', !isActive);
+                if (mainButtons[key]) mainButtons[key].classList.toggle('active', isActive);
             });
+            // When switching main views, trigger a render of the active category
+            if(viewName === 'calculator') Calculator.render();
+            if(viewName === 'admin') AdminPanel.render();
         }
 
-        // Helper to format numbers as currency
         function formatCurrency(value) {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD'
-            }).format(value);
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
         }
 
-        return {
-            init,
-            showView,
-            formatCurrency
-        };
+        return { init, showMainView, formatCurrency };
     })();
 
-    /**
-     * @module AdminPanel
-     * @description Controls the logic and rendering of the admin panel.
-     */
     const AdminPanel = (function() {
-        let container = null; // Will be assigned in init()
+        let container = null;
+        let currentCategory = 'countertops';
 
         function render() {
-            const data = DataEngine.getData();
-            const graniteData = data.countertops.granite;
-
+            container = container || document.getElementById('admin-panel');
             let html = `
-                <div class="admin-panel__card">
-                    <h2 class="text-2xl font-bold mb-4">Admin Panel - Granite Countertops</h2>
-                    <div class="space-y-6">
-                        <div>
-                            <label for="admin-base-cost" class="admin-panel__label">Base Cost per SqFt</label>
-                            <input type="number" id="admin-base-cost" class="admin-panel__input" step="0.01" value="${graniteData.cost_sqft}">
-                        </div>
-
-                        <!-- Edge treatments -->
-                        <h3 class="text-lg font-semibold border-b pb-2">Edge Treatments (per Linear Foot)</h3>
-                        <div id="admin-edges-container" class="space-y-3">
-                            ${Object.keys(graniteData.edges).map(key => `
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                                    <span class="font-medium">${graniteData.edges[key].name}</span>
-                                    <input type="number" data-key="${key}" class="admin-panel__input admin-edge-cost" step="0.01" value="${graniteData.edges[key].cost_lnft}">
-                                </div>
-                            `).join('')}
-                        </div>
-
-                        <!-- Cutouts -->
-                        <h3 class="text-lg font-semibold border-b pb-2">Cutout Costs</h3>
-                        <div id="admin-cutouts-container" class="space-y-3">
-                            ${Object.keys(graniteData.cutouts).map(key => `
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                                    <span class="font-medium">${graniteData.cutouts[key].name}</span>
-                                    <input type="number" data-key="${key}" class="admin-panel__input admin-cutout-cost" step="0.01" value="${graniteData.cutouts[key].cost}">
-                                </div>
-                            `).join('')}
-                        </div>
-                        
-                        <div class="flex justify-end mt-6">
-                            <button id="save-admin-changes" class="admin-panel__button">Save Changes</button>
-                        </div>
-                         <div id="save-confirmation" class="text-green-600 font-semibold mt-4 text-right hidden">Changes saved successfully!</div>
-                    </div>
+                <div id="service-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
+                    <button data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
+                    <button data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
+                    <button data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
                 </div>
-            `;
+                <div id="service-category-content"></div>`;
             container.innerHTML = html;
+            renderCategory(currentCategory);
+            attachListeners();
         }
         
-        function saveChanges() {
-            const data = DataEngine.getData();
-            
-            // Update base cost
-            data.countertops.granite.cost_sqft = parseFloat(document.getElementById('admin-base-cost').value);
+        function renderCategory(category) {
+            currentCategory = category;
+            const contentContainer = document.getElementById('service-category-content');
+            if(category === 'countertops') {
+                contentContainer.innerHTML = '<h2>Countertop Admin - Coming Soon</h2>'; // Placeholder
+            } else if (category === 'casework') {
+                 contentContainer.innerHTML = '<h2>Casework Admin - Coming Soon</h2>'; // Placeholder
+            } else if (category === 'misc_services') {
+                contentContainer.innerHTML = '<h2>Misc Services Admin - To be implemented</h2>';
+            }
+             // NOTE: Full admin implementation for each category will be added in subsequent steps.
+             // This structure prepares for that. For now, we confirm the tabbing works.
+        }
 
-            // Update edge costs
-            document.querySelectorAll('.admin-edge-cost').forEach(input => {
-                const key = input.dataset.key;
-                data.countertops.granite.edges[key].cost_lnft = parseFloat(input.value);
+        function attachListeners() {
+            container.querySelector('#service-category-tabs').addEventListener('click', e => {
+                if (e.target.tagName === 'BUTTON') {
+                    const category = e.target.dataset.category;
+                    // Update active button state
+                    container.querySelectorAll('#service-category-tabs button').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    renderCategory(category);
+                }
             });
-
-            // Update cutout costs
-            document.querySelectorAll('.admin-cutout-cost').forEach(input => {
-                const key = input.dataset.key;
-                data.countertops.granite.cutouts[key].cost = parseFloat(input.value);
-            });
-            
-            DataEngine.saveData(data);
-            
-            // Show confirmation message
-            const confirmationMsg = document.getElementById('save-confirmation');
-            confirmationMsg.classList.remove('hidden');
-            setTimeout(() => confirmationMsg.classList.add('hidden'), 3000);
-
-            // Re-render the calculator to reflect changes immediately
-            Calculator.render();
         }
 
         function init() {
-            container = document.getElementById('admin-panel');
-            render();
-            container.addEventListener('click', function(e) {
-                if(e.target.id === 'save-admin-changes') {
-                    saveChanges();
-                }
-            });
+            // Initial render is triggered by UIController.showMainView
         }
         
-        return { init };
+        return { init, render };
     })();
 
-    /**
-     * @module Calculator
-     * @description Logic for the main pricing calculator interface.
-     */
     const Calculator = (function() {
-        let container = null; // Will be assigned in init()
-        
+        let container = null;
+        let currentCategory = 'countertops';
+
         function render() {
-             const data = DataEngine.getData();
-             const graniteData = data.countertops.granite;
-
+             container = container || document.getElementById('calculator-interface');
              let html = `
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <!-- Left side: inputs -->
-                    <div class="lg:col-span-2">
-                        <div class="calculator__card">
-                            <h2 class="text-2xl font-bold mb-4">Granite Countertop Calculator</h2>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Step 1: Dimensions -->
-                                <fieldset class="space-y-4">
-                                    <legend class="text-lg font-semibold">1. Dimensions (in inches)</legend>
-                                    <div>
-                                        <label for="calc-length" class="calculator__label">Length</label>
-                                        <input type="number" id="calc-length" class="calculator__input" placeholder="e.g., 120">
-                                    </div>
-                                    <div>
-                                        <label for="calc-width" class="calculator__label">Width</label>
-                                        <input type="number" id="calc-width" class="calculator__input" placeholder="e.g., 25.5">
-                                    </div>
-                                </fieldset>
+                <div id="service-category-tabs" class="view-switcher" style="justify-content: flex-start; margin-top: 0; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); padding-bottom: 16px;">
+                    <button data-category="countertops" class="${currentCategory === 'countertops' ? 'active' : ''}">Countertops</button>
+                    <button data-category="casework" class="${currentCategory === 'casework' ? 'active' : ''}">Casework</button>
+                    <button data-category="misc_services" class="${currentCategory === 'misc_services' ? 'active' : ''}">Misc Services</button>
+                </div>
+                <div id="service-category-content"></div>`;
+            container.innerHTML = html;
+            renderCategory(currentCategory);
+            attachListeners();
+        }
 
-                                <!-- Step 2: Material Options -->
-                                <fieldset class="space-y-4">
-                                    <legend class="text-lg font-semibold">2. Material Grade</legend>
-                                    <select id="calc-grade" class="calculator__input">
-                                        ${Object.keys(graniteData.grades).map(key => `
-                                            <option value="${key}">${graniteData.grades[key].name}</option>
-                                        `).join('')}
-                                    </select>
-                                </fieldset>
+        function renderCategory(category) {
+            currentCategory = category;
+            const contentContainer = document.getElementById('service-category-content');
+            if (category === 'countertops') {
+                renderCountertopCalculator(contentContainer);
+            } else if (category === 'casework') {
+                renderCaseworkCalculator(contentContainer);
+            } else if (category === 'misc_services') {
+                renderMiscServicesCalculator(contentContainer);
+            }
+        }
+        
+        // Renders the specific UI for the Countertop calculator
+        function renderCountertopCalculator(container) {
+            // This function is essentially the old `render` function from the Calculator module
+            const data = DataEngine.getData();
+            const allMaterials = data.countertops;
+            
+            let materialOptionsHTML = Object.keys(allMaterials).map(key => `<option value="${key}">${allMaterials[key].name}</option>`).join('');
 
-                                <!-- Step 3: Edge & Corner -->
-                                <fieldset class="space-y-4">
-                                     <legend class="text-lg font-semibold">3. Edge Treatment</legend>
-                                     <select id="calc-edge" class="calculator__input">
-                                        ${Object.keys(graniteData.edges).map(key => `
-                                            <option value="${key}">${graniteData.edges[key].name}</option>
-                                        `).join('')}
-                                     </select>
-                                </fieldset>
-
-                                <!-- Step 4: Cutouts & Add-ons -->
-                                <fieldset class="space-y-4">
-                                     <legend class="text-lg font-semibold">4. Cutouts & Add-ons</legend>
-                                     <div class="space-y-2">
-                                        ${Object.keys(graniteData.cutouts).map(key => `
-                                            <div class="flex items-center">
-                                                <input type="checkbox" id="calc-cutout-${key}" data-key="${key}" class="calc-cutout h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
-                                                <label for="calc-cutout-${key}" class="ml-2 block text-sm text-gray-900">${graniteData.cutouts[key].name}</label>
-                                            </div>
-                                        `).join('')}
-                                     </div>
-                                </fieldset>
+            let html = `
+                <div class="main-grid">
+                    <div>
+                        <div class="card" style="margin-bottom: 0;">
+                            <h2 class="card__title">Countertop Calculator</h2>
+                            <div class="form-group">
+                                <label for="calc-material-select" class="form-group__label">1. Select Material</label>
+                                <select id="calc-material-select" class="form-group__select">${materialOptionsHTML}</select>
+                            </div>
+                            <div id="calc-options-container"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div id="quote-summary" class="card">
+                            <h2 class="card__title">Quote Summary</h2>
+                            <div id="quote-details">
+                                <p class="quote-summary__placeholder">Select material and enter dimensions.</p>
                             </div>
                         </div>
                     </div>
+                </div>`;
+             container.innerHTML = html;
+             
+             const materialSelect = document.getElementById('calc-material-select');
+             materialSelect.addEventListener('change', () => renderCountertopOptions(materialSelect.value));
+             renderCountertopOptions(materialSelect.value);
+        }
+        
+        function renderCountertopOptions(materialKey) {
+            // This is the old `renderOptions` function
+            const optionsContainer = document.getElementById('calc-options-container');
+            const data = DataEngine.getData();
+            const materialData = data.countertops[materialKey];
+            
+            let optionsHTML = materialData.options ? Object.keys(materialData.options).map(optKey => {
+                const option = materialData.options[optKey];
+                return `<div class="form-group">
+                            <label for="calc-option-${optKey}" class="form-group__label">${option.name}</label>
+                            <select id="calc-option-${optKey}" data-option-key="${optKey}" class="form-group__select calc-input">
+                                ${Object.keys(option.values).map(valKey => `<option value="${valKey}">${option.values[valKey].name}</option>`).join('')}
+                            </select>
+                        </div>`;
+            }).join('') : '';
 
-                    <!-- Right side: quote summary -->
-                    <div class="lg:col-span-1">
-                        <div id="quote-summary" class="calculator__card sticky top-8">
-                            <h2 class="text-2xl font-bold mb-4">Quote Summary</h2>
+            let html = `
+                <div class="form-grid" style="margin-top: 24px;">
+                    <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">2. Dimensions</legend>
+                        <div class="form-group">
+                            <label for="calc-length" class="form-group__label">Length (in)</label>
+                            <input type="number" id="calc-length" class="form-group__input calc-input" placeholder="e.g., 120">
+                        </div>
+                        <div class="form-group">
+                            <label for="calc-width" class="form-group__label">Width (in)</label>
+                            <input type="number" id="calc-width" class="form-group__input calc-input" placeholder="e.g., 25.5">
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">3. Selections</legend>
+                        ${optionsHTML}
+                        <div class="form-group">
+                            <label for="calc-edge" class="form-group__label">Edge Treatment</label>
+                            <select id="calc-edge" class="form-group__select calc-input">
+                                ${Object.keys(materialData.edges).map(key => `<option value="${key}">${materialData.edges[key].name}</option>`).join('')}
+                            </select>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-fieldset" style="grid-column: span 2;">
+                         <legend class="form-fieldset__legend">4. Add-ons</legend>
+                         <div class="form-group">
+                            ${Object.keys(materialData.cutouts).map(key => `
+                                <div class="form-group--checkbox">
+                                    <input type="checkbox" id="calc-cutout-${key}" data-key="${key}" class="form-group__checkbox calc-input calc-cutout">
+                                    <label for="calc-cutout-${key}" class="form-group__label">${materialData.cutouts[key].name}</label>
+                                </div>`).join('')}
+                         </div>
+                    </fieldset>
+                </div>
+            `;
+            optionsContainer.innerHTML = html;
+            calculateQuote();
+        }
+
+        // Renders the new UI for the Casework calculator
+        function renderCaseworkCalculator(container) {
+            const data = DataEngine.getData();
+            const allCasework = data.casework;
+            let caseworkOptionsHTML = Object.keys(allCasework).map(key => `<option value="${key}">${allCasework[key].name}</option>`).join('');
+
+             let html = `
+                <div class="main-grid">
+                    <div>
+                        <div class="card" style="margin-bottom: 0;">
+                            <h2 class="card__title">Casework Calculator</h2>
+                             <div class="form-group">
+                                <label for="calc-casework-select" class="form-group__label">1. Select Casework Type</label>
+                                <select id="calc-casework-select" class="form-group__select">${caseworkOptionsHTML}</select>
+                            </div>
+                            <div id="calc-casework-options-container"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div id="quote-summary" class="card">
+                            <h2 class="card__title">Quote Summary</h2>
                             <div id="quote-details">
-                                <p class="text-gray-500 text-center py-8">Enter dimensions to begin.</p>
+                                <p class="quote-summary__placeholder">Select casework type and enter length.</p>
                             </div>
                         </div>
                     </div>
                 </div>
              `;
              container.innerHTML = html;
+
+             const caseworkSelect = document.getElementById('calc-casework-select');
+             caseworkSelect.addEventListener('change', () => renderCaseworkOptions(caseworkSelect.value));
+             renderCaseworkOptions(caseworkSelect.value);
+        }
+
+        function renderCaseworkOptions(caseworkKey) {
+            const optionsContainer = document.getElementById('calc-casework-options-container');
+            const data = DataEngine.getData();
+            const caseworkData = data.casework[caseworkKey];
+
+            let optionsHTML = Object.keys(caseworkData.options).map(optKey => {
+                const option = caseworkData.options[optKey];
+                return `<div class="form-group">
+                            <label for="calc-casework-option-${optKey}" class="form-group__label">${option.name}</label>
+                            <select id="calc-casework-option-${optKey}" data-option-key="${optKey}" class="form-group__select calc-input">
+                                ${Object.keys(option.values).map(valKey => `<option value="${valKey}">${option.values[valKey].name}</option>`).join('')}
+                            </select>
+                        </div>`;
+            }).join('');
+            
+            let html = `
+                <div class="form-grid" style="margin-top: 24px;">
+                     <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">2. Dimensions</legend>
+                        <div class="form-group">
+                            <label for="calc-length" class="form-group__label">Length (ft)</label>
+                            <input type="number" id="calc-length" class="form-group__input calc-input" placeholder="e.g., 10">
+                        </div>
+                    </fieldset>
+                    <fieldset class="form-fieldset">
+                        <legend class="form-fieldset__legend">3. Selections</legend>
+                        ${optionsHTML}
+                    </fieldset>
+                </div>
+            `;
+            optionsContainer.innerHTML = html;
+            calculateQuote();
         }
 
         function calculateQuote() {
+            if (currentCategory === 'countertops') {
+                calculateCountertopQuote();
+            } else if (currentCategory === 'casework') {
+                calculateCaseworkQuote();
+            } else if (currentCategory === 'misc_services') {
+                calculateMiscServicesQuote();
+            }
+        }
+
+        function calculateCountertopQuote() {
+            // This is the old calculateQuote function, renamed
             const data = DataEngine.getData();
-            const graniteData = data.countertops.granite;
+            const materialKey = document.getElementById('calc-material-select').value;
+            const materialData = data.countertops[materialKey];
             const settings = data.settings;
 
-            // 1. Gather Inputs
             const length = parseFloat(document.getElementById('calc-length').value) || 0;
             const width = parseFloat(document.getElementById('calc-width').value) || 0;
-            const selectedGradeKey = document.getElementById('calc-grade').value;
-            const selectedEdgeKey = document.getElementById('calc-edge').value;
-
             const quoteDetailsContainer = document.getElementById('quote-details');
+
             if (length === 0 || width === 0) {
-                 quoteDetailsContainer.innerHTML = `<p class="text-gray-500 text-center py-8">Enter dimensions to begin.</p>`;
+                 quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter dimensions to begin.</p>`;
                  return;
             }
 
-            // 2. Perform Calculations
-            const squareInches = length * width;
-            const squareFeet = squareInches / 144;
+            const squareFeet = (length * width) / 144;
             const linearFeet = (length * 2 + width * 2) / 12;
 
-            const gradeMultiplier = graniteData.grades[selectedGradeKey].multiplier;
-            const baseMaterialCostSqFt = graniteData.cost_sqft;
-            const adjustedMaterialCostSqFt = baseMaterialCostSqFt * gradeMultiplier;
+            let optionMultiplier = 1;
+            document.querySelectorAll('#calc-options-container select[data-option-key]').forEach(select => {
+                const optKey = select.dataset.optionKey;
+                const valKey = select.value;
+                optionMultiplier *= materialData.options[optKey].values[valKey].multiplier;
+            });
             
-            const totalMaterialCost = squareFeet * adjustedMaterialCostSqFt;
-            const edgeCost = linearFeet * graniteData.edges[selectedEdgeKey].cost_lnft;
+            const totalMaterialCost = squareFeet * materialData.cost_sqft * optionMultiplier;
+            
+            const selectedEdgeKey = document.getElementById('calc-edge').value;
+            const edgeCost = linearFeet * materialData.edges[selectedEdgeKey].cost_lnft;
 
             let cutoutCost = 0;
             let cutoutItems = [];
             document.querySelectorAll('.calc-cutout:checked').forEach(checkbox => {
                 const key = checkbox.dataset.key;
-                const cost = graniteData.cutouts[key].cost;
+                const cost = materialData.cutouts[key].cost;
                 cutoutCost += cost;
-                cutoutItems.push({ name: graniteData.cutouts[key].name, cost: cost });
+                cutoutItems.push({ name: materialData.cutouts[key].name, cost: cost });
             });
 
             const subtotal = totalMaterialCost + edgeCost + cutoutCost;
             const tax = subtotal * settings.taxRate;
             const total = subtotal + tax;
 
-            // 3. Display Results
             let summaryHTML = `
                 <table class="quote-summary__table">
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <tr>
-                            <td class="quote-summary__cell font-medium text-gray-900">Material (${squareFeet.toFixed(2)} sq ft)</td>
-                            <td class="quote-summary__cell text-right">${UIController.formatCurrency(totalMaterialCost)}</td>
-                        </tr>
-                        <tr>
-                            <td class="quote-summary__cell font-medium text-gray-900">Edge Treatment (${linearFeet.toFixed(2)} ln ft)</td>
-                            <td class="quote-summary__cell text-right">${UIController.formatCurrency(edgeCost)}</td>
-                        </tr>
-            `;
-
-            cutoutItems.forEach(item => {
-                 summaryHTML += `
-                    <tr>
-                        <td class="quote-summary__cell font-medium text-gray-900">${item.name}</td>
-                        <td class="quote-summary__cell text-right">${UIController.formatCurrency(item.cost)}</td>
-                    </tr>
-                 `;
-            });
-            
-            summaryHTML += `
-                        <tr class="bg-gray-50">
-                            <td class="quote-summary__cell font-semibold text-gray-900">Subtotal</td>
-                            <td class="quote-summary__cell text-right font-semibold">${UIController.formatCurrency(subtotal)}</td>
-                        </tr>
-                        <tr>
-                            <td class="quote-summary__cell font-medium text-gray-900">Tax (${(settings.taxRate * 100).toFixed(2)}%)</td>
-                            <td class="quote-summary__cell text-right">${UIController.formatCurrency(tax)}</td>
-                        </tr>
-                        <tr class="bg-gray-100">
-                            <td class="quote-summary__cell text-lg font-bold text-gray-900">Total</td>
-                            <td class="quote-summary__cell text-right text-lg font-bold">${UIController.formatCurrency(total)}</td>
-                        </tr>
+                    <tbody>
+                        <tr><td class="item-name">Material (${squareFeet.toFixed(2)} sq ft)</td><td class="item-cost">${UIController.formatCurrency(totalMaterialCost)}</td></tr>
+                        <tr><td class="item-name">Edge (${linearFeet.toFixed(2)} ln ft)</td><td class="item-cost">${UIController.formatCurrency(edgeCost)}</td></tr>
+                        ${cutoutItems.map(item => `<tr><td class="item-name">${item.name}</td><td class="item-cost">${UIController.formatCurrency(item.cost)}</td></tr>`).join('')}
+                        <tr class="subtotal-row"><td>Subtotal</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>
+                        <tr><td class="item-name">Tax (${(settings.taxRate * 100).toFixed(2)}%)</td><td class="item-cost">${UIController.formatCurrency(tax)}</td></tr>
+                        <tr class="total-row"><td>Total</td><td class="item-cost">${UIController.formatCurrency(total)}</td></tr>
                     </tbody>
-                </table>
-            `;
+                </table>`;
 
             quoteDetailsContainer.innerHTML = summaryHTML;
         }
 
+        function calculateCaseworkQuote() {
+            const data = DataEngine.getData();
+            const caseworkKey = document.getElementById('calc-casework-select').value;
+            const caseworkData = data.casework[caseworkKey];
+            const settings = data.settings;
+            
+            const linearFeet = parseFloat(document.getElementById('calc-length').value) || 0;
+            const quoteDetailsContainer = document.getElementById('quote-details');
+            
+            if (linearFeet === 0) {
+                quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter length to begin.</p>`;
+                return;
+            }
 
-        function init() {
-            container = document.getElementById('calculator-interface');
-            render();
-            // Add event listeners to all inputs to trigger real-time calculation
+            let optionMultiplier = 1;
+            let lineItems = [];
+            document.querySelectorAll('#calc-casework-options-container select[data-option-key]').forEach(select => {
+                const optKey = select.dataset.optionKey;
+                const valKey = select.value;
+                const multiplier = caseworkData.options[optKey].values[valKey].multiplier;
+                optionMultiplier *= multiplier;
+                if (multiplier !== 1) {
+                    lineItems.push(`${caseworkData.options[optKey].values[valKey].name} Finish`);
+                }
+            });
+
+            const baseCost = linearFeet * caseworkData.cost_lnft;
+            const totalCost = baseCost * optionMultiplier;
+            const subtotal = totalCost;
+            const tax = subtotal * settings.taxRate;
+            const total = subtotal + tax;
+
+             let summaryHTML = `
+                <table class="quote-summary__table">
+                    <tbody>
+                        <tr><td class="item-name">${caseworkData.name} (${linearFeet} ln ft)</td><td class="item-cost">${UIController.formatCurrency(baseCost)}</td></tr>
+                        ${lineItems.length > 0 ? `<tr><td class="item-name">Options (${lineItems.join(', ')})</td><td class="item-cost">x${optionMultiplier.toFixed(2)}</td></tr>` : ''}
+                        <tr class="subtotal-row"><td>Subtotal</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>
+                        <tr><td class="item-name">Tax (${(settings.taxRate * 100).toFixed(2)}%)</td><td class="item-cost">${UIController.formatCurrency(tax)}</td></tr>
+                        <tr class="total-row"><td>Total</td><td class="item-cost">${UIController.formatCurrency(total)}</td></tr>
+                    </tbody>
+                </table>`;
+            quoteDetailsContainer.innerHTML = summaryHTML;
+        }
+
+        function renderMiscServicesCalculator(container) {
+            const data = DataEngine.getData();
+            const allMiscServices = data.misc_services;
+            let serviceOptionsHTML = Object.keys(allMiscServices).map(key => `<option value="${key}">${allMiscServices[key].name}</option>`).join('');
+
+             let html = `
+                <div class="main-grid">
+                    <div>
+                         <div class="form-group">
+                            <label for="calc-misc-select" class="form-group__label">1. Select Service</label>
+                            <select id="calc-misc-select" class="form-group__select">${serviceOptionsHTML}</select>
+                        </div>
+                        <div id="calc-misc-options-container"></div>
+                    </div>
+                    <div>
+                        <div id="quote-summary" class="card" style="padding: 0; box-shadow: none;">
+                            <h2 class="card__title" style="padding: 24px; margin-bottom: 0;">Quote Summary</h2>
+                            <div id="quote-details">
+                                <p class="quote-summary__placeholder">Select a service to begin.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+             container.innerHTML = html;
+
+             const miscSelect = document.getElementById('calc-misc-select');
+             miscSelect.addEventListener('change', () => renderMiscServiceOptions(miscSelect.value));
+             renderMiscServiceOptions(miscSelect.value);
+        }
+
+        function renderMiscServiceOptions(serviceKey) {
+            const optionsContainer = document.getElementById('calc-misc-options-container');
+            const data = DataEngine.getData();
+            const serviceData = data.misc_services[serviceKey];
+            let html = '';
+
+            if (serviceKey === 'design') {
+                html = `
+                    <div class="form-grid" style="margin-top: 24px;">
+                         <fieldset class="form-fieldset"> <legend class="form-fieldset__legend">2. Enter Hours</legend>
+                            <div class="form-group">
+                                <label for="calc-hours" class="form-group__label">Estimated Hours</label>
+                                <input type="number" id="calc-hours" class="form-group__input calc-input" placeholder="e.g., 5">
+                            </div>
+                        </fieldset>
+                    </div>`;
+            } else if (serviceKey === 'cnc_machining') {
+                html = `
+                     <div class="form-grid" style="margin-top: 24px;">
+                         <fieldset class="form-fieldset"> <legend class="form-fieldset__legend">2. Enter Details</legend>
+                            <div class="form-group">
+                                <label for="calc-machine-time" class="form-group__label">Machine Time (Hours)</label>
+                                <input type="number" id="calc-machine-time" class="form-group__input calc-input" placeholder="e.g., 2.5">
+                            </div>
+                             <div class="form-group">
+                                <label for="calc-setup-fee" class="form-group__label">Setup Fee</label>
+                                <input type="number" id="calc-setup-fee" class="form-group__input calc-input" value="${serviceData.setup_fee}" disabled>
+                            </div>
+                        </fieldset>
+                    </div>`;
+            }
+            optionsContainer.innerHTML = html;
+            calculateQuote();
+        }
+
+        function calculateMiscServicesQuote() {
+            const data = DataEngine.getData();
+            const serviceKey = document.getElementById('calc-misc-select').value;
+            const serviceData = data.misc_services[serviceKey];
+            const settings = data.settings;
+            const quoteDetailsContainer = document.getElementById('quote-details');
+            let subtotal = 0;
+            let lineItems = [];
+
+            if (serviceKey === 'design') {
+                const hours = parseFloat(document.getElementById('calc-hours').value) || 0;
+                if (hours > 0) {
+                    subtotal = hours * serviceData.rate_hourly;
+                    lineItems.push(`<tr><td class="item-name">Design Services (${hours} hrs)</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>`);
+                }
+            } else if (serviceKey === 'cnc_machining') {
+                const machineTime = parseFloat(document.getElementById('calc-machine-time').value) || 0;
+                const setupFee = serviceData.setup_fee;
+                const machineCost = machineTime * serviceData.rate_hourly;
+                subtotal = machineCost + setupFee;
+                if (setupFee > 0) lineItems.push(`<tr><td class="item-name">Setup Fee</td><td class="item-cost">${UIController.formatCurrency(setupFee)}</td></tr>`);
+                if (machineTime > 0) lineItems.push(`<tr><td class="item-name">Machine Time (${machineTime} hrs)</td><td class="item-cost">${UIController.formatCurrency(machineCost)}</td></tr>`);
+            }
+            
+            if (subtotal === 0) {
+                quoteDetailsContainer.innerHTML = `<p class="quote-summary__placeholder">Enter details to generate a quote.</p>`;
+                return;
+            }
+
+            const tax = subtotal * settings.taxRate;
+            const total = subtotal + tax;
+            
+            let summaryHTML = `<table class="quote-summary__table"><tbody>
+                        ${lineItems.join('')}
+                        <tr class="subtotal-row"><td>Subtotal</td><td class="item-cost">${UIController.formatCurrency(subtotal)}</td></tr>
+                        <tr><td class="item-name">Tax (${(settings.taxRate * 100).toFixed(2)}%)</td><td class="item-cost">${UIController.formatCurrency(tax)}</td></tr>
+                        <tr class="total-row"><td>Total</td><td class="item-cost">${UIController.formatCurrency(total)}</td></tr>
+                    </tbody></table>`;
+            quoteDetailsContainer.innerHTML = summaryHTML;
+        }
+
+        function attachListeners() {
             container.addEventListener('input', calculateQuote);
-            container.addEventListener('change', calculateQuote); // For checkboxes and selects
+            container.addEventListener('change', calculateQuote);
+
+            container.querySelector('#service-category-tabs').addEventListener('click', e => {
+                if (e.target.tagName === 'BUTTON') {
+                    const category = e.target.dataset.category;
+                    // Update active button state
+                    container.querySelectorAll('#service-category-tabs button').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    renderCategory(category);
+                }
+            });
+        }
+        
+        function init() {
+            // Initial render is triggered by UIController.showMainView
         }
         
         return { init, render };
