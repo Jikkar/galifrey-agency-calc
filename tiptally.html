@@ -12,8 +12,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         /* --- START: Duda Override Fix --- */
-        /* All styles are now scoped to the #tiptally-app-wrapper to increase specificity. */
-        /* The `!important` rule is used to ensure these styles take priority over Duda's global CSS. */
         #tiptally-app-wrapper {
             --bg-primary: #111827; /* Gray 900 */
             --bg-secondary: #1f2937; /* Gray 800 */
@@ -44,7 +42,6 @@
         /* --- END: Duda Override Fix --- */
 
         body {
-            /* Body styles are minimal to avoid conflicts */
             font-family: 'Inter', sans-serif;
         }
         #tiptally-app-wrapper .font-mono {
@@ -95,6 +92,19 @@
         #tiptally-app-wrapper .hidden {
             display: none !important;
         }
+        #tiptally-app-wrapper .scrollable-list {
+            overflow-y: auto;
+            padding-right: 0.5rem; /* For scrollbar spacing */
+        }
+        #tiptally-app-wrapper .scrollable-list-short {
+            max-height: 150px; /* Approx 5 items */
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        #tiptally-app-wrapper .main-content-area {
+            height: calc(100vh - 200px); /* Adjust based on header/footer height */
+            overflow-y: auto;
+        }
         /* Scoped text color overrides */
         #tiptally-app-wrapper h1, 
         #tiptally-app-wrapper h2, 
@@ -104,11 +114,21 @@
         #tiptally-app-wrapper div,
         #tiptally-app-wrapper span,
         #tiptally-app-wrapper label,
-        #tiptally-app-wrapper button,
         #tiptally-app-wrapper select,
         #tiptally-app-wrapper option {
-            color: var(--text-primary);
+            color: var(--text-primary) !important;
         }
+        /* Button text needs to be handled separately for contrast */
+        #tiptally-app-wrapper button {
+             color: var(--text-primary) !important;
+        }
+        #tiptally-app-wrapper .btn-primary,
+        #tiptally-app-wrapper .bg-brand-green,
+        #tiptally-app-wrapper .bg-brand-blue,
+        #tiptally-app-wrapper .bg-yellow-500 {
+            color: white !important;
+        }
+
         #tiptally-app-wrapper .text-text-muted {
             color: var(--text-muted) !important;
         }
@@ -130,10 +150,15 @@
         #tiptally-app-wrapper .bg-bg-tertiary {
             background-color: var(--bg-tertiary) !important;
         }
+        /* NEW: Added background color utilities */
+        #tiptally-app-wrapper .bg-brand-green { background-color: var(--brand-green) !important; }
+        #tiptally-app-wrapper .bg-brand-yellow { background-color: var(--brand-yellow) !important; }
+        #tiptally-app-wrapper .bg-brand-blue { background-color: var(--brand-blue) !important; }
+        #tiptally-app-wrapper .bg-gray-500 { background-color: #6b7280 !important; }
+
     </style>
 </head>
 <body>
-    <!-- START: Duda Override Fix - Added a wrapper div with a unique ID -->
     <div id="tiptally-app-wrapper">
         <div id="app-container" class="min-h-screen">
             <!-- App content is rendered here by JavaScript -->
@@ -142,7 +167,6 @@
             </div>
         </div>
     </div>
-    <!-- END: Duda Override Fix -->
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -151,11 +175,13 @@
             users: [],
             transactions: [],
             currentUser: null,
-            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', 'adminWorkerDetail', 'adminAddWorker', 'adminEditWorker'
+            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', 'adminWorkerDetail', 'adminAddWorker', 'adminEditWorker', 'adminProfiles'
             selectedDate: new Date(),
             selectedWorkerId: null,
             loginError: '',
-            selectedLoginUser: ''
+            selectedLoginUser: '',
+            dailyPayoutsExpanded: false,
+            allTimePayoutsExpanded: false
         };
 
         // --- Firebase Initialization ---
@@ -216,6 +242,9 @@
                     break;
                  case 'adminEditWorker':
                     currentViewHtml = renderMainAppView(renderAddWorkerForm({isEdit: true}));
+                    break;
+                case 'adminProfiles':
+                    currentViewHtml = renderMainAppView(renderAdminProfilesView());
                     break;
             }
             appContainer.innerHTML = currentViewHtml;
@@ -281,6 +310,12 @@
                             <h3 class="text-text-muted text-sm">Your Total Take (All Time)</h3>
                             <p class="text-4xl font-bold text-brand-green">$${allTimeTake.toFixed(2)}</p>
                         </div>
+                        <div class="card">
+                            <h3 class="text-xl font-bold text-primary mb-4">Account Settings</h3>
+                            <div id="pin-change-container">
+                                <button data-action="show-update-pin-form" class="btn bg-bg-tertiary hover:bg-gray-600 text-primary">Change PIN</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="lg:col-span-2 space-y-6">
                         <div>
@@ -328,10 +363,17 @@
                 return Object.values(totals);
             };
 
-            const workerDailyTotals = getWorkerTotals(dailyTransactions);
+            const workerDailyTotals = getWorkerTotals(dailyTransactions).filter(w => w.total > 0);
             const workerAllTimeTotals = getWorkerTotals(state.transactions);
             const totalClubEarningsDay = workerDailyTotals.reduce((sum, w) => sum + w.total, 0);
             const totalHouseTakeDay = workerDailyTotals.reduce((sum, w) => sum + (w.total * w.split.house), 0);
+
+            // Sorting for payout lists
+            const sortedDailyPayouts = [...workerDailyTotals].sort((a, b) => (b.total * b.split.worker) - (a.total * a.split.worker));
+            const dailyPayoutsToShow = state.dailyPayoutsExpanded ? sortedDailyPayouts : sortedDailyPayouts.slice(0, 5);
+
+            const sortedAllTimePayouts = [...workerAllTimeTotals].sort((a, b) => (b.total * b.split.worker) - (a.total * a.split.worker));
+            const allTimePayoutsToShow = state.allTimePayoutsExpanded ? sortedAllTimePayouts : sortedAllTimePayouts.slice(0, 5);
 
             return `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -339,48 +381,73 @@
                         <div class="card">
                             <div class="flex justify-between items-center mb-4">
                                 <h2 class="text-xl font-bold text-primary">Admin Tools</h2>
-                                <button data-action="admin-add-worker-view" class="btn text-sm bg-brand-blue text-white">Add Worker</button>
+                                <div class="flex gap-2">
+                                    <button data-action="admin-profiles-view" class="btn text-xs bg-brand-blue text-white">All Profiles</button>
+                                    <button data-action="admin-add-worker-view" class="btn text-xs bg-brand-green text-white">Add Worker</button>
+                                </div>
                             </div>
                             ${renderCalendar()}
                         </div>
                         <div class="card">
+                            <h3 class="text-text-muted text-sm">Club Earnings (Day)</h3>
+                            <p class="text-3xl font-bold text-brand-green">$${totalClubEarningsDay.toFixed(2)}</p>
+                        </div>
+                        <div class="card">
+                            <h3 class="text-text-muted text-sm">House Take (Day)</h3>
+                            <p class="text-3xl font-bold text-brand-pink">$${totalHouseTakeDay.toFixed(2)}</p>
+                        </div>
+                        <div class="card">
                             <h3 class="text-xl font-bold text-primary mb-4">Daily Worker Payouts</h3>
-                            <div class="space-y-2">${workerDailyTotals.map(w => `<div class="flex justify-between items-center text-sm"><span class="font-semibold text-primary">${w.name}</span><span class="font-bold text-brand-pink">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('')}</div>
+                            <div class="scrollable-list-short">${dailyPayoutsToShow.length > 0 ? dailyPayoutsToShow.map(w => `<div class="flex justify-between items-center text-sm py-1"><span class="font-semibold text-primary">${w.name}</span><span class="font-bold text-brand-pink">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('') : '<p class="text-text-muted text-sm">No payouts for this day.</p>'}</div>
+                            ${sortedDailyPayouts.length > 5 ? `<button data-action="toggle-daily-payouts" class="text-brand-pink hover:underline text-sm mt-2">${state.dailyPayoutsExpanded ? 'Hide' : 'See more'}</button>` : ''}
                         </div>
                          <div class="card">
                             <h3 class="text-xl font-bold text-primary mb-4">All-Time Worker Payouts</h3>
-                            <div class="space-y-2">${workerAllTimeTotals.map(w => `<div class="flex justify-between items-center text-sm"><span class="font-semibold text-primary">${w.name}</span><span class="font-bold text-brand-green">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('')}</div>
+                            <div class="scrollable-list-short">${allTimePayoutsToShow.map(w => `<div class="flex justify-between items-center text-sm py-1"><span class="font-semibold text-primary">${w.name}</span><span class="font-bold text-brand-green">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('')}</div>
+                            ${sortedAllTimePayouts.length > 5 ? `<button data-action="toggle-all-time-payouts" class="text-brand-pink hover:underline text-sm mt-2">${state.allTimePayoutsExpanded ? 'Hide' : 'See more'}</button>` : ''}
                         </div>
                     </div>
-                    <div class="lg:col-span-2 space-y-6">
-                        <div>
-                            <h2 class="text-2xl font-bold text-primary mb-1">Daily Summary</h2>
-                            <p class="text-lg text-brand-pink">${formatDate(state.selectedDate)}</p>
+                    <div class="lg:col-span-2 flex flex-col md:flex-row gap-6" style="min-height: 80vh;">
+                        <div class="card flex-1 flex flex-col">
+                            <h3 class="text-xl font-bold text-primary mb-4">Active Worker Totals (${formatDate(state.selectedDate)})</h3>
+                            <div class="flex-grow scrollable-list">${workerDailyTotals.length > 0 ? workerDailyTotals.map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="bg-bg-tertiary p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors mb-2"><p class="font-bold text-primary text-lg">${w.name}</p><p class="font-semibold text-brand-green text-lg">$${w.total.toFixed(2)}</p></div>`).join('') : '<p class="text-text-muted text-sm">No workers with earnings for this day.</p>'}</div>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="card"><h3 class="text-text-muted text-sm">Club Earnings (Day)</h3><p class="text-3xl font-bold text-brand-green">$${totalClubEarningsDay.toFixed(2)}</p></div>
-                            <div class="card"><h3 class="text-text-muted text-sm">House Take (Day)</h3><p class="text-3xl font-bold text-brand-pink">$${totalHouseTakeDay.toFixed(2)}</p></div>
-                        </div>
-                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                            <div class="card">
-                                <h3 class="text-xl font-bold text-primary mb-4">Worker Totals (Day)</h3>
-                                <div class="space-y-3">${workerDailyTotals.map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="bg-bg-tertiary p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors"><p class="font-bold text-primary text-lg">${w.name}</p><p class="font-semibold text-brand-green text-lg">$${w.total.toFixed(2)}</p></div>`).join('')}</div>
+                        <div class="card flex-1 flex flex-col">
+                            <h3 class="text-xl font-bold text-primary mb-4">Pending Verifications (${pendingTransactions.length})</h3>
+                            <div class="flex-grow scrollable-list">${pendingTransactions.length > 0 ? pendingTransactions.map(tx => `
+                                <div class="bg-bg-tertiary p-4 rounded-lg mb-2">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <div><p class="font-bold text-primary">${tx.workerName} - <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p></div>
+                                        ${renderStatusBadge(tx.status)}
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <input type="number" data-id="${tx.id}" placeholder="Enter counted amount" class="input-field verification-amount flex-grow"/>
+                                        <button data-action="verify" data-id="${tx.id}" class="btn bg-brand-green text-white">Verify</button>
+                                    </div>
+                                </div>`).join('') : `<p class="text-text-muted">No pending transactions.</p>`}
                             </div>
-                            <div class="card">
-                                <h3 class="text-xl font-bold text-primary mb-4">Pending Verifications (${pendingTransactions.length})</h3>
-                                <div class="space-y-4 max-h-96 overflow-y-auto pr-2">${pendingTransactions.length > 0 ? pendingTransactions.map(tx => `
-                                    <div class="bg-bg-tertiary p-4 rounded-lg">
-                                        <div class="flex justify-between items-center mb-3">
-                                            <div><p class="font-bold text-primary">${tx.workerName} - <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p></div>
-                                            ${renderStatusBadge(tx.status)}
-                                        </div>
-                                        <div class="flex gap-2">
-                                            <input type="number" data-id="${tx.id}" placeholder="Enter counted amount" class="input-field verification-amount flex-grow"/>
-                                            <button data-action="verify" data-id="${tx.id}" class="btn bg-brand-green text-white">Verify</button>
-                                        </div>
-                                    </div>`).join('') : `<p class="text-text-muted">No pending transactions.</p>`}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderAdminProfilesView() {
+            const workers = state.users.filter(u => u.role === 'worker');
+            return `
+                <div>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-primary">All Worker Profiles</h2>
+                        <button data-action="admin-dashboard-view" class="text-brand-pink hover:underline">&larr; Back to Dashboard</button>
+                    </div>
+                    <div class="card">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            ${workers.map(w => `
+                                <div data-action="admin-worker-detail-view" data-id="${w.id}" class="bg-bg-tertiary p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors">
+                                    <p class="font-bold text-lg text-primary">${w.name}</p>
+                                    <p class="text-sm text-text-muted">ID: ${w.id}</p>
                                 </div>
-                            </div>
+                            `).join('')}
                         </div>
                     </div>
                 </div>
@@ -408,8 +475,8 @@
                         <h3 class="text-xl font-bold text-primary mb-4">All-Time Totals</h3>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="card bg-bg-tertiary"><h3 class="text-text-muted text-sm">Total Approved</h3><p class="text-3xl font-bold text-brand-green">$${allTimeApprovedTotal.toFixed(2)}</p></div>
-                            <div class="card bg-bg-tertiary"><h3 class="text-text-muted text-sm">Total Payout (${payoutSplit.worker * 100}%)</h3><p class="text-3xl font-bold text-brand-pink">$${(allTimeApprovedTotal * payoutSplit.worker).toFixed(2)}</p></div>
-                            <div class="card bg-bg-tertiary"><h3 class="text-text-muted text-sm">Total House Take (${payoutSplit.house * 100}%)</h3><p class="text-3xl font-bold text-brand-blue">$${(allTimeApprovedTotal * payoutSplit.house).toFixed(2)}</p></div>
+                            <div class="card bg-bg-tertiary"><h3 class="text-text-muted text-sm">Total Payout (${Math.round(payoutSplit.worker * 100)}%)</h3><p class="text-3xl font-bold text-brand-pink">$${(allTimeApprovedTotal * payoutSplit.worker).toFixed(2)}</p></div>
+                            <div class="card bg-bg-tertiary"><h3 class="text-text-muted text-sm">Total House Take (${Math.round(payoutSplit.house * 100)}%)</h3><p class="text-3xl font-bold text-brand-blue">$${(allTimeApprovedTotal * payoutSplit.house).toFixed(2)}</p></div>
                         </div>
                     </div>
                     <p class="text-lg text-brand-pink mb-4 font-bold">${formatDate(state.selectedDate)}</p>
@@ -462,7 +529,7 @@
                 const isSelected = isSameDay(date, selectedDate);
                 const isToday = isSameDay(date, new Date());
                 const hasTransactions = transactionDays.has(date.toDateString());
-                const dayClasses = `w-10 h-10 flex items-center justify-center rounded-full cursor-pointer transition-colors relative ${isSelected ? 'bg-brand-pink text-white font-bold' : isToday ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'}`;
+                const dayClasses = `w-10 h-10 flex items-center justify-center rounded-full cursor-pointer transition-colors relative ${isSelected ? 'bg-brand-pink text-white font-bold ring-2 ring-brand-pink-hover' : isToday ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'}`;
                 daysHtml += `<div data-action="select-date" data-date="${date.toISOString()}" class="${dayClasses}"><span>${day}</span>${hasTransactions && !isSelected ? '<div class="absolute bottom-1 w-1.5 h-1.5 bg-brand-blue rounded-full"></div>' : ''}</div>`;
             }
 
@@ -487,6 +554,17 @@
             };
             const { text, color } = badgeMap[status] || badgeMap.pending;
             return `<span class="px-2 py-1 text-xs font-bold rounded-full text-white ${color}">${text}</span>`;
+        }
+
+        function renderPinUpdateForm() {
+            const container = document.getElementById('pin-change-container');
+            if (!container) return;
+            container.innerHTML = `
+                <div class="flex flex-col md:flex-row gap-4">
+                    <input type="password" id="new-pin-input" class="input-field flex-grow" placeholder="Enter new 4-digit PIN" pattern="\\d{4}" maxlength="4" />
+                    <button data-action="update-pin" class="btn btn-primary">Save PIN</button>
+                </div>
+            `;
         }
         
         // --- Event Handlers & Actions ---
@@ -534,6 +612,20 @@
                 case 'admin-create-worker': handleAddWorker(); break;
                 case 'admin-update-worker': handleUpdateWorker(id); break;
                 case 'toggle-theme': handleToggleTheme(); break;
+                case 'show-update-pin-form': renderPinUpdateForm(); break;
+                case 'update-pin': handleUpdatePin(); break;
+                case 'toggle-daily-payouts':
+                    state.dailyPayoutsExpanded = !state.dailyPayoutsExpanded;
+                    render();
+                    break;
+                case 'toggle-all-time-payouts':
+                    state.allTimePayoutsExpanded = !state.allTimePayoutsExpanded;
+                    render();
+                    break;
+                case 'admin-profiles-view':
+                    state.view = 'adminProfiles';
+                    render();
+                    break;
             }
         }
         
@@ -624,6 +716,27 @@
             });
             state.view = 'adminDashboard';
             render();
+        }
+
+        async function handleUpdatePin() {
+            const newPinInput = document.getElementById('new-pin-input');
+            const newPin = newPinInput.value;
+
+            if (!/^\d{4}$/.test(newPin)) {
+                alert("PIN must be 4 digits.");
+                return;
+            }
+
+            try {
+                const userRef = db.collection('users').doc(state.currentUser.id);
+                await userRef.update({ pin: newPin });
+                alert("PIN updated successfully!");
+                // Re-render the dashboard to show the original button again
+                render();
+            } catch (error) {
+                console.error("Error updating PIN:", error);
+                alert("Failed to update PIN. Please try again.");
+            }
         }
         
         function handleToggleTheme() {
