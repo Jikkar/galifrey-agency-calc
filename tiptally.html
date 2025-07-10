@@ -1,22 +1,17 @@
-<meta>
- 
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- 
- <title>
-  TipTally - Cloud Version
- </title>
- <script src="https://cdn.tailwindcss.com">
- </script>
- <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js">
- </script>
- <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js">
- </script>
- <link rel="preconnect" href="https://fonts.googleapis.com">
- <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
- <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
- <style>
-  /* --- START: Duda Override Fix --- */
-        #tiptally-app-wrapper {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TipTally - Cloud Version</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
             --bg-primary: #111827; /* Gray 900 */
             --bg-secondary: #1f2937; /* Gray 800 */
             --bg-tertiary: #374151; /* Gray 700 */
@@ -30,9 +25,6 @@
             --brand-yellow: #f59e0b; /* Amber 500 */
             --brand-blue: #3b82f6; /* Blue 500 */
             --brand-red: #ef4444; /* Red 500 */
-            font-family: 'Inter', sans-serif !important;
-            background-color: var(--bg-primary) !important;
-            color: var(--text-primary) !important;
         }
         #tiptally-app-wrapper.light-mode {
             --bg-primary: #f3f4f6; /* Gray 100 */
@@ -43,12 +35,15 @@
             --text-secondary: #4b5563; /* Gray 600 */
             --text-muted: #6b7280; /* Gray 500 */
         }
-        /* --- END: Duda Override Fix --- */
         body {
             font-family: 'Inter', sans-serif;
         }
+        #tiptally-app-wrapper {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
         #tiptally-app-wrapper .font-mono {
-            font-family: 'Roboto Mono', monospace !important;
+            font-family: 'Roboto Mono', monospace;
         }
         #tiptally-app-wrapper .btn {
             padding: 0.75rem 1.25rem;
@@ -60,36 +55,36 @@
             cursor: pointer;
         }
         #tiptally-app-wrapper .btn-primary {
-            background-color: var(--brand-pink) !important;
-            color: white !important;
+            background-color: var(--brand-pink);
+            color: white;
         }
         #tiptally-app-wrapper .btn-primary:hover {
-            background-color: var(--brand-pink-hover) !important;
+            background-color: var(--brand-pink-hover);
         }
         #tiptally-app-wrapper .btn-primary:disabled {
-            background-color: var(--bg-tertiary) !important;
+            background-color: var(--bg-tertiary);
             cursor: not-allowed;
             opacity: 0.6;
         }
-        #tiptally-app-wrapper .input-field {
+        #tiptally-app-wrapper .input-field, #tiptally-app-wrapper .select-field {
             width: 100%;
-            background-color: var(--bg-tertiary) !important;
-            border: 1px solid var(--border-color) !important;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
             border-radius: 0.5rem;
             padding: 0.75rem 1rem;
-            color: var(--text-primary) !important;
+            color: var(--text-primary);
             transition: border-color 0.2s, box-shadow 0.2s, background-color 0.3s;
         }
-        #tiptally-app-wrapper .input-field:focus {
-            outline: none !important;
-            border-color: var(--brand-pink) !important;
-            box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.3) !important;
+        #tiptally-app-wrapper .input-field:focus, #tiptally-app-wrapper .select-field:focus {
+            outline: none;
+            border-color: var(--brand-pink);
+            box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.3);
         }
         #tiptally-app-wrapper .card {
-            background-color: var(--bg-secondary) !important;
+            background-color: var(--bg-secondary);
             border-radius: 0.75rem;
             padding: 1.5rem;
-            border: 1px solid var(--border-color) !important;
+            border: 1px solid var(--border-color);
             transition: background-color 0.3s, border-color 0.3s;
         }
         #tiptally-app-wrapper .hidden {
@@ -97,94 +92,107 @@
         }
         #tiptally-app-wrapper .scrollable-list {
             overflow-y: auto;
-            padding-right: 0.5rem; /* For scrollbar spacing */
+            padding-right: 0.5rem;
         }
         #tiptally-app-wrapper .scrollable-list-short {
-            max-height: 450px; /* Increased height for better visibility */
+            max-height: 450px;
             overflow-y: auto;
             padding-right: 0.5rem;
         }
-        #tiptally-app-wrapper .main-content-area {
-            height: calc(100vh - 200px); /* Adjust based on header/footer height */
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background-color: var(--bg-secondary);
+            padding: 2rem;
+            border-radius: 0.75rem;
+            width: 90%;
+            max-width: 900px; /* Increased max-width */
+            max-height: 90vh;
             overflow-y: auto;
+            border: 1px solid var(--border-color);
         }
-        /* Scoped text color overrides */
-        #tiptally-app-wrapper h1, 
-        #tiptally-app-wrapper h2, 
-        #tiptally-app-wrapper h3, 
-        #tiptally-app-wrapper h4, 
-        #tiptally-app-wrapper p, 
-        #tiptally-app-wrapper div,
-        #tiptally-app-wrapper span,
-        #tiptally-app-wrapper label,
-        #tiptally-app-wrapper select,
-        #tiptally-app-wrapper option {
-            color: var(--text-primary) !important;
+        /* Tab Styles for Admin Modal */
+        .admin-tab {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
         }
-        /* Button text needs to be handled separately for contrast */
-        #tiptally-app-wrapper button {
-             color: var(--text-primary) !important;
+        .admin-tab.active {
+            background-color: var(--brand-pink);
+            color: white;
         }
-        #tiptally-app-wrapper .btn-primary,
-        #tiptally-app-wrapper .bg-brand-green,
-        #tiptally-app-wrapper .bg-brand-blue,
-        #tiptally-app-wrapper .bg-brand-red,
-        #tiptally-app-wrapper .bg-yellow-500 {
-            color: white !important;
+        .admin-tab:not(.active) {
+            background-color: var(--bg-tertiary);
         }
-        #tiptally-app-wrapper .text-text-muted {
-            color: var(--text-muted) !important;
+        .admin-tab:not(.active):hover {
+            background-color: var(--border-color);
         }
-        #tiptally-app-wrapper .text-text-secondary {
-             color: var(--text-secondary) !important;
+
+        /* Progress Bar */
+        .progress-bar-bg {
+            background-color: var(--bg-tertiary);
+            border-radius: 9999px;
+            overflow: hidden;
         }
-        #tiptally-app-wrapper .text-brand-pink {
-            color: var(--brand-pink) !important;
+        .progress-bar-fg {
+            height: 100%;
+            background-color: var(--brand-green);
+            border-radius: 9999px;
+            transition: width 0.5s ease-in-out;
         }
-         #tiptally-app-wrapper .text-brand-green {
-            color: var(--brand-green) !important;
-        }
-         #tiptally-app-wrapper .text-brand-blue {
-            color: var(--brand-blue) !important;
-        }
-         #tiptally-app-wrapper .text-brand-yellow {
-            color: var(--brand-yellow) !important;
-        }
-        #tiptally-app-wrapper .bg-bg-tertiary {
-            background-color: var(--bg-tertiary) !important;
-        }
-        /* NEW: Added background color utilities */
-        #tiptally-app-wrapper .bg-brand-green { background-color: var(--brand-green) !important; }
-        #tiptally-app-wrapper .bg-brand-yellow { background-color: var(--brand-yellow) !important; }
-        #tiptally-app-wrapper .bg-brand-blue { background-color: var(--brand-blue) !important; }
-        #tiptally-app-wrapper .bg-brand-red { background-color: var(--brand-red) !important; }
-        #tiptally-app-wrapper .bg-gray-500 { background-color: #6b7280 !important; }
- </style>
- <div id="tiptally-app-wrapper">
-  <div id="app-container" class="min-h-screen">
-   <!-- App content is rendered here by JavaScript -->
-   <div class="flex items-center justify-center min-h-screen">
-    <p class="text-text-muted">
-     Loading TipTally...
-    </p>
-   </div>
-  </div>
- </div>
- <script>
-  document.addEventListener('DOMContentLoaded', () => {
+
+    </style>
+</head>
+<body>
+    <div id="tiptally-app-wrapper">
+        <div id="app-container" class="min-h-screen">
+            <!-- App content is rendered here by JavaScript -->
+            <div class="flex items-center justify-center min-h-screen">
+                <p style="color: var(--text-muted);">Loading TipTally...</p>
+            </div>
+        </div>
+        <!-- Admin Tools Modal -->
+        <div id="admin-tools-modal" class="modal-overlay hidden">
+            <div id="admin-tools-modal-content" class="modal-content">
+                <!-- Admin modal content rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
         // --- App State ---
         let state = {
             users: [],
             transactions: [],
+            services: [],
+            incentives: [],
             currentUser: null,
-            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', 'adminWorkerDetail', 'adminAddWorker', 'adminEditWorker', 'adminProfiles'
+            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', etc.
+            adminModalView: 'workers', // 'workers', 'services', 'incentives'
             selectedDate: new Date(),
             selectedWorkerId: null,
             loginError: '',
             selectedLoginUser: '',
             dailyPayoutsExpanded: false,
-            allTimePayoutsExpanded: false
+            allTimePayoutsExpanded: false,
+            isAdminModalOpen: false,
         };
+
         // --- Firebase Initialization ---
         const firebaseConfig = {
           apiKey: "AIzaSyCbX8RkQxxDMxkhSDMzeKmDi5m07GoCEGQ",
@@ -197,107 +205,97 @@
         };
         const app = firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+
         // --- DOM Elements ---
         const appContainer = document.getElementById('app-container');
         const appWrapper = document.getElementById('tiptally-app-wrapper');
+        const adminModal = document.getElementById('admin-tools-modal');
+        const adminModalContent = document.getElementById('admin-tools-modal-content');
+
         // --- Helper Functions ---
-        const isAdmin = (user) => {
-            if (!user) return false;
-            return ['Manager', 'General Manager'].includes(user.role);
-        };
-        const isWorker = (user) => {
-            if (!user) return false;
-            return ['Entertainer', 'Server', 'Security'].includes(user.role);
-        };
+        const isAdmin = (user) => user && ['Manager', 'General Manager'].includes(user.role);
+        const isWorker = (user) => user && ['Entertainer', 'Server', 'Security'].includes(user.role);
         const isSameDay = (date1, date2) => {
             if (!date1 || !date2) return false;
             const d1 = new Date(date1);
             const d2 = new Date(date2);
-            return d1.getFullYear() === d2.getFullYear() &&
-                   d1.getMonth() === d2.getMonth() &&
-                   d1.getDate() === d2.getDate();
+            return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
         };
-        const formatDate = (date) => {
-            return new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(date));
-        };
+        const formatDate = (date) => new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(date));
+        
         const getApprovedAmount = (tx) => {
             if (tx.status !== 'approved') return 0;
             return tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : tx.workerSubmittedAmount;
         };
+
         // --- Main Render Function ---
         function render() {
             let currentViewHtml = '';
             switch (state.view) {
-                case 'login':
-                    currentViewHtml = renderLoginView();
-                    break;
-                case 'workerDashboard':
-                    currentViewHtml = renderMainAppView(renderWorkerDashboard());
-                    break;
-                case 'adminDashboard':
-                    currentViewHtml = renderMainAppView(renderAdminDashboard());
-                    break;
-                case 'adminWorkerDetail':
-                    currentViewHtml = renderMainAppView(renderAdminWorkerDetail());
-                    break;
-                case 'adminAddWorker':
-                    currentViewHtml = renderMainAppView(renderAddWorkerForm());
-                    break;
-                 case 'adminEditWorker':
-                    currentViewHtml = renderMainAppView(renderAddWorkerForm({isEdit: true}));
-                    break;
-                case 'adminProfiles':
-                    currentViewHtml = renderMainAppView(renderAdminProfilesView());
-                    break;
+                case 'login': currentViewHtml = renderLoginView(); break;
+                case 'workerDashboard': currentViewHtml = renderMainAppView(renderWorkerDashboard()); break;
+                case 'adminDashboard': currentViewHtml = renderMainAppView(renderAdminDashboard()); break;
+                case 'adminWorkerDetail': currentViewHtml = renderMainAppView(renderAdminWorkerDetail()); break;
             }
             appContainer.innerHTML = currentViewHtml;
+            if (state.isAdminModalOpen) {
+                adminModal.classList.remove('hidden');
+                renderAdminModal();
+            } else {
+                adminModal.classList.add('hidden');
+            }
         }
+
         // --- View Templates ---
         function renderLoginView() {
             return `
                 <div class="flex items-center justify-center min-h-screen">
                     <div class="w-full max-w-sm p-8 space-y-6 card">
                         <div class="text-center">
-                            <h1 class="text-4xl font-bold text-primary">TipTally</h1>
-                            <p class="text-text-muted mt-2">Streamlined Earnings Management</p>
+                            <h1 class="text-4xl font-bold" style="color: var(--text-primary);">TipTally</h1>
+                            <p style="color: var(--text-muted);" class="mt-2">Streamlined Earnings Management</p>
                         </div>
                         <div class="space-y-4">
                             <div>
-                                <label for="user-select" class="block text-sm font-medium text-text-secondary mb-1">Select User</label>
-                                <select id="user-select" class="input-field">
+                                <label for="user-select" class="block text-sm font-medium mb-1" style="color: var(--text-secondary);">Select User</label>
+                                <select id="user-select" class="select-field">
                                     ${state.users.length > 0 ? state.users.map(user => `<option value="${user.id}" ${state.selectedLoginUser === user.id ? 'selected' : ''}>${user.name} (${user.role})</option>`).join('') : '<option>Loading users...</option>'}
                                 </select>
                             </div>
                             <div>
-                                <label for="pin-input" class="block text-sm font-medium text-text-secondary mb-1">PIN</label>
+                                <label for="pin-input" class="block text-sm font-medium mb-1" style="color: var(--text-secondary);">PIN</label>
                                 <input type="password" id="pin-input" class="input-field" placeholder="****"/>
                             </div>
-                            <p id="login-error" class="text-sm text-red-400 ${state.loginError ? '' : 'hidden'}">${state.loginError}</p>
+                            <p id="login-error" class="text-sm" style="color: var(--brand-red); ${state.loginError ? '' : 'display: none;'}">${state.loginError}</p>
                             <button data-action="login" class="w-full btn btn-primary">Login</button>
                         </div>
                     </div>
                 </div>
             `;
         }
+
         function renderMainAppView(content) {
             const isLight = appWrapper.classList.contains('light-mode');
             const themeIcon = isLight ? 
                 `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>` : 
                 `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>`;
+            
             return `
-                <header class="bg-bg-secondary p-4 flex justify-between items-center shadow-md border-b border-border-color">
+                <header class="p-4 flex justify-between items-center shadow-md" style="background-color: var(--bg-secondary); border-bottom: 1px solid var(--border-color);">
                     <div>
-                        <h1 class="text-xl font-bold text-primary">TipTally</h1>
-                        <p class="text-sm text-text-muted">Logged in as: <span class="font-semibold text-brand-pink">${state.currentUser?.name}</span></p>
+                        <h1 class="text-xl font-bold" style="color: var(--text-primary);">TipTally</h1>
+                        <p class="text-sm" style="color: var(--text-muted);">Logged in as: <span class="font-semibold" style="color: var(--brand-pink);">${state.currentUser?.name}</span></p>
                     </div>
                     <div class="flex items-center gap-4">
-                        <button data-action="toggle-theme" class="p-2 rounded-full bg-bg-tertiary hover:bg-gray-600 text-primary">${themeIcon}</button>
-                        <button data-action="logout" class="btn bg-bg-tertiary hover:bg-gray-600 text-primary">Logout</button>
+                        ${isAdmin(state.currentUser) ? `<button data-action="open-admin-modal" class="btn" style="background-color: var(--brand-blue); color: white;">Admin Tools</button>` : ''}
+                        <button data-action="toggle-theme" class="p-2 rounded-full" style="background-color: var(--bg-tertiary); color: var(--text-primary);">${themeIcon}</button>
+                        <button data-action="logout" class="btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Logout</button>
                     </div>
                 </header>
                 <main class="p-4 md:p-8">${content}</main>
             `;
         }
+
         function renderWorkerDashboard() {
             const dailyTransactions = state.transactions.filter(t => t.workerId === state.currentUser.id && isSameDay(t.submissionTimestamp, state.selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
             const allTimeTransactions = state.transactions.filter(t => t.workerId === state.currentUser.id);
@@ -305,51 +303,166 @@
             const allTimeApprovedTotal = allTimeTransactions.reduce((sum, t) => sum + getApprovedAmount(t), 0);
             const allTimeTake = allTimeApprovedTotal * state.currentUser.payoutSplit.worker;
             const isToday = isSameDay(state.selectedDate, new Date());
+
             return `
-                <div class="max-w-7xl mx-auto flex flex-col gap-8">
-                    ${isToday ? `
-                    <div class="card">
-                        <h3 class="text-xl font-bold text-primary mb-4">Submit New Earnings</h3>
-                        <div class="flex flex-col md:flex-row gap-4">
-                            <input type="number" id="new-transaction-amount" placeholder="Enter amount" class="input-field flex-grow"/>
-                            <button data-action="add-transaction" class="btn btn-primary">Submit</button>
+                <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 flex flex-col gap-8">
+                        ${isToday ? `
+                        <div class="card">
+                            <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Submit New Earnings</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <input type="number" id="new-transaction-amount" placeholder="Amount" class="input-field md:col-span-1"/>
+                                <select id="new-transaction-service" class="select-field md:col-span-1">
+                                    <option value="">No Service</option>
+                                    ${state.services.map(s => `<option value="${s.id}">${s.name} ($${s.price})</option>`).join('')}
+                                </select>
+                                <button data-action="add-transaction" class="btn btn-primary md:col-span-1">Submit</button>
+                            </div>
+                        </div>` : ''}
+                        <div>
+                            <h2 class="text-2xl font-bold mb-1" style="color: var(--text-primary);">Daily Summary</h2>
+                            <p class="text-lg" style="color: var(--brand-pink);">${formatDate(state.selectedDate)}</p>
                         </div>
-                    </div>` : ''}
-                    <div class="card">
-                        <h3 class="text-text-muted text-sm">Your Total Take (All Time)</h3>
-                        <p class="text-4xl font-bold text-brand-green">$${allTimeTake.toFixed(2)}</p>
-                    </div>
-                    <div>
-                        <h2 class="text-2xl font-bold text-primary mb-1">Daily Summary</h2>
-                        <p class="text-lg text-brand-pink">${formatDate(state.selectedDate)}</p>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="card"><h3 class="text-text-muted text-sm">Approved Earnings (Day)</h3><p class="text-2xl font-bold text-brand-green">$${dailyApprovedTotal.toFixed(2)}</p></div>
-                        <div class="card"><h3 class="text-text-muted text-sm">Your Take (Day)</h3><p class="text-2xl font-bold text-brand-pink">$${(dailyApprovedTotal * state.currentUser.payoutSplit.worker).toFixed(2)}</p></div>
-                        <div class="card"><h3 class="text-text-muted text-sm">House Take (Day)</h3><p class="text-2xl font-bold text-brand-blue">$${(dailyApprovedTotal * state.currentUser.payoutSplit.house).toFixed(2)}</p></div>
-                    </div>
-                    <div class="card">
-                        <h3 class="text-xl font-bold text-primary mb-4">Submissions for this day</h3>
-                        <div class="space-y-4 scrollable-list-short">
-                            ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => `
-                            <div class="bg-bg-tertiary p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div><p class="font-bold text-primary">ID: <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">${new Date(tx.submissionTimestamp).toLocaleTimeString()}</p></div>
-                                <div class="text-left md:text-right"><p class="text-lg font-bold text-primary">You Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p>${tx.status === 'disputed' ? `<p class="text-md font-semibold text-brand-yellow">Manager Counted: $${tx.managerVerifiedAmount.toFixed(2)}</p>` : ''}</div>
-                                <div class="flex items-center gap-4 w-full md:w-auto">${renderStatusBadge(tx.status)} ${tx.status === 'disputed' ? `<button data-action="worker-accept" data-id="${tx.id}" class="btn text-xs bg-brand-green text-white">Accept</button>` : ''}</div>
-                            </div>`).join('') : `<p class="text-text-muted">No transactions submitted on this day.</p>`}
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="card"><h3 class="text-sm" style="color: var(--text-muted);">Approved Earnings (Day)</h3><p class="text-2xl font-bold" style="color: var(--brand-green);">$${dailyApprovedTotal.toFixed(2)}</p></div>
+                            <div class="card"><h3 class="text-sm" style="color: var(--text-muted);">Your Take (Day)</h3><p class="text-2xl font-bold" style="color: var(--brand-pink);">$${(dailyApprovedTotal * state.currentUser.payoutSplit.worker).toFixed(2)}</p></div>
+                            <div class="card"><h3 class="text-sm" style="color: var(--text-muted);">House Take (Day)</h3><p class="text-2xl font-bold" style="color: var(--brand-blue);">$${(dailyApprovedTotal * state.currentUser.payoutSplit.house).toFixed(2)}</p></div>
+                        </div>
+                        <div class="card">
+                            <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Submissions for this day</h3>
+                            <div class="space-y-4 scrollable-list-short">
+                                ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => renderTransactionItem(tx)).join('') : `<p style="color: var(--text-muted);">No transactions submitted on this day.</p>`}
+                            </div>
                         </div>
                     </div>
-                    <div class="card">${renderCalendar()}</div>
-                    <div class="card">
-                        <h3 class="text-xl font-bold text-primary mb-4">Account Settings</h3>
-                        <div id="pin-change-container">
-                            <button data-action="show-update-pin-form" class="btn bg-bg-tertiary hover:bg-gray-600 text-primary">Change PIN</button>
+                    <div class="lg:col-span-1 flex flex-col gap-8">
+                        <div class="card">
+                            <h3 style="color: var(--text-muted);" class="text-sm">Your Total Take (All Time)</h3>
+                            <p class="text-4xl font-bold" style="color: var(--brand-green);">$${allTimeTake.toFixed(2)}</p>
                         </div>
+                        <div class="card">${renderIncentivesPanel()}</div>
+                        <div class="card">${renderCalendar()}</div>
                     </div>
                 </div>
             `;
         }
+        
+        function renderTransactionItem(tx) {
+            const service = state.services.find(s => s.id === tx.serviceId);
+            return `
+                <div class="p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4" style="background-color: var(--bg-tertiary);">
+                    <div>
+                        <p class="font-bold" style="color: var(--text-primary);">ID: <span class="font-mono" style="color: var(--brand-pink);">${tx.transactionCode}</span></p>
+                        <p class="text-sm" style="color: var(--text-muted);">${new Date(tx.submissionTimestamp).toLocaleTimeString()}</p>
+                        ${service ? `<p class="text-xs font-semibold" style="color: var(--brand-blue);">${service.name}</p>` : ''}
+                    </div>
+                    <div class="text-left md:text-right">
+                        <p class="text-lg font-bold" style="color: var(--text-primary);">You Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p>
+                        ${tx.status === 'disputed' ? `<p class="text-md font-semibold" style="color: var(--brand-yellow);">Manager Counted: $${tx.managerVerifiedAmount.toFixed(2)}</p>` : ''}
+                    </div>
+                    <div class="flex items-center gap-4 w-full md:w-auto">
+                        ${renderStatusBadge(tx.status)}
+                        ${tx.status === 'disputed' ? `<button data-action="worker-accept" data-id="${tx.id}" class="btn text-xs" style="background-color: var(--brand-green); color: white;">Accept</button>` : ''}
+                    </div>
+                </div>`;
+        }
+        
+        function renderIncentivesPanel() {
+            const now = new Date();
+            const activeIncentives = state.incentives.filter(inc => {
+                const start = new Date(inc.startDate);
+                const end = new Date(inc.endDate);
+                end.setHours(23, 59, 59, 999); // End of day
+                return start <= now && now <= end;
+            });
+
+            if (activeIncentives.length === 0) {
+                return `<h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Active Incentives</h3><p style="color: var(--text-muted);">No active incentives right now.</p>`;
+            }
+
+            return `
+                <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Active Incentives</h3>
+                <div class="space-y-6 scrollable-list-short">
+                    ${activeIncentives.map(inc => renderIncentiveItem(inc)).join('')}
+                </div>
+            `;
+        }
+
+        function renderIncentiveItem(incentive) {
+            let progressHtml = '';
+            let progressValue = 0;
+            let progressMax = 1;
+            let progressText = '';
+
+            const allApprovedTxs = state.transactions.filter(tx => tx.status === 'approved');
+
+            if (incentive.type === 'service_push') {
+                const relevantTxs = allApprovedTxs.filter(tx => tx.serviceId === incentive.targetId);
+                const userTxs = relevantTxs.filter(tx => tx.workerId === state.currentUser.id);
+                progressValue = userTxs.length;
+                progressMax = incentive.details.goal || 1;
+                progressText = `${progressValue} / ${progressMax} sold`;
+            } else if (incentive.type === 'top_earners_night' || incentive.type === 'top_earners_month') {
+                const isNightly = incentive.type === 'top_earners_night';
+                const today = new Date();
+                const relevantTxs = allApprovedTxs.filter(tx => {
+                    const txDate = new Date(tx.submissionTimestamp);
+                    if (isNightly) {
+                        return isSameDay(txDate, today);
+                    } else {
+                        return txDate.getMonth() === today.getMonth() && txDate.getFullYear() === today.getFullYear();
+                    }
+                });
+
+                const workerEarnings = {};
+                state.users.forEach(u => { workerEarnings[u.id] = { name: u.name, earnings: 0 }; });
+                relevantTxs.forEach(tx => {
+                    if(workerEarnings[tx.workerId]) {
+                        workerEarnings[tx.workerId].earnings += getApprovedAmount(tx);
+                    }
+                });
+
+                const sortedWorkers = Object.values(workerEarnings).sort((a,b) => b.earnings - a.earnings);
+                const userRank = sortedWorkers.findIndex(w => w.name === state.currentUser.name) + 1;
+                const userEarnings = sortedWorkers.find(w => w.name === state.currentUser.name)?.earnings || 0;
+                
+                progressValue = userRank > 0 ? (sortedWorkers.length - userRank + 1) : 0;
+                progressMax = sortedWorkers.length;
+                
+                progressText = userRank > 0 ? `Rank #${userRank} with $${userEarnings.toFixed(2)}` : 'No earnings yet';
+                
+                if (incentive.details.shareProgress) {
+                    const topN = sortedWorkers.slice(0, incentive.details.placements);
+                    progressHtml += `<div class="mt-2 text-xs space-y-1">`
+                    topN.forEach((w, i) => {
+                        progressHtml += `<p style="color: var(--text-secondary);">${i+1}. ${w.name} - $${w.earnings.toFixed(2)}</p>`
+                    });
+                    progressHtml += `</div>`
+                }
+            }
+
+            const progressPercent = (progressValue / progressMax) * 100;
+
+            return `
+                <div class="p-3 rounded-lg" style="background-color: var(--bg-tertiary);">
+                    <p class="font-bold" style="color: var(--text-primary);">${incentive.name}</p>
+                    <p class="text-sm mt-1" style="color: var(--text-muted);">${incentive.description}</p>
+                    <div class="mt-3">
+                        <div class="flex justify-between text-xs font-medium" style="color: var(--text-secondary);">
+                            <span>Progress</span>
+                            <span>${progressText}</span>
+                        </div>
+                        <div class="w-full progress-bar-bg mt-1">
+                            <div class="progress-bar-fg" style="width: ${progressPercent}%;"></div>
+                        </div>
+                        ${progressHtml}
+                    </div>
+                </div>
+            `;
+        }
+
         function renderAdminDashboard() {
+            // This function is greatly simplified as most of its content is now in the modal
             const dailyTransactions = state.transactions.filter(t => isSameDay(t.submissionTimestamp, state.selectedDate));
             const pendingTransactions = dailyTransactions.filter(t => t.status === 'pending');
             const workers = state.users.filter(u => isWorker(u));
@@ -360,92 +473,48 @@
                 return Object.values(totals);
             };
             const workerDailyTotals = getWorkerTotals(dailyTransactions).filter(w => w.total > 0).sort((a,b) => b.total - a.total);
-            const workerAllTimeTotals = getWorkerTotals(state.transactions);
             const totalClubEarningsDay = workerDailyTotals.reduce((sum, w) => sum + w.total, 0);
             const totalHouseTakeDay = workerDailyTotals.reduce((sum, w) => sum + (w.total * w.split.house), 0);
-            // Sorting for payout lists
-            const sortedDailyPayouts = [...workerDailyTotals].sort((a, b) => (b.total * b.split.worker) - (a.total * a.split.worker));
-            const dailyPayoutsToShow = state.dailyPayoutsExpanded ? sortedDailyPayouts : sortedDailyPayouts.slice(0, 5);
-            const sortedAllTimePayouts = [...workerAllTimeTotals].sort((a, b) => (b.total * b.split.worker) - (a.total * a.split.worker));
-            const allTimePayoutsToShow = state.allTimePayoutsExpanded ? sortedAllTimePayouts : sortedAllTimePayouts.slice(0, 5);
+
             return `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div class="lg:col-span-1 space-y-4">
+                        <div class="card">${renderCalendar()}</div>
                         <div class="card">
-                            <div class="flex justify-between items-center mb-4">
-                                <h2 class="text-xl font-bold text-primary">Admin Tools</h2>
-                                <div class="flex gap-2">
-                                    <button data-action="admin-profiles-view" class="btn text-xs bg-brand-blue text-white">All Profiles</button>
-                                    <button data-action="admin-add-worker-view" class="btn text-xs bg-brand-green text-white">Add Worker</button>
-                                </div>
-                            </div>
-                            ${renderCalendar()}
+                            <h3 class="text-sm" style="color: var(--text-muted);">Club Earnings (Day)</h3>
+                            <p class="text-3xl font-bold" style="color: var(--brand-green);">$${totalClubEarningsDay.toFixed(2)}</p>
                         </div>
                         <div class="card">
-                            <h3 class="text-text-muted text-sm">Club Earnings (Day)</h3>
-                            <p class="text-3xl font-bold text-brand-green">$${totalClubEarningsDay.toFixed(2)}</p>
-                        </div>
-                        <div class="card">
-                            <h3 class="text-text-muted text-sm">House Take (Day)</h3>
-                            <p class="text-3xl font-bold text-brand-pink">$${totalHouseTakeDay.toFixed(2)}</p>
-                        </div>
-                        <div class="card">
-                            <h3 class="text-xl font-bold text-primary mb-4">Daily Worker Payouts</h3>
-                            <div class="scrollable-list-short">${dailyPayoutsToShow.length > 0 ? dailyPayoutsToShow.map(w => `<div class="flex justify-between items-center text-sm py-1"><span class="font-semibold text-primary">${w.name}</span><span class="font-bold text-brand-pink">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('') : '<p class="text-text-muted text-sm">No payouts for this day.</p>'}</div>
-                            ${sortedDailyPayouts.length > 5 ? `<button data-action="toggle-daily-payouts" class="text-brand-pink hover:underline text-sm mt-2">${state.dailyPayoutsExpanded ? 'Hide' : 'See more'}</button>` : ''}
-                        </div>
-                         <div class="card">
-                            <h3 class="text-xl font-bold text-primary mb-4">All-Time Worker Payouts</h3>
-                            <div class="scrollable-list-short">${allTimePayoutsToShow.map(w => `<div class="flex justify-between items-center text-sm py-1"><span class="font-semibold text-primary">${w.name}</span><span class="font-bold text-brand-green">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('')}</div>
-                            ${sortedAllTimePayouts.length > 5 ? `<button data-action="toggle-all-time-payouts" class="text-brand-pink hover:underline text-sm mt-2">${state.allTimePayoutsExpanded ? 'Hide' : 'See more'}</button>` : ''}
+                            <h3 class="text-sm" style="color: var(--text-muted);">House Take (Day)</h3>
+                            <p class="text-3xl font-bold" style="color: var(--brand-pink);">$${totalHouseTakeDay.toFixed(2)}</p>
                         </div>
                     </div>
                     <div class="lg:col-span-2 flex flex-col gap-6" style="min-height: 80vh;">
                         <div class="card flex-1 flex flex-col">
-                            <h3 class="text-xl font-bold text-primary mb-4">Pending Verifications (${pendingTransactions.length})</h3>
+                            <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Pending Verifications (${pendingTransactions.length})</h3>
                             <div class="flex-grow scrollable-list">${pendingTransactions.length > 0 ? pendingTransactions.map(tx => `
-                                <div class="bg-bg-tertiary p-4 rounded-lg mb-2">
+                                <div class="p-4 rounded-lg mb-2" style="background-color: var(--bg-tertiary);">
                                     <div class="flex justify-between items-center mb-3">
-                                        <div><p class="font-bold text-primary">${tx.workerName} - <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p></div>
+                                        <div><p class="font-bold" style="color: var(--text-primary);">${tx.workerName} - <span class="font-mono" style="color: var(--brand-pink);">${tx.transactionCode}</span></p><p class="text-sm" style="color: var(--text-muted);">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p></div>
                                         ${renderStatusBadge(tx.status)}
                                     </div>
                                     <div class="flex gap-2">
                                         <input type="number" data-id="${tx.id}" placeholder="Enter counted amount" class="input-field verification-amount flex-grow"/>
-                                        <button data-action="verify" data-id="${tx.id}" class="btn bg-brand-green text-white">Verify</button>
-                                        <button data-action="deny" data-id="${tx.id}" class="btn bg-brand-red text-white">Deny</button>
+                                        <button data-action="verify" data-id="${tx.id}" class="btn" style="background-color: var(--brand-green); color: white;">Verify</button>
+                                        <button data-action="deny" data-id="${tx.id}" class="btn" style="background-color: var(--brand-red); color: white;">Deny</button>
                                     </div>
-                                </div>`).join('') : `<p class="text-text-muted">No pending transactions.</p>`}
+                                </div>`).join('') : `<p style="color: var(--text-muted);">No pending transactions.</p>`}
                             </div>
                         </div>
                         <div class="card flex-1 flex flex-col">
-                            <h3 class="text-xl font-bold text-primary mb-4">Active Worker Totals (${formatDate(state.selectedDate)})</h3>
-                            <div class="flex-grow scrollable-list">${workerDailyTotals.length > 0 ? workerDailyTotals.map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="bg-bg-tertiary p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors mb-2"><p class="font-bold text-primary text-lg">${w.name}</p><p class="font-semibold text-brand-green text-lg">$${w.total.toFixed(2)}</p></div>`).join('') : '<p class="text-text-muted text-sm">No workers with earnings for this day.</p>'}</div>
+                            <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Active Worker Totals (${formatDate(state.selectedDate)})</h3>
+                            <div class="flex-grow scrollable-list">${workerDailyTotals.length > 0 ? workerDailyTotals.map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors mb-2" style="background-color: var(--bg-tertiary);"><p class="font-bold text-lg" style="color: var(--text-primary);">${w.name}</p><p class="font-semibold text-lg" style="color: var(--brand-green);">$${w.total.toFixed(2)}</p></div>`).join('') : '<p class="text-sm" style="color: var(--text-muted);">No workers with earnings for this day.</p>'}</div>
                         </div>
                     </div>
                 </div>
             `;
         }
-        function renderAdminProfilesView() {
-            const workers = state.users.filter(u => isWorker(u));
-            return `
-                <div>
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-primary">All Worker Profiles</h2>
-                        <button data-action="admin-dashboard-view" class="text-brand-pink hover:underline">&larr; Back to Dashboard</button>
-                    </div>
-                    <div class="card">
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            ${workers.map(w => `
-                                <div data-action="admin-worker-detail-view" data-id="${w.id}" class="bg-bg-tertiary p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors">
-                                    <p class="font-bold text-lg text-primary">${w.name}</p>
-                                    <p class="text-sm text-text-muted">ID: ${w.id}</p>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
+
         function renderAdminWorkerDetail() {
             const worker = state.users.find(u => u.id === state.selectedWorkerId);
             if (!worker) return `<p>Worker not found.</p>`;
@@ -457,55 +526,38 @@
             return `
                 <div>
                     <div class="flex justify-between items-center mb-6">
-                        <button data-action="admin-dashboard-view" class="text-brand-pink hover:underline">&larr; Back to Dashboard</button>
-                        <button data-action="admin-edit-worker-view" data-id="${worker.id}" class="btn text-sm bg-yellow-500 text-white">Edit Worker</button>
+                        <button data-action="admin-dashboard-view" class="hover:underline" style="color: var(--brand-pink);">&larr; Back to Dashboard</button>
                     </div>
-                    <h2 class="text-3xl font-bold text-primary mb-2">${worker.name}'s Summary</h2>
+                    <h2 class="text-3xl font-bold mb-2" style="color: var(--text-primary);">${worker.name}'s Summary</h2>
                     <div class="mb-8 p-4 card mt-4">
-                        <h3 class="text-xl font-bold text-primary mb-4">All-Time Totals</h3>
+                        <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">All-Time Totals</h3>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div class="card bg-bg-tertiary"><h3 class="text-text-muted text-sm">Total Approved</h3><p class="text-3xl font-bold text-brand-green">$${allTimeApprovedTotal.toFixed(2)}</p></div>
-                            <div class="card bg-bg-tertiary"><h3 class="text-text-muted text-sm">Total Payout (${Math.round(payoutSplit.worker * 100)}%)</h3><p class="text-3xl font-bold text-brand-pink">$${(allTimeApprovedTotal * payoutSplit.worker).toFixed(2)}</p></div>
-                            <div class="card bg-bg-tertiary"><h3 class="text-text-muted text-sm">Total House Take (${Math.round(payoutSplit.house * 100)}%)</h3><p class="text-3xl font-bold text-brand-blue">$${(allTimeApprovedTotal * payoutSplit.house).toFixed(2)}</p></div>
+                            <div class="card" style="background-color: var(--bg-tertiary);"><h3 class="text-sm" style="color: var(--text-muted);">Total Approved</h3><p class="text-3xl font-bold" style="color: var(--brand-green);">$${allTimeApprovedTotal.toFixed(2)}</p></div>
+                            <div class="card" style="background-color: var(--bg-tertiary);"><h3 class="text-sm" style="color: var(--text-muted);">Total Payout (${Math.round(payoutSplit.worker * 100)}%)</h3><p class="text-3xl font-bold" style="color: var(--brand-pink);">$${(allTimeApprovedTotal * payoutSplit.worker).toFixed(2)}</p></div>
+                            <div class="card" style="background-color: var(--bg-tertiary);"><h3 class="text-sm" style="color: var(--text-muted);">Total House Take (${Math.round(payoutSplit.house * 100)}%)</h3><p class="text-3xl font-bold" style="color: var(--brand-blue);">$${(allTimeApprovedTotal * payoutSplit.house).toFixed(2)}</p></div>
                         </div>
                     </div>
-                    <p class="text-lg text-brand-pink mb-4 font-bold">${formatDate(state.selectedDate)}</p>
-                    <h3 class="text-xl font-bold text-primary mb-4">Transaction History (Day)</h3>
+                    <p class="text-lg font-bold mb-4" style="color: var(--brand-pink);">${formatDate(state.selectedDate)}</p>
+                    <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Transaction History (Day)</h3>
                     <div class="space-y-4">
-                        ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => `
-                        <div class="card flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                            <div><p class="font-bold text-primary">ID: <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">${new Date(tx.submissionTimestamp).toLocaleTimeString()}</p></div>
-                            <div class="text-left md:text-right"><p class="text-lg font-bold text-primary">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p>${tx.managerVerifiedAmount !== null ? `<p class="text-md font-semibold text-brand-yellow">Verified: $${tx.managerVerifiedAmount.toFixed(2)}</p>` : ''}</div>
-                            ${renderStatusBadge(tx.status)}
-                        </div>`).join('') : `<p class="text-text-muted">No transactions on this day.</p>`}
+                        ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => renderTransactionItem(tx)).join('') : `<p style="color: var(--text-muted);">No transactions on this day.</p>`}
                     </div>
                 </div>
             `;
         }
-        function renderAddWorkerForm({ isEdit = false } = {}) {
-            const worker = isEdit ? state.users.find(u => u.id === state.selectedWorkerId) : null;
-            const roles = ['Entertainer', 'Server', 'Security', 'Manager', 'General Manager'];
-            return `
-                <div>
-                    <button data-action="admin-dashboard-view" class="mb-6 text-brand-pink hover:underline">&larr; Back to Dashboard</button>
-                    <div class="max-w-md mx-auto card">
-                        <h2 class="text-2xl font-bold text-primary mb-6">${isEdit ? 'Edit Worker Profile' : 'Add New Worker'}</h2>
-                        <div class="space-y-4">
-                            <div><label for="worker-name" class="block text-sm font-medium text-text-secondary mb-1">Worker Name</label><input type="text" id="worker-name" class="input-field" value="${worker?.name || ''}" required /></div>
-                            <div><label for="worker-pin" class="block text-sm font-medium text-text-secondary mb-1">4-Digit PIN</label><input type="text" pattern="\\d{4}" title="PIN must be 4 digits" id="worker-pin" class="input-field" value="${worker?.pin || ''}" required /></div>
-                            <div>
-                                <label for="worker-role" class="block text-sm font-medium text-text-secondary mb-1">Role</label>
-                                <select id="worker-role" class="input-field">
-                                    ${roles.map(r => `<option value="${r}" ${worker?.role === r ? 'selected' : ''}>${r}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div><label for="worker-split" class="block text-sm font-medium text-text-secondary mb-1">Worker Payout Split (%)</label><input type="number" min="0" max="100" id="worker-split" class="input-field" value="${worker ? worker.payoutSplit.worker * 100 : '70'}" required /></div>
-                            <button data-action="${isEdit ? 'admin-update-worker' : 'admin-create-worker'}" data-id="${worker?.id || ''}" class="w-full btn btn-primary">${isEdit ? 'Save Changes' : 'Create Worker'}</button>
-                        </div>
-                    </div>
-                </div>
-            `;
+
+        function renderStatusBadge(status) {
+            const badgeMap = {
+                approved: { text: 'Approved', color: 'var(--brand-green)' },
+                disputed: { text: 'Disputed', color: 'var(--brand-yellow)' },
+                pending: { text: 'Pending', color: '#6b7280' },
+                denied: { text: 'Denied', color: 'var(--brand-red)' }
+            };
+            const { text, color } = badgeMap[status] || badgeMap.pending;
+            return `<span class="px-2 py-1 text-xs font-bold rounded-full text-white" style="background-color: ${color};">${text}</span>`;
         }
+        
+        // ADDED MISSING FUNCTION
         function renderCalendar() {
             const { selectedDate, transactions } = state;
             const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -513,112 +565,215 @@
             const month = selectedDate.getMonth();
             const firstDay = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const transactionDays = new Set(transactions.map(tx => new Date(tx.submissionTimestamp).toDateString()));
+            
+            const transactionDays = new Set(transactions.map(tx => {
+                const d = new Date(tx.submissionTimestamp);
+                return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+            }));
+
             let daysHtml = '';
             for (let i = 0; i < firstDay; i++) {
                 daysHtml += `<div class="w-10 h-10"></div>`;
             }
+
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(year, month, day);
                 const isSelected = isSameDay(date, selectedDate);
                 const isToday = isSameDay(date, new Date());
-                const hasTransactions = transactionDays.has(date.toDateString());
-                const dayClasses = `w-10 h-10 flex items-center justify-center rounded-full cursor-pointer transition-colors relative ${isSelected ? 'bg-brand-pink text-white font-bold ring-2 ring-brand-pink-hover' : isToday ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'}`;
-                daysHtml += `<div data-action="select-date" data-date="${date.toISOString()}" class="${dayClasses}"><span>${day}</span>${hasTransactions && !isSelected ? '<div class="absolute bottom-1 w-1.5 h-1.5 bg-brand-blue rounded-full"></div>' : ''}</div>`;
+                const hasTransactions = transactionDays.has(date.getTime());
+
+                let dayClasses = `w-10 h-10 flex items-center justify-center rounded-full cursor-pointer transition-colors relative`;
+                
+                let style = 'color: var(--text-primary);';
+                if (isSelected) {
+                    style += 'background-color: var(--brand-pink); color: white; font-weight: bold;';
+                } else if (isToday) {
+                    style += 'background-color: var(--bg-tertiary);';
+                } else {
+                    dayClasses += ' hover:bg-gray-600'; // Using Tailwind for hover on non-special days
+                }
+                
+                daysHtml += `
+                    <div data-action="select-date" data-date="${date.toISOString()}" class="${dayClasses}" style="${style}">
+                        <span>${day}</span>
+                        ${hasTransactions && !isSelected ? '<div class="absolute bottom-1 w-1.5 h-1.5 rounded-full" style="background-color: var(--brand-blue);"></div>' : ''}
+                    </div>
+                `;
             }
+
             return `
                 <div class="flex justify-between items-center mb-4">
-                    <button data-action="prev-month" class="p-2 rounded-full hover:bg-bg-tertiary">&lt;</button>
-                    <h3 class="text-lg font-semibold text-primary">${monthNames[month]} ${year}</h3>
-                    <button data-action="next-month" class="p-2 rounded-full hover:bg-bg-tertiary">&gt;</button>
+                    <button data-action="prev-month" class="p-2 rounded-full hover:bg-gray-600" style="color: var(--text-primary);">&lt;</button>
+                    <h3 class="text-lg font-semibold" style="color: var(--text-primary);">${monthNames[month]} ${year}</h3>
+                    <button data-action="next-month" class="p-2 rounded-full hover:bg-gray-600" style="color: var(--text-primary);">&gt;</button>
                 </div>
-                <div class="grid grid-cols-7 gap-y-2 place-items-center text-xs text-text-muted mb-2">
+                <div class="grid grid-cols-7 gap-y-2 place-items-center text-xs mb-2" style="color: var(--text-muted);">
                     ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<div>${d}</div>`).join('')}
                 </div>
                 <div class="grid grid-cols-7 gap-y-2 place-items-center">${daysHtml}</div>
             `;
         }
-        function renderStatusBadge(status) {
-            const badgeMap = {
-                approved: { text: 'Approved', color: 'bg-brand-green' },
-                disputed: { text: 'Disputed', color: 'bg-brand-yellow' },
-                pending: { text: 'Pending', color: 'bg-gray-500' },
-                denied: { text: 'Denied', color: 'bg-brand-red' }
-            };
-            const { text, color } = badgeMap[status] || badgeMap.pending;
-            return `<span class="px-2 py-1 text-xs font-bold rounded-full text-white ${color}">${text}</span>`;
+
+        // --- Admin Modal Render Functions ---
+        function renderAdminModal() {
+            let content = '';
+            switch(state.adminModalView) {
+                case 'workers': content = renderAdminWorkersContent(); break;
+                case 'services': content = renderAdminServicesContent(); break;
+                case 'incentives': content = renderAdminIncentivesContent(); break;
+            }
+
+            adminModalContent.innerHTML = `
+                <div class="flex justify-between items-start mb-6">
+                    <h2 class="text-2xl font-bold" style="color: var(--text-primary);">Admin Tools</h2>
+                    <button data-action="close-admin-modal" class="text-2xl" style="color: var(--text-muted);">&times;</button>
+                </div>
+                <div class="flex space-x-2 border-b mb-6" style="border-color: var(--border-color);">
+                    <button data-action="set-admin-view" data-view="workers" class="admin-tab ${state.adminModalView === 'workers' ? 'active' : ''}">Workers</button>
+                    <button data-action="set-admin-view" data-view="services" class="admin-tab ${state.adminModalView === 'services' ? 'active' : ''}">Services</button>
+                    <button data-action="set-admin-view" data-view="incentives" class="admin-tab ${state.adminModalView === 'incentives' ? 'active' : ''}">Incentives</button>
+                </div>
+                <div id="admin-modal-dynamic-content">${content}</div>
+            `;
         }
-        function renderPinUpdateForm() {
-            const container = document.getElementById('pin-change-container');
-            if (!container) return;
-            container.innerHTML = `
-                <div class="flex flex-col md:flex-row gap-4">
-                    <input type="password" id="new-pin-input" class="input-field flex-grow" placeholder="Enter new 4-digit PIN" pattern="\\d{4}" maxlength="4" />
-                    <button data-action="update-pin" class="btn btn-primary">Save PIN</button>
+
+        function renderAdminWorkersContent() {
+            return `
+                <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Manage Workers</h3>
+                <form data-action="admin-add-worker" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 rounded-lg mb-6" style="background-color: var(--bg-tertiary);">
+                    <div class="md:col-span-1"><label class="text-xs font-medium" style="color: var(--text-secondary);">Name</label><input id="new-worker-name" type="text" class="input-field mt-1" required></div>
+                    <div class="md:col-span-1"><label class="text-xs font-medium" style="color: var(--text-secondary);">PIN (4 digits)</label><input id="new-worker-pin" type="text" pattern="\\d{4}" class="input-field mt-1" required></div>
+                    <div class="md:col-span-1"><label class="text-xs font-medium" style="color: var(--text-secondary);">Payout Split (%)</label><input id="new-worker-split" type="number" min="0" max="100" class="input-field mt-1" required></div>
+                    <div class="md:col-span-1"><button type="submit" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Worker</button></div>
+                </form>
+                <div class="space-y-2 scrollable-list" style="max-height: 50vh;">
+                    ${state.users.filter(u => isWorker(u)).map(w => `
+                        <div class="p-3 rounded-lg flex justify-between items-center" style="background-color: var(--bg-tertiary);">
+                            <div>
+                                <p class="font-semibold" style="color: var(--text-primary);">${w.name}</p>
+                                <p class="text-xs" style="color: var(--text-muted);">Split: ${w.payoutSplit.worker * 100}%</p>
+                            </div>
+                            <button data-action="admin-delete-worker" data-id="${w.id}" class="btn text-xs" style="background-color: var(--brand-red); color: white;">Delete</button>
+                        </div>
+                    `).join('')}
                 </div>
             `;
         }
+
+        function renderAdminServicesContent() {
+             return `
+                <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Manage Services</h3>
+                <form data-action="admin-add-service" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end p-4 rounded-lg mb-6" style="background-color: var(--bg-tertiary);">
+                    <div><label class="text-xs font-medium" style="color: var(--text-secondary);">Service Name</label><input id="new-service-name" type="text" class="input-field mt-1" required></div>
+                    <div><label class="text-xs font-medium" style="color: var(--text-secondary);">Price ($)</label><input id="new-service-price" type="number" step="0.01" class="input-field mt-1" required></div>
+                    <div><button type="submit" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Service</button></div>
+                </form>
+                <div class="space-y-2 scrollable-list" style="max-height: 50vh;">
+                    ${state.services.map(s => `
+                        <div class="p-3 rounded-lg flex justify-between items-center" style="background-color: var(--bg-tertiary);">
+                            <p class="font-semibold" style="color: var(--text-primary);">${s.name} - $${s.price.toFixed(2)}</p>
+                            <button data-action="admin-delete-service" data-id="${s.id}" class="btn text-xs" style="background-color: var(--brand-red); color: white;">Delete</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderAdminIncentivesContent() {
+            return `
+                <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Manage Incentives</h3>
+                <form data-action="admin-add-incentive" class="space-y-4 p-4 rounded-lg mb-6" style="background-color: var(--bg-tertiary);">
+                    <input id="new-incentive-name" type="text" class="input-field" placeholder="Incentive Name" required>
+                    <textarea id="new-incentive-desc" class="input-field" placeholder="Description" required></textarea>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="text-xs font-medium" style="color: var(--text-secondary);">Start Date</label><input id="new-incentive-start" type="date" class="input-field mt-1" required></div>
+                        <div><label class="text-xs font-medium" style="color: var(--text-secondary);">End Date</label><input id="new-incentive-end" type="date" class="input-field mt-1" required></div>
+                    </div>
+                    <select id="new-incentive-type" class="select-field">
+                        <option value="service_push">Service Push</option>
+                        <option value="top_earners_night">Top Earners (Night)</option>
+                        <option value="top_earners_month">Top Earners (Month)</option>
+                    </select>
+                    <div id="incentive-details-form"></div>
+                    <button type="submit" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Incentive</button>
+                </form>
+                <div class="space-y-2 scrollable-list" style="max-height: 40vh;">
+                    ${state.incentives.map(inc => `
+                        <div class="p-3 rounded-lg" style="background-color: var(--bg-tertiary);">
+                            <div class="flex justify-between items-center">
+                                <p class="font-semibold" style="color: var(--text-primary);">${inc.name}</p>
+                                <button data-action="admin-delete-incentive" data-id="${inc.id}" class="btn text-xs" style="background-color: var(--brand-red); color: white;">Delete</button>
+                            </div>
+                            <p class="text-sm" style="color: var(--text-muted);">${inc.description}</p>
+                            <p class="text-xs mt-2" style="color: var(--text-secondary);">Active: ${formatDate(inc.startDate)} to ${formatDate(inc.endDate)}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderIncentiveDetailsForm(type) {
+            const container = document.getElementById('incentive-details-form');
+            if (!container) return;
+            let html = '';
+            if (type === 'service_push') {
+                html = `
+                    <select id="incentive-target-service" class="select-field mt-2">
+                        <option value="">Select Target Service</option>
+                        ${state.services.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+                    </select>
+                    <input id="incentive-service-goal" type="number" class="input-field mt-2" placeholder="Sales Goal (e.g., 10)">
+                    <input id="incentive-service-reward" type="number" step="0.01" class="input-field mt-2" placeholder="Reward per sale ($)">
+                `;
+            } else if (type === 'top_earners_night' || type === 'top_earners_month') {
+                html = `
+                    <input id="incentive-placements" type="number" class="input-field mt-2" placeholder="Number of winning placements (e.g., 3)">
+                    <input id="incentive-reward-percent" type="number" step="0.01" class="input-field mt-2" placeholder="Reward (% of house take)">
+                     <div class="flex items-center mt-2">
+                        <input id="incentive-share-progress" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500">
+                        <label for="incentive-share-progress" class="ml-2 block text-sm" style="color: var(--text-secondary);">Share progress with workers</label>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
         // --- Event Handlers & Actions ---
         function handleAction(e) {
             const target = e.target.closest('[data-action]');
             if (!target) return;
-            const { action, id } = target.dataset;
+            const { action, id, view } = target.dataset;
             switch(action) {
+                // Main App
                 case 'login': handleLogin(); break;
                 case 'logout': handleLogout(); break;
-                case 'select-date':
-                    state.selectedDate = new Date(target.dataset.date);
-                    render();
-                    break;
-                case 'prev-month':
-                    state.selectedDate.setMonth(state.selectedDate.getMonth() - 1);
-                    render();
-                    break;
-                case 'next-month':
-                    state.selectedDate.setMonth(state.selectedDate.getMonth() + 1);
-                    render();
-                    break;
+                case 'select-date': state.selectedDate = new Date(target.dataset.date); render(); break;
+                case 'prev-month': state.selectedDate.setMonth(state.selectedDate.getMonth() - 1); render(); break;
+                case 'next-month': state.selectedDate.setMonth(state.selectedDate.getMonth() + 1); render(); break;
                 case 'add-transaction': handleAddTransaction(); break;
                 case 'verify': handleVerification(id); break;
                 case 'deny': handleDenyTransaction(id); break;
                 case 'worker-accept': handleWorkerAcceptance(id); break;
-                case 'admin-dashboard-view':
-                    state.view = 'adminDashboard';
-                    render();
-                    break;
-                case 'admin-add-worker-view':
-                    state.view = 'adminAddWorker';
-                    render();
-                    break;
+                case 'toggle-theme': handleToggleTheme(); break;
+                // Admin
+                case 'open-admin-modal': state.isAdminModalOpen = true; render(); break;
+                case 'close-admin-modal': state.isAdminModalOpen = false; render(); break;
+                case 'set-admin-view': state.adminModalView = view; renderAdminModal(); break;
+                case 'admin-add-worker': handleAddWorker(e); break;
+                case 'admin-delete-worker': handleDelete('users', id, 'Worker'); break;
+                case 'admin-add-service': handleAddService(e); break;
+                case 'admin-delete-service': handleDelete('services', id, 'Service'); break;
+                case 'admin-add-incentive': handleAddIncentive(e); break;
+                case 'admin-delete-incentive': handleDelete('incentives', id, 'Incentive'); break;
+                case 'admin-dashboard-view': state.view = 'adminDashboard'; render(); break;
                 case 'admin-worker-detail-view':
                     state.selectedWorkerId = id;
                     state.view = 'adminWorkerDetail';
                     render();
                     break;
-                case 'admin-edit-worker-view':
-                    state.selectedWorkerId = id;
-                    state.view = 'adminEditWorker';
-                    render();
-                    break;
-                case 'admin-create-worker': handleAddWorker(); break;
-                case 'admin-update-worker': handleUpdateWorker(id); break;
-                case 'toggle-theme': handleToggleTheme(); break;
-                case 'show-update-pin-form': renderPinUpdateForm(); break;
-                case 'update-pin': handleUpdatePin(); break;
-                case 'toggle-daily-payouts':
-                    state.dailyPayoutsExpanded = !state.dailyPayoutsExpanded;
-                    render();
-                    break;
-                case 'toggle-all-time-payouts':
-                    state.allTimePayoutsExpanded = !state.allTimePayoutsExpanded;
-                    render();
-                    break;
-                case 'admin-profiles-view':
-                    state.view = 'adminProfiles';
-                    render();
-                    break;
             }
         }
+        
         async function handleLogin() {
             const selectedId = document.getElementById('user-select').value;
             const pin = document.getElementById('pin-input').value;
@@ -633,16 +788,21 @@
             }
             render();
         }
+
         function handleLogout() {
             localStorage.removeItem('tipTallyUserId');
             state.currentUser = null;
             state.view = 'login';
             render();
         }
+
         async function handleAddTransaction() {
             const amountInput = document.getElementById('new-transaction-amount');
+            const serviceSelect = document.getElementById('new-transaction-service');
             const amount = parseFloat(amountInput.value);
+            const serviceId = serviceSelect.value;
             if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
+            
             const newTransaction = {
               workerId: state.currentUser.id,
               workerName: state.currentUser.name,
@@ -652,10 +812,13 @@
               status: 'pending',
               submissionTimestamp: new Date().toISOString(),
               verificationTimestamp: null,
+              serviceId: serviceId || null,
             };
             await db.collection('transactions').add(newTransaction);
             amountInput.value = '';
+            serviceSelect.value = '';
         }
+
         async function handleVerification(txId) {
             const amountInput = document.querySelector(`input.verification-amount[data-id="${txId}"]`);
             const managerAmount = parseFloat(amountInput.value);
@@ -669,137 +832,144 @@
             }
         }
         async function handleDenyTransaction(txId) {
-            const txRef = db.collection('transactions').doc(txId);
-            await txRef.update({ status: 'denied', verificationTimestamp: new Date().toISOString() });
+            await db.collection('transactions').doc(txId).update({ status: 'denied', verificationTimestamp: new Date().toISOString() });
         }
         async function handleWorkerAcceptance(txId) {
-            const txRef = db.collection('transactions').doc(txId);
-            await txRef.update({ status: 'approved' });
+            await db.collection('transactions').doc(txId).update({ status: 'approved' });
         }
-        async function handleAddWorker() {
-            const name = document.getElementById('worker-name').value;
-            const pin = document.getElementById('worker-pin').value;
-            const split = document.getElementById('worker-split').value;
-            const role = document.getElementById('worker-role').value;
-            if (!name || !pin || !split || !role) { alert("All fields are required."); return; }
+
+        async function handleAddWorker(e) {
+            e.preventDefault();
+            const name = document.getElementById('new-worker-name').value;
+            const pin = document.getElementById('new-worker-pin').value;
+            const split = document.getElementById('new-worker-split').value;
+            if (!name || !pin || !split) { alert("All fields are required."); return; }
             const newWorker = {
-                name, role, pin,
+                name, role: 'Entertainer', pin,
                 payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
             };
             await db.collection('users').add(newWorker);
-            state.view = 'adminDashboard';
-            render();
+            e.target.reset();
         }
-        async function handleUpdateWorker(id) {
-            const name = document.getElementById('worker-name').value;
-            const pin = document.getElementById('worker-pin').value;
-            const split = document.getElementById('worker-split').value;
-            const role = document.getElementById('worker-role').value;
-            if (!id || !name || !pin || !split || !role) { alert("All fields are required."); return; }
-            const workerRef = db.collection('users').doc(id);
-            await workerRef.update({
-                name, pin, role,
-                payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
-            });
-            state.view = 'adminDashboard';
-            render();
+
+        async function handleAddService(e) {
+            e.preventDefault();
+            const name = document.getElementById('new-service-name').value;
+            const price = parseFloat(document.getElementById('new-service-price').value);
+            if (!name || isNaN(price)) { alert("All fields are required."); return; }
+            await db.collection('services').add({ name, price });
+            e.target.reset();
         }
-        async function handleUpdatePin() {
-            const newPinInput = document.getElementById('new-pin-input');
-            const newPin = newPinInput.value;
-            if (!/^\d{4}$/.test(newPin)) {
-                alert("PIN must be 4 digits.");
-                return;
+        
+        async function handleAddIncentive(e) {
+            e.preventDefault();
+            const form = e.target;
+            const name = form.querySelector('#new-incentive-name').value;
+            const description = form.querySelector('#new-incentive-desc').value;
+            const startDate = form.querySelector('#new-incentive-start').value;
+            const endDate = form.querySelector('#new-incentive-end').value;
+            const type = form.querySelector('#new-incentive-type').value;
+
+            let details = {};
+            if (type === 'service_push') {
+                details.goal = parseInt(form.querySelector('#incentive-service-goal').value);
+                details.reward = parseFloat(form.querySelector('#incentive-service-reward').value);
+            } else {
+                details.placements = parseInt(form.querySelector('#incentive-placements').value);
+                details.rewardPercent = parseFloat(form.querySelector('#incentive-reward-percent').value) / 100;
+                details.shareProgress = form.querySelector('#incentive-share-progress').checked;
             }
-            try {
-                const userRef = db.collection('users').doc(state.currentUser.id);
-                await userRef.update({ pin: newPin });
-                alert("PIN updated successfully!");
-                render();
-            } catch (error) {
-                console.error("Error updating PIN:", error);
-                alert("Failed to update PIN. Please try again.");
+
+            const newIncentive = {
+                name, description, startDate, endDate, type,
+                targetId: form.querySelector('#incentive-target-service')?.value || null,
+                details
+            };
+
+            await db.collection('incentives').add(newIncentive);
+            form.reset();
+            renderIncentiveDetailsForm('service_push'); // Reset details form
+        }
+
+        async function handleDelete(collection, id, itemType) {
+            if (confirm(`Are you sure you want to delete this ${itemType}?`)) {
+                await db.collection(collection).doc(id).delete();
             }
         }
+
         function handleToggleTheme() {
-            const appWrapper = document.getElementById('tiptally-app-wrapper');
-            const isLight = appWrapper.classList.toggle('light-mode');
-            localStorage.setItem('tipTallyTheme', isLight ? 'light' : 'dark');
-            render(); // Re-render to update the theme icon
+            appWrapper.classList.toggle('light-mode');
+            localStorage.setItem('tipTallyTheme', appWrapper.classList.contains('light-mode') ? 'light' : 'dark');
+            render();
         }
+
         // --- Initializer ---
         async function init() {
-            function applyTheme() {
-                const savedTheme = localStorage.getItem('tipTallyTheme') || 'dark';
-                const appWrapper = document.getElementById('tiptally-app-wrapper');
-                if (appWrapper) {
-                   appWrapper.classList.toggle('light-mode', savedTheme === 'light');
-                }
-            }
-            applyTheme();
-            // Seed data if necessary
-            const usersRef = db.collection('users');
+            const savedTheme = localStorage.getItem('tipTallyTheme') || 'dark';
+            appWrapper.classList.toggle('light-mode', savedTheme === 'light');
+
             try {
-                const usersSnapshot = await usersRef.get();
-                if (usersSnapshot.empty) {
-                    console.log('No users found, seeding initial data.');
-                    const initialUsers = [
-                      { id: 'admin-1', name: 'Manager', role: 'General Manager', pin: '1234', payoutSplit: { worker: 0, house: 1 } },
-                      { id: 'worker-1', name: 'Destiny', role: 'Entertainer', pin: '1111', payoutSplit: { worker: 0.7, house: 0.3 } },
-                      { id: 'worker-2', name: 'Crystal', role: 'Entertainer', pin: '2222', payoutSplit: { worker: 0.7, house: 0.3 } },
-                    ];
-                    const batch = db.batch();
-                    initialUsers.forEach(user => {
-                      const docRef = usersRef.doc(user.id);
-                      batch.set(docRef, user);
-                    });
-                    await batch.commit();
-                    console.log("Default users seeded.");
-                }
+                // Real-time listeners
+                db.collection('users').onSnapshot(snapshot => {
+                    const usersData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                    const roleOrder = { 'General Manager': 0, 'Manager': 1, 'Entertainer': 2, 'Server': 3, 'Security': 4 };
+                    usersData.sort((a, b) => (roleOrder[a.role] ?? 99) - (roleOrder[b.role] ?? 99) || a.name.localeCompare(b.name));
+                    state.users = usersData;
+                    
+                    const savedUserId = localStorage.getItem('tipTallyUserId');
+                    if (savedUserId && !state.currentUser) {
+                        const savedUser = state.users.find(u => u.id === savedUserId);
+                        if (savedUser) {
+                            state.currentUser = savedUser;
+                            state.view = isAdmin(savedUser) ? 'adminDashboard' : 'workerDashboard';
+                        }
+                    }
+                    if (state.view === 'login' && !state.selectedLoginUser && state.users.length > 0) {
+                        state.selectedLoginUser = state.users[0].id;
+                    }
+                    render();
+                });
+
+                db.collection('transactions').orderBy("submissionTimestamp", "desc").onSnapshot(snapshot => {
+                    state.transactions = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                    if (state.view !== 'login') render();
+                });
+
+                db.collection('services').onSnapshot(snapshot => {
+                    state.services = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                    if (state.view !== 'login') render();
+                });
+
+                db.collection('incentives').onSnapshot(snapshot => {
+                    state.incentives = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                    if (state.view !== 'login') render();
+                });
+
             } catch (e) {
-                console.error("Firestore operation failed. This is likely a permissions issue. Please check your Firestore security rules.", e);
-                appContainer.innerHTML = `<div class="p-8 text-center text-red-400"><h2>Connection Error</h2><p>Could not connect to the database. Please ensure your Firestore security rules are set to allow reads and writes.</p></div>`;
+                console.error("Firestore connection error:", e);
+                appContainer.innerHTML = `<div class="p-8 text-center" style="color: var(--brand-red);"><h2>Connection Error</h2><p>Could not connect to the database. Please check your Firestore security rules.</p></div>`;
                 return;
             }
-            // Set up real-time listeners
-            db.collection('users').onSnapshot(snapshot => {
-                const usersData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                // Custom sorting logic for login dropdown
-                const roleOrder = { 'General Manager': 0, 'Manager': 1, 'Entertainer': 2, 'Server': 3, 'Security': 4 };
-                usersData.sort((a, b) => {
-                    const orderA = roleOrder[a.role] ?? 99;
-                    const orderB = roleOrder[b.role] ?? 99;
-                    if (orderA !== orderB) {
-                        return orderA - orderB;
-                    }
-                    return a.name.localeCompare(b.name);
-                });
-                state.users = usersData;
-                const savedUserId = localStorage.getItem('tipTallyUserId');
-                if (savedUserId && !state.currentUser) {
-                    const savedUser = state.users.find(u => u.id === savedUserId);
-                    if (savedUser) {
-                        state.currentUser = savedUser;
-                        state.view = isAdmin(savedUser) ? 'adminDashboard' : 'workerDashboard';
-                    }
-                }
-                if (state.view === 'login' && !state.selectedLoginUser && state.users.length > 0) {
-                    state.selectedLoginUser = state.users[0].id;
-                }
-                render();
-            }, error => console.error("Error fetching users:", error));
-            db.collection('transactions').orderBy("submissionTimestamp", "desc").onSnapshot(snapshot => {
-                state.transactions = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                if (state.view !== 'login') render();
-            }, error => console.error("Error fetching transactions:", error));
-            // Add global event listeners
+
+            // Global event listeners
             appContainer.addEventListener('click', handleAction);
+            adminModal.addEventListener('click', handleAction);
+            
+            adminModal.addEventListener('change', (e) => {
+                if(e.target.id === 'new-incentive-type') {
+                    renderIncentiveDetailsForm(e.target.value);
+                }
+            });
+
             appContainer.addEventListener('change', (e) => {
                 if (e.target.id === 'user-select') {
                     state.selectedLoginUser = e.target.value;
                 }
             });
         }
+        
         init();
     });
- </script>
+    </script>
+</body>
+</html>
