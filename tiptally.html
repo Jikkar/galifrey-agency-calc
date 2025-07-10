@@ -182,7 +182,7 @@
             services: [],
             incentives: [],
             currentUser: null,
-            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', etc.
+            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', 'adminWorkerDetail', 'adminEditWorker'
             adminModalView: 'workers', // 'workers', 'services', 'incentives'
             selectedDate: new Date(),
             selectedWorkerId: null,
@@ -236,6 +236,7 @@
                 case 'workerDashboard': currentViewHtml = renderMainAppView(renderWorkerDashboard()); break;
                 case 'adminDashboard': currentViewHtml = renderMainAppView(renderAdminDashboard()); break;
                 case 'adminWorkerDetail': currentViewHtml = renderMainAppView(renderAdminWorkerDetail()); break;
+                case 'adminEditWorker': currentViewHtml = renderMainAppView(renderEditWorkerForm()); break;
             }
             appContainer.innerHTML = currentViewHtml;
             if (state.isAdminModalOpen) {
@@ -279,7 +280,7 @@
             const themeIcon = isLight ? 
                 `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>` : 
                 `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>`;
-            
+            const adminIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
             return `
                 <header class="p-4 flex justify-between items-center shadow-md" style="background-color: var(--bg-secondary); border-bottom: 1px solid var(--border-color);">
                     <div>
@@ -287,8 +288,8 @@
                         <p class="text-sm" style="color: var(--text-muted);">Logged in as: <span class="font-semibold" style="color: var(--brand-pink);">${state.currentUser?.name}</span></p>
                     </div>
                     <div class="flex items-center gap-4">
-                        ${isAdmin(state.currentUser) ? `<button data-action="open-admin-modal" class="btn" style="background-color: var(--brand-blue); color: white;">Admin Tools</button>` : ''}
-                        <button data-action="toggle-theme" class="p-2 rounded-full" style="background-color: var(--bg-tertiary); color: var(--text-primary);">${themeIcon}</button>
+                        ${isAdmin(state.currentUser) ? `<button data-action="open-admin-modal" title="Admin Tools" class="p-2 rounded-full" style="background-color: var(--bg-tertiary); color: var(--text-primary);">${adminIcon}</button>` : ''}
+                        <button data-action="toggle-theme" title="Toggle Theme" class="p-2 rounded-full" style="background-color: var(--bg-tertiary); color: var(--text-primary);">${themeIcon}</button>
                         <button data-action="logout" class="btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Logout</button>
                     </div>
                 </header>
@@ -462,7 +463,6 @@
         }
 
         function renderAdminDashboard() {
-            // This function is greatly simplified as most of its content is now in the modal
             const dailyTransactions = state.transactions.filter(t => isSameDay(t.submissionTimestamp, state.selectedDate));
             const pendingTransactions = dailyTransactions.filter(t => t.status === 'pending');
             const workers = state.users.filter(u => isWorker(u));
@@ -527,6 +527,7 @@
                 <div>
                     <div class="flex justify-between items-center mb-6">
                         <button data-action="admin-dashboard-view" class="hover:underline" style="color: var(--brand-pink);">&larr; Back to Dashboard</button>
+                        <button data-action="admin-edit-worker-view" data-id="${worker.id}" class="btn text-sm" style="background-color: var(--brand-yellow); color: white;">Edit Worker</button>
                     </div>
                     <h2 class="text-3xl font-bold mb-2" style="color: var(--text-primary);">${worker.name}'s Summary</h2>
                     <div class="mb-8 p-4 card mt-4">
@@ -545,6 +546,26 @@
                 </div>
             `;
         }
+        
+        function renderEditWorkerForm() {
+            const worker = state.users.find(u => u.id === state.selectedWorkerId);
+            if (!worker) return `<p>Worker not found.</p>`;
+
+            return `
+                <div class="max-w-md mx-auto card">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-primary">Edit ${worker.name}</h2>
+                        <button data-action="admin-worker-detail-view" data-id="${worker.id}" class="text-brand-pink hover:underline">Cancel</button>
+                    </div>
+                    <form id="edit-worker-form" class="space-y-4">
+                        <div><label for="edit-worker-name" class="block text-sm font-medium text-text-secondary mb-1">Worker Name</label><input type="text" id="edit-worker-name" class="input-field" value="${worker.name}" required /></div>
+                        <div><label for="edit-worker-pin" class="block text-sm font-medium text-text-secondary mb-1">4-Digit PIN</label><input type="text" pattern="\\d{4}" title="PIN must be 4 digits" id="edit-worker-pin" class="input-field" value="${worker.pin}" required /></div>
+                        <div><label for="edit-worker-split" class="block text-sm font-medium text-text-secondary mb-1">Worker Payout Split (%)</label><input type="number" min="0" max="100" id="edit-worker-split" class="input-field" value="${worker.payoutSplit.worker * 100}" required /></div>
+                        <button data-action="admin-update-worker" data-id="${worker.id}" class="w-full btn btn-primary">Save Changes</button>
+                    </form>
+                </div>
+            `;
+        }
 
         function renderStatusBadge(status) {
             const badgeMap = {
@@ -557,7 +578,6 @@
             return `<span class="px-2 py-1 text-xs font-bold rounded-full text-white" style="background-color: ${color};">${text}</span>`;
         }
         
-        // ADDED MISSING FUNCTION
         function renderCalendar() {
             const { selectedDate, transactions } = state;
             const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -640,11 +660,11 @@
         function renderAdminWorkersContent() {
             return `
                 <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Manage Workers</h3>
-                <form data-action="admin-add-worker" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 rounded-lg mb-6" style="background-color: var(--bg-tertiary);">
+                <form id="add-worker-form" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 rounded-lg mb-6" style="background-color: var(--bg-tertiary);">
                     <div class="md:col-span-1"><label class="text-xs font-medium" style="color: var(--text-secondary);">Name</label><input id="new-worker-name" type="text" class="input-field mt-1" required></div>
                     <div class="md:col-span-1"><label class="text-xs font-medium" style="color: var(--text-secondary);">PIN (4 digits)</label><input id="new-worker-pin" type="text" pattern="\\d{4}" class="input-field mt-1" required></div>
                     <div class="md:col-span-1"><label class="text-xs font-medium" style="color: var(--text-secondary);">Payout Split (%)</label><input id="new-worker-split" type="number" min="0" max="100" class="input-field mt-1" required></div>
-                    <div class="md:col-span-1"><button type="submit" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Worker</button></div>
+                    <div class="md:col-span-1"><button type="submit" data-action="admin-add-worker" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Worker</button></div>
                 </form>
                 <div class="space-y-2 scrollable-list" style="max-height: 50vh;">
                     ${state.users.filter(u => isWorker(u)).map(w => `
@@ -653,7 +673,10 @@
                                 <p class="font-semibold" style="color: var(--text-primary);">${w.name}</p>
                                 <p class="text-xs" style="color: var(--text-muted);">Split: ${w.payoutSplit.worker * 100}%</p>
                             </div>
-                            <button data-action="admin-delete-worker" data-id="${w.id}" class="btn text-xs" style="background-color: var(--brand-red); color: white;">Delete</button>
+                            <div class="flex gap-2">
+                                <button data-action="admin-edit-worker-view" data-id="${w.id}" class="btn text-xs" style="background-color: var(--brand-yellow); color: white;">Edit</button>
+                                <button data-action="admin-delete-worker" data-id="${w.id}" class="btn text-xs" style="background-color: var(--brand-red); color: white;">Delete</button>
+                            </div>
                         </div>
                     `).join('')}
                 </div>
@@ -663,10 +686,10 @@
         function renderAdminServicesContent() {
              return `
                 <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Manage Services</h3>
-                <form data-action="admin-add-service" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end p-4 rounded-lg mb-6" style="background-color: var(--bg-tertiary);">
+                <form id="add-service-form" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end p-4 rounded-lg mb-6" style="background-color: var(--bg-tertiary);">
                     <div><label class="text-xs font-medium" style="color: var(--text-secondary);">Service Name</label><input id="new-service-name" type="text" class="input-field mt-1" required></div>
                     <div><label class="text-xs font-medium" style="color: var(--text-secondary);">Price ($)</label><input id="new-service-price" type="number" step="0.01" class="input-field mt-1" required></div>
-                    <div><button type="submit" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Service</button></div>
+                    <div><button type="submit" data-action="admin-add-service" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Service</button></div>
                 </form>
                 <div class="space-y-2 scrollable-list" style="max-height: 50vh;">
                     ${state.services.map(s => `
@@ -682,7 +705,7 @@
         function renderAdminIncentivesContent() {
             return `
                 <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Manage Incentives</h3>
-                <form data-action="admin-add-incentive" class="space-y-4 p-4 rounded-lg mb-6" style="background-color: var(--bg-tertiary);">
+                <form id="add-incentive-form" class="space-y-4 p-4 rounded-lg mb-6" style="background-color: var(--bg-tertiary);">
                     <input id="new-incentive-name" type="text" class="input-field" placeholder="Incentive Name" required>
                     <textarea id="new-incentive-desc" class="input-field" placeholder="Description" required></textarea>
                     <div class="grid grid-cols-2 gap-4">
@@ -695,7 +718,7 @@
                         <option value="top_earners_month">Top Earners (Month)</option>
                     </select>
                     <div id="incentive-details-form"></div>
-                    <button type="submit" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Incentive</button>
+                    <button type="submit" data-action="admin-add-incentive" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Incentive</button>
                 </form>
                 <div class="space-y-2 scrollable-list" style="max-height: 40vh;">
                     ${state.incentives.map(inc => `
@@ -742,7 +765,17 @@
         function handleAction(e) {
             const target = e.target.closest('[data-action]');
             if (!target) return;
+            
+            // Prevent form submission from triggering this on parent elements
+            if (e.target.tagName === 'FORM' && e.type === 'click') return;
+
             const { action, id, view } = target.dataset;
+            
+            // For form submissions, we want to prevent default page reload
+            if (action === 'admin-add-worker' || action === 'admin-add-service' || action === 'admin-add-incentive' || action === 'admin-update-worker') {
+                e.preventDefault();
+            }
+
             switch(action) {
                 // Main App
                 case 'login': handleLogin(); break;
@@ -759,11 +792,11 @@
                 case 'open-admin-modal': state.isAdminModalOpen = true; render(); break;
                 case 'close-admin-modal': state.isAdminModalOpen = false; render(); break;
                 case 'set-admin-view': state.adminModalView = view; renderAdminModal(); break;
-                case 'admin-add-worker': handleAddWorker(e); break;
+                case 'admin-add-worker': handleAddWorker(); break;
                 case 'admin-delete-worker': handleDelete('users', id, 'Worker'); break;
-                case 'admin-add-service': handleAddService(e); break;
+                case 'admin-add-service': handleAddService(); break;
                 case 'admin-delete-service': handleDelete('services', id, 'Service'); break;
-                case 'admin-add-incentive': handleAddIncentive(e); break;
+                case 'admin-add-incentive': handleAddIncentive(); break;
                 case 'admin-delete-incentive': handleDelete('incentives', id, 'Incentive'); break;
                 case 'admin-dashboard-view': state.view = 'adminDashboard'; render(); break;
                 case 'admin-worker-detail-view':
@@ -771,6 +804,12 @@
                     state.view = 'adminWorkerDetail';
                     render();
                     break;
+                case 'admin-edit-worker-view':
+                    state.selectedWorkerId = id;
+                    state.view = 'adminEditWorker';
+                    render();
+                    break;
+                case 'admin-update-worker': handleUpdateWorker(id); break;
             }
         }
         
@@ -838,53 +877,81 @@
             await db.collection('transactions').doc(txId).update({ status: 'approved' });
         }
 
-        async function handleAddWorker(e) {
-            e.preventDefault();
-            const name = document.getElementById('new-worker-name').value;
-            const pin = document.getElementById('new-worker-pin').value;
-            const split = document.getElementById('new-worker-split').value;
+        async function handleAddWorker() {
+            const form = document.getElementById('add-worker-form');
+            const name = form.querySelector('#new-worker-name').value;
+            const pin = form.querySelector('#new-worker-pin').value;
+            const split = form.querySelector('#new-worker-split').value;
             if (!name || !pin || !split) { alert("All fields are required."); return; }
             const newWorker = {
                 name, role: 'Entertainer', pin,
                 payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
             };
             await db.collection('users').add(newWorker);
-            e.target.reset();
-        }
-
-        async function handleAddService(e) {
-            e.preventDefault();
-            const name = document.getElementById('new-service-name').value;
-            const price = parseFloat(document.getElementById('new-service-price').value);
-            if (!name || isNaN(price)) { alert("All fields are required."); return; }
-            await db.collection('services').add({ name, price });
-            e.target.reset();
+            form.reset();
         }
         
-        async function handleAddIncentive(e) {
-            e.preventDefault();
-            const form = e.target;
+        async function handleUpdateWorker(id) {
+            const form = document.getElementById('edit-worker-form');
+            const name = form.querySelector('#edit-worker-name').value;
+            const pin = form.querySelector('#edit-worker-pin').value;
+            const split = form.querySelector('#edit-worker-split').value;
+            if (!id || !name || !pin || !split) { alert("All fields are required."); return; }
+            const workerRef = db.collection('users').doc(id);
+            await workerRef.update({
+                name, pin,
+                payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
+            });
+            state.view = 'adminDashboard';
+            state.isAdminModalOpen = true;
+            state.adminModalView = 'workers';
+            render();
+        }
+
+
+        async function handleAddService() {
+            const form = document.getElementById('add-service-form');
+            const name = form.querySelector('#new-service-name').value;
+            const price = parseFloat(form.querySelector('#new-service-price').value);
+            if (!name || isNaN(price)) { alert("All fields are required."); return; }
+            await db.collection('services').add({ name, price });
+            form.reset();
+        }
+        
+        async function handleAddIncentive() {
+            const form = document.getElementById('add-incentive-form');
             const name = form.querySelector('#new-incentive-name').value;
             const description = form.querySelector('#new-incentive-desc').value;
             const startDate = form.querySelector('#new-incentive-start').value;
             const endDate = form.querySelector('#new-incentive-end').value;
             const type = form.querySelector('#new-incentive-type').value;
 
-            let details = {};
-            if (type === 'service_push') {
-                details.goal = parseInt(form.querySelector('#incentive-service-goal').value);
-                details.reward = parseFloat(form.querySelector('#incentive-service-reward').value);
-            } else {
-                details.placements = parseInt(form.querySelector('#incentive-placements').value);
-                details.rewardPercent = parseFloat(form.querySelector('#incentive-reward-percent').value) / 100;
-                details.shareProgress = form.querySelector('#incentive-share-progress').checked;
+            if (!name || !description || !startDate || !endDate || !type) {
+                alert("Please fill out all incentive fields.");
+                return;
             }
 
-            const newIncentive = {
-                name, description, startDate, endDate, type,
-                targetId: form.querySelector('#incentive-target-service')?.value || null,
-                details
-            };
+            let details = {};
+            let targetId = null;
+            if (type === 'service_push') {
+                targetId = form.querySelector('#incentive-target-service')?.value;
+                details.goal = parseInt(form.querySelector('#incentive-service-goal')?.value);
+                details.reward = parseFloat(form.querySelector('#incentive-service-reward')?.value);
+                if (!targetId || isNaN(details.goal) || isNaN(details.reward)) {
+                    alert("Please fill out all fields for the service push incentive.");
+                    return;
+                }
+            } else {
+                details.placements = parseInt(form.querySelector('#incentive-placements')?.value);
+                details.rewardPercent = parseFloat(form.querySelector('#incentive-reward-percent')?.value) / 100;
+                details.shareProgress = form.querySelector('#incentive-share-progress')?.checked || false;
+                 if (isNaN(details.placements) || isNaN(details.rewardPercent)) {
+                    alert("Please fill out all fields for the top earners incentive.");
+                    return;
+                }
+            }
+
+            const newIncentive = { name, description, startDate, endDate, type, targetId, details };
 
             await db.collection('incentives').add(newIncentive);
             form.reset();
@@ -954,6 +1021,29 @@
             // Global event listeners
             appContainer.addEventListener('click', handleAction);
             adminModal.addEventListener('click', handleAction);
+
+            // Delegated form submission
+            adminModal.addEventListener('submit', (e) => {
+                const form = e.target;
+                if (form.id === 'add-worker-form') {
+                    e.preventDefault();
+                    handleAddWorker();
+                } else if (form.id === 'add-service-form') {
+                    e.preventDefault();
+                    handleAddService();
+                } else if (form.id === 'add-incentive-form') {
+                    e.preventDefault();
+                    handleAddIncentive();
+                }
+            });
+            
+            appContainer.addEventListener('submit', (e) => {
+                 if (e.target.id === 'edit-worker-form') {
+                    e.preventDefault();
+                    const workerId = e.target.querySelector('[data-action="admin-update-worker"]').dataset.id;
+                    handleUpdateWorker(workerId);
+                }
+            });
             
             adminModal.addEventListener('change', (e) => {
                 if(e.target.id === 'new-incentive-type') {
