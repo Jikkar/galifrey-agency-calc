@@ -81,7 +81,10 @@
 </head>
 <body>
     <div id="app-container" class="min-h-screen">
-        <!-- This container will be populated by JavaScript -->
+        <!-- App content is rendered here by JavaScript -->
+        <div class="flex items-center justify-center min-h-screen">
+            <p class="text-text-muted">Loading TipTally...</p>
+        </div>
     </div>
 
     <script>
@@ -172,7 +175,7 @@
                             <div>
                                 <label for="user-select" class="block text-sm font-medium text-text-secondary mb-1">Select User</label>
                                 <select id="user-select" class="input-field">
-                                    ${state.users.map(user => `<option value="${user.id}" ${state.selectedLoginUser === user.id ? 'selected' : ''}>${user.name} (${user.role})</option>`).join('')}
+                                    ${state.users.length > 0 ? state.users.map(user => `<option value="${user.id}" ${state.selectedLoginUser === user.id ? 'selected' : ''}>${user.name} (${user.role})</option>`).join('') : '<option>Loading users...</option>'}
                                 </select>
                             </div>
                             <div>
@@ -508,6 +511,7 @@
               verificationTimestamp: null,
             };
             await db.collection('transactions').add(newTransaction);
+            amountInput.value = '';
         }
 
         async function handleVerification(txId) {
@@ -563,20 +567,27 @@
         async function init() {
             // Seed data if necessary
             const usersRef = db.collection('users');
-            const usersSnapshot = await usersRef.get();
-            if (usersSnapshot.empty) {
-                console.log('No users found, seeding initial data.');
-                const initialUsers = [
-                  { id: 'admin-1', name: 'Manager', role: 'admin', pin: '1234', payoutSplit: { worker: 0, house: 1 } },
-                  { id: 'worker-1', name: 'Destiny', role: 'worker', pin: '1111', payoutSplit: { worker: 0.7, house: 0.3 } },
-                  { id: 'worker-2', name: 'Crystal', role: 'worker', pin: '2222', payoutSplit: { worker: 0.7, house: 0.3 } },
-                ];
-                const batch = db.batch();
-                initialUsers.forEach(user => {
-                  const docRef = usersRef.doc(user.id);
-                  batch.set(docRef, user);
-                });
-                await batch.commit();
+            try {
+                const usersSnapshot = await usersRef.get();
+                if (usersSnapshot.empty) {
+                    console.log('No users found, seeding initial data.');
+                    const initialUsers = [
+                      { id: 'admin-1', name: 'Manager', role: 'admin', pin: '1234', payoutSplit: { worker: 0, house: 1 } },
+                      { id: 'worker-1', name: 'Destiny', role: 'worker', pin: '1111', payoutSplit: { worker: 0.7, house: 0.3 } },
+                      { id: 'worker-2', name: 'Crystal', role: 'worker', pin: '2222', payoutSplit: { worker: 0.7, house: 0.3 } },
+                    ];
+                    const batch = db.batch();
+                    initialUsers.forEach(user => {
+                      const docRef = usersRef.doc(user.id);
+                      batch.set(docRef, user);
+                    });
+                    await batch.commit();
+                    console.log("Default users seeded.");
+                }
+            } catch (e) {
+                console.error("Firestore operation failed. This is likely a permissions issue. Please check your Firestore security rules.", e);
+                appContainer.innerHTML = `<div class="p-8 text-center text-red-400"><h2>Connection Error</h2><p>Could not connect to the database. Please ensure your Firestore security rules are set to allow reads and writes.</p></div>`;
+                return;
             }
 
             // Set up real-time listeners
@@ -601,8 +612,7 @@
                 }
             });
 
-            // Initial render
-            render();
+            // Initial render is now driven by the snapshot listeners
         }
 
         init();
