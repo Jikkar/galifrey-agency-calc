@@ -38,24 +38,30 @@
     // --- Helper Functions & Initial Data ---
 
     const getInitialData = async () => {
-      const usersRef = db.collection('users');
-      const usersSnapshot = await usersRef.get();
+      try {
+        const usersRef = db.collection('users');
+        const usersSnapshot = await usersRef.get();
 
-      if (usersSnapshot.empty) {
-        console.log('No users found in Firestore, seeding initial data.');
-        const initialUsers = [
-          { id: 'admin-1', name: 'Manager', role: 'admin', pin: '1234', payoutSplit: { worker: 0, house: 1 } },
-          { id: 'worker-1', name: 'Destiny', role: 'worker', pin: '1111', payoutSplit: { worker: 0.7, house: 0.3 } },
-          { id: 'worker-2', name: 'Crystal', role: 'worker', pin: '2222', payoutSplit: { worker: 0.7, house: 0.3 } },
-        ];
+        if (usersSnapshot.empty) {
+          console.log('No users found in Firestore, seeding initial data.');
+          const initialUsers = [
+            { id: 'admin-1', name: 'Manager', role: 'admin', pin: '1234', payoutSplit: { worker: 0, house: 1 } },
+            { id: 'worker-1', name: 'Destiny', role: 'worker', pin: '1111', payoutSplit: { worker: 0.7, house: 0.3 } },
+            { id: 'worker-2', name: 'Crystal', role: 'worker', pin: '2222', payoutSplit: { worker: 0.7, house: 0.3 } },
+          ];
 
-        const batch = db.batch();
-        initialUsers.forEach(user => {
-          const docRef = usersRef.doc(user.id);
-          batch.set(docRef, user);
-        });
-        await batch.commit();
-        console.log('Initial users have been added to Firestore.');
+          const batch = db.batch();
+          initialUsers.forEach(user => {
+            const docRef = usersRef.doc(user.id);
+            batch.set(docRef, user);
+          });
+          await batch.commit();
+          console.log('Initial users have been added to Firestore.');
+        }
+      } catch (error) {
+        // Log the error and inform the user if necessary
+        console.error("Error initializing data from Firebase:", error);
+        alert("Could not connect to the database. Please check your connection and Firebase configuration.");
       }
     };
 
@@ -649,7 +655,9 @@
       );
     }
 
-    ReactDOM.render(<App />, document.getElementById('root'));
+    window.onload = function() {
+      ReactDOM.render(<App />, document.getElementById('root'));
+    };
 
     </script>
 </body>
