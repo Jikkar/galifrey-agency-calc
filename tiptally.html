@@ -5,653 +5,480 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TipTally - Cloud Version</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React Libraries -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <!-- Icon Library -->
-    <script src="https://unpkg.com/lucide-react@latest/dist/lucide-react.js"></script>
-    <!-- Firebase Libraries -->
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #111827; /* Gray 900 */
+            --bg-secondary: #1f2937; /* Gray 800 */
+            --bg-tertiary: #374151; /* Gray 700 */
+            --border-color: #4b5563; /* Gray 600 */
+            --text-primary: #f9fafb; /* Gray 50 */
+            --text-secondary: #d1d5db; /* Gray 300 */
+            --text-muted: #9ca3af; /* Gray 400 */
+            --brand-pink: #ec4899; /* Pink 500 */
+            --brand-pink-hover: #db2777; /* Pink 600 */
+            --brand-green: #22c55e; /* Green 500 */
+            --brand-yellow: #f59e0b; /* Amber 500 */
+            --brand-blue: #3b82f6; /* Blue 500 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        .font-mono {
+            font-family: 'Roboto Mono', monospace;
+        }
+        .btn {
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-align: center;
+            transition: all 0.2s ease-in-out;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background-color: var(--brand-pink);
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: var(--brand-pink-hover);
+        }
+        .btn-primary:disabled {
+            background-color: var(--bg-tertiary);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .input-field {
+            width: 100%;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .input-field:focus {
+            outline: none;
+            border-color: var(--brand-pink);
+            box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.3);
+        }
+        .card {
+            background-color: var(--bg-secondary);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
 </head>
-<body class="bg-gray-900">
-    <div id="root"></div>
+<body>
+    <div id="app-container" class="min-h-screen">
+        <!-- Login View -->
+        <div id="login-view" class="flex items-center justify-center min-h-screen">
+            <div class="w-full max-w-sm p-8 space-y-6 card">
+                <div class="text-center">
+                    <h1 class="text-4xl font-bold text-white">TipTally</h1>
+                    <p class="text-text-muted mt-2">Streamlined Earnings Management</p>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label for="user-select" class="block text-sm font-medium text-text-secondary mb-1">Select User</label>
+                        <select id="user-select" class="input-field"></select>
+                    </div>
+                    <div>
+                        <label for="pin-input" class="block text-sm font-medium text-text-secondary mb-1">PIN</label>
+                        <input type="password" id="pin-input" class="input-field" placeholder="****"/>
+                    </div>
+                    <p id="login-error" class="text-sm text-red-400 hidden"></p>
+                    <button data-action="login" class="w-full btn btn-primary">Login</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main App View (Worker/Admin) -->
+        <div id="main-view" class="hidden">
+            <header class="bg-bg-secondary p-4 flex justify-between items-center shadow-md border-b border-border-color">
+                <div>
+                    <h1 class="text-xl font-bold text-white">TipTally</h1>
+                    <p class="text-sm text-text-muted">Logged in as: <span id="current-user-name" class="font-semibold text-brand-pink"></span></p>
+                </div>
+                <button data-action="logout" class="btn bg-bg-tertiary hover:bg-gray-600 text-white">Logout</button>
+            </header>
+            <main id="dashboard-content" class="p-4 md:p-8"></main>
+        </div>
+    </div>
 
     <script>
-    // This script block contains standard JavaScript, not "text/babel".
-    // The JSX has been manually transpiled to React.createElement calls to ensure it runs on any server.
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- App State ---
+        let state = {
+            users: [],
+            transactions: [],
+            currentUser: null,
+            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', 'adminWorkerDetail', 'adminAddWorker'
+            selectedDate: new Date(),
+            selectedWorkerId: null,
+            loginError: '',
+            selectedLoginUser: ''
+        };
 
-    window.onload = function() {
-        try {
-            // --- Firebase Configuration & Initialization ---
-            const firebaseConfig = {
-              apiKey: "AIzaSyCbX8RkQxxDMxkhSDMzeKmDi5m07GoCEGQ",
-              authDomain: "tiptally-b3e22.firebaseapp.com",
-              projectId: "tiptally-b3e22",
-              storageBucket: "tiptally-b3e22.firebasestorage.app",
-              messagingSenderId: "455968198845",
-              appId: "1:455968198845:web:fb55125d3d82b24eafe7d4",
-              measurementId: "G-SRDQRGLQ5Y"
-            };
+        // --- Firebase Initialization ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyCbX8RkQxxDMxkhSDMzeKmDi5m07GoCEGQ",
+          authDomain: "tiptally-b3e22.firebaseapp.com",
+          projectId: "tiptally-b3e22",
+          storageBucket: "tiptally-b3e22.firebasestorage.app",
+          messagingSenderId: "455968198845",
+          appId: "1:455968198845:web:fb55125d3d82b24eafe7d4",
+          measurementId: "G-SRDQRGLQ5Y"
+        };
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
-            // Initialize Firebase
-            const app = firebase.initializeApp(firebaseConfig);
-            const db = firebase.firestore();
-            
-            // --- FIX: Explicitly get the icon library from the window object ---
-            const LucideIcons = window.LucideReact;
-            if (!LucideIcons) {
-                throw new Error("LucideReact icon library failed to load.");
-            }
-            const { CheckCircle, AlertTriangle, List, ChevronLeft, ChevronRight, UserPlus, Edit, LogOut } = LucideIcons;
+        // --- DOM Elements ---
+        const loginView = document.getElementById('login-view');
+        const mainView = document.getElementById('main-view');
+        const dashboardContent = document.getElementById('dashboard-content');
+        const userSelect = document.getElementById('user-select');
+        const pinInput = document.getElementById('pin-input');
+        const loginErrorEl = document.getElementById('login-error');
+        const currentUserNameEl = document.getElementById('current-user-name');
 
-
-            // --- Helper Functions & Initial Data ---
-            const getInitialData = async () => {
-              try {
-                  const usersRef = db.collection('users');
-                  const usersSnapshot = await usersRef.get();
-
-                  if (usersSnapshot.empty) {
-                    console.log('No users found in Firestore, seeding initial data.');
-                    const initialUsers = [
-                      { id: 'admin-1', name: 'Manager', role: 'admin', pin: '1234', payoutSplit: { worker: 0, house: 1 } },
-                      { id: 'worker-1', name: 'Destiny', role: 'worker', pin: '1111', payoutSplit: { worker: 0.7, house: 0.3 } },
-                      { id: 'worker-2', name: 'Crystal', role: 'worker', pin: '2222', payoutSplit: { worker: 0.7, house: 0.3 } },
-                    ];
-
-                    const batch = db.batch();
-                    initialUsers.forEach(user => {
-                      const docRef = usersRef.doc(user.id);
-                      batch.set(docRef, user);
-                    });
-                    await batch.commit();
-                    console.log('Initial users have been added to Firestore.');
-                  }
-              } catch (error) {
-                  console.error("Error initializing data from Firebase:", error);
-                  alert("Could not connect to the database. Please check your connection and Firebase configuration.");
-              }
-            };
-
-            getInitialData();
-
-            // Date Helper
-            const isSameDay = (date1, date2) => {
-                if (!date1 || !date2) return false;
-                return date1.getFullYear() === date2.getFullYear() &&
-                       date1.getMonth() === date2.getMonth() &&
-                       date1.getDate() === date2.getDate();
-            };
-
-            const formatDate = (date) => {
-                return new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(date);
+        // --- Main Render Function ---
+        function render() {
+            // Update login screen user dropdown
+            if (state.view === 'login') {
+                userSelect.innerHTML = state.users.map(user => `<option value="${user.id}">${user.name} (${user.role})</option>`).join('');
+                if (state.selectedLoginUser) {
+                    userSelect.value = state.selectedLoginUser;
+                }
+                loginErrorEl.textContent = state.loginError;
+                loginErrorEl.classList.toggle('hidden', !state.loginError);
             }
 
-            // --- UI Components (Stateless) ---
+            // Show/hide main views
+            loginView.classList.toggle('hidden', state.view !== 'login');
+            mainView.classList.toggle('hidden', state.view === 'login');
 
-            const StatusBadge = ({ status }) => {
-                const baseClasses = "px-2 py-1 text-xs font-bold rounded-full text-white inline-flex items-center";
-                switch (status) {
-                  case 'approved':
-                    return React.createElement('span', { className: `${baseClasses} bg-green-500` },
-                        React.createElement(CheckCircle, { className: "w-4 h-4 mr-1" }), 'Approved');
-                  case 'disputed':
-                    return React.createElement('span', { className: `${baseClasses} bg-yellow-500` },
-                        React.createElement(AlertTriangle, { className: "w-4 h-4 mr-1" }), 'Disputed');
-                  case 'pending':
-                  default:
-                    return React.createElement('span', { className: `${baseClasses} bg-gray-500` },
-                        React.createElement(List, { className: "w-4 h-4 mr-1" }), 'Pending');
-                }
-            };
-
-            const Calendar = ({ selectedDate, onDateChange, transactions }) => {
-                const { useState, useEffect, useMemo } = React;
-                const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
-
-                useEffect(() => {
-                    setCurrentMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
-                }, [selectedDate]);
-
-                const transactionDays = useMemo(() => {
-                    const days = new Set();
-                    transactions.forEach(tx => {
-                        const d = new Date(tx.submissionTimestamp);
-                        days.add(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime());
-                    });
-                    return days;
-                }, [transactions]);
-
-                const changeMonth = (offset) => {
-                    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
-                };
-
-                const renderHeader = () => React.createElement('div', { className: "flex justify-between items-center mb-4" },
-                    React.createElement('button', { onClick: () => changeMonth(-1), className: "p-2 rounded-full hover:bg-gray-600" }, React.createElement(ChevronLeft, null)),
-                    React.createElement('h3', { className: "text-lg font-semibold text-white" }, new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(currentMonth)),
-                    React.createElement('button', { onClick: () => changeMonth(1), className: "p-2 rounded-full hover:bg-gray-600" }, React.createElement(ChevronRight, null))
-                );
-
-                const renderDays = () => {
-                    const days = [];
-                    const startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-                    const startDay = startDate.getDay();
-
-                    for (let i = 0; i < startDay; i++) {
-                        days.push(React.createElement('div', { key: `empty-start-${i}`, className: "w-10 h-10" }));
-                    }
-
-                    const month = currentMonth.getMonth();
-                    let day = 1;
-                    while (new Date(currentMonth.getFullYear(), month, day).getMonth() === month) {
-                        const date = new Date(currentMonth.getFullYear(), month, day);
-                        const isSelected = isSameDay(date, selectedDate);
-                        const isToday = isSameDay(date, new Date());
-                        const hasTransactions = transactionDays.has(date.getTime());
-
-                        const dayClasses = `w-10 h-10 flex items-center justify-center rounded-full cursor-pointer transition-colors ${
-                            isSelected ? 'bg-pink-600 text-white font-bold' :
-                            isToday ? 'bg-gray-700' : 'hover:bg-gray-600'
-                        }`;
-
-                        days.push(
-                            React.createElement('div', { key: day, onClick: () => onDateChange(date), className: dayClasses },
-                                React.createElement('span', null, day),
-                                hasTransactions && !isSelected && React.createElement('div', { className: "absolute mt-6 w-1 h-1 bg-pink-400 rounded-full" })
-                            )
-                        );
-                        day++;
-                    }
-                    return React.createElement('div', { className: "grid grid-cols-7 gap-y-2 place-items-center" }, days);
-                };
-
-                const renderWeekdays = () => {
-                    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                    return React.createElement('div', { className: "grid grid-cols-7 gap-y-2 place-items-center mb-2 text-xs text-gray-400" },
-                        weekdays.map(day => React.createElement('div', { key: day }, day))
-                    );
-                }
-
-                return React.createElement('div', { className: "bg-gray-800 p-4 rounded-lg" },
-                    renderHeader(),
-                    renderWeekdays(),
-                    renderDays()
-                );
-            };
-
-            const LoginScreen = ({ users, selectedLoginUser, pinInput, loginError, handleLogin, setSelectedLoginUser, setPinInput }) => React.createElement('div', { className: "flex items-center justify-center min-h-screen bg-gray-900" },
-                React.createElement('div', { className: "w-full max-w-sm p-8 space-y-6 bg-gray-800 rounded-xl shadow-lg" },
-                    React.createElement('div', { className: "text-center" },
-                        React.createElement('h1', { className: "text-4xl font-bold text-white" }, "TipTally"),
-                        React.createElement('p', { className: "text-gray-400" }, "Streamlined Earnings Management")
-                    ),
-                    React.createElement('form', { onSubmit: handleLogin, className: "space-y-4" },
-                        React.createElement('div', null,
-                            React.createElement('label', { htmlFor: "user-select", className: "block text-sm font-medium text-gray-300" }, "Select User"),
-                            React.createElement('select', { id: "user-select", value: selectedLoginUser, onChange: (e) => setSelectedLoginUser(e.target.value), className: "w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" },
-                                React.createElement('option', { value: "", disabled: true }, "Select a user..."),
-                                users.map(user => React.createElement('option', { key: user.id, value: user.id }, `${user.name} (${user.role})`))
-                            )
-                        ),
-                        React.createElement('div', null,
-                            React.createElement('label', { htmlFor: "pin", className: "block text-sm font-medium text-gray-300" }, "PIN"),
-                            React.createElement('input', { type: "password", id: "pin", value: pinInput, onChange: (e) => setPinInput(e.target.value), className: "w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500", placeholder: "****" })
-                        ),
-                        loginError && React.createElement('p', { className: "text-sm text-red-400" }, loginError),
-                        React.createElement('button', { type: "submit", className: "w-full py-3 font-semibold text-white transition-transform duration-200 transform bg-pink-600 rounded-md hover:bg-pink-700 active:scale-95" }, "Login")
-                    )
-                )
-            );
-
-            const WorkerDashboard = ({ currentUser, transactions, selectedDate, setSelectedDate, handleAddTransaction, handleWorkerAcceptance }) => {
-                const { useState, useMemo } = React;
-                const [amount, setAmount] = useState('');
-                const isToday = isSameDay(selectedDate, new Date());
-
-                const dailyTransactions = useMemo(() => {
-                    return transactions.filter(t => t.workerId === currentUser.id && isSameDay(new Date(t.submissionTimestamp), selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
-                }, [transactions, currentUser, selectedDate]);
-
-                const allTimeTransactions = useMemo(() => {
-                    return transactions.filter(t => t.workerId === currentUser.id);
-                }, [transactions, currentUser]);
-
-                const dailyApprovedTotal = dailyTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
-                const allTimeApprovedTotal = allTimeTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
-
-                const allTimeTake = allTimeApprovedTotal * currentUser.payoutSplit.worker;
-
-                const handleSubmit = (e) => {
-                    e.preventDefault();
-                    handleAddTransaction(amount);
-                    setAmount('');
-                }
-
-                return React.createElement('div', { className: "p-4 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8" },
-                    React.createElement('div', { className: "lg:col-span-1" },
-                        React.createElement('h2', { className: "text-2xl font-bold text-white mb-4" }, "Calendar & Totals"),
-                        React.createElement(Calendar, { selectedDate, onDateChange: setSelectedDate, transactions: allTimeTransactions }),
-                        React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg mt-4" },
-                            React.createElement('h3', { className: "text-gray-400 text-sm" }, "Your Total Take (All Time)"),
-                            React.createElement('p', { className: "text-4xl font-bold text-green-400" }, `$${allTimeTake.toFixed(2)}`)
-                        )
-                    ),
-                    React.createElement('div', { className: "lg:col-span-2" },
-                        React.createElement('h2', { className: "text-2xl font-bold text-white mb-2" }, "My Daily Summary"),
-                        React.createElement('p', { className: "text-lg text-pink-400 mb-4" }, formatDate(selectedDate)),
-                        React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" },
-                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "Approved Earnings (Day)"), React.createElement('p', { className: "text-2xl font-bold text-green-400" }, `$${dailyApprovedTotal.toFixed(2)}`)),
-                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "Your Take (Day)"), React.createElement('p', { className: "text-2xl font-bold text-pink-400" }, `$${(dailyApprovedTotal * currentUser.payoutSplit.worker).toFixed(2)}`)),
-                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "House Take (Day)"), React.createElement('p', { className: "text-2xl font-bold text-blue-400" }, `$${(dailyApprovedTotal * currentUser.payoutSplit.house).toFixed(2)}`))
-                        ),
-                        isToday && React.createElement('div', { className: "bg-gray-800 p-6 rounded-lg mb-6" },
-                            React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "Submit New Earnings"),
-                            React.createElement('form', { onSubmit: handleSubmit, className: "flex flex-col md:flex-row gap-4" },
-                                React.createElement('input', { type: "number", value: amount, onChange: e => setAmount(e.target.value), placeholder: "Enter amount", className: "flex-grow px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" }),
-                                React.createElement('button', { type: "submit", className: "px-6 py-2 font-semibold text-white transition-transform duration-200 transform bg-pink-600 rounded-md hover:bg-pink-700 active:scale-95" }, "Submit")
-                            )
-                        ),
-                        React.createElement('div', null,
-                            React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "Submissions for this day"),
-                            React.createElement('div', { className: "space-y-4" },
-                                dailyTransactions.length > 0 ? dailyTransactions.map(tx =>
-                                    React.createElement('div', { key: tx.id, className: "bg-gray-800 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4" },
-                                        React.createElement('div', null, React.createElement('p', { className: "font-bold text-white" }, "ID: ", React.createElement('span', { className: "font-mono text-pink-400" }, tx.transactionCode)), React.createElement('p', { className: "text-sm text-gray-400" }, new Date(tx.submissionTimestamp).toLocaleTimeString())),
-                                        React.createElement('div', { className: "text-left md:text-right" }, React.createElement('p', { className: "text-lg font-bold text-white" }, `You Submitted: $${tx.workerSubmittedAmount.toFixed(2)}`), tx.status === 'disputed' && React.createElement('p', { className: "text-md font-semibold text-yellow-400" }, `Manager Counted: $${tx.managerVerifiedAmount.toFixed(2)}`)),
-                                        React.createElement('div', { className: "flex items-center gap-4 w-full md:w-auto" }, React.createElement(StatusBadge, { status: tx.status }), tx.status === 'disputed' && React.createElement('button', { onClick: () => handleWorkerAcceptance(tx.id), className: "px-3 py-1 text-sm font-semibold text-white bg-green-600 rounded-md hover:bg-green-700" }, "Accept Count"))
-                                    )
-                                ) : React.createElement('p', { className: "text-gray-400" }, "No transactions submitted on this day.")
-                            )
-                        )
-                    )
-                );
-            };
-
-            const AdminDashboard = ({ workers, transactions, selectedDate, setView, setSelectedWorkerId, setSelectedDate, handleVerification }) => {
-                const { useState, useMemo } = React;
-                const [verificationAmounts, setVerificationAmounts] = useState({});
-
-                const dailyTransactions = useMemo(() => {
-                    return transactions.filter(t => isSameDay(new Date(t.submissionTimestamp), selectedDate));
-                }, [transactions, selectedDate]);
-
-                const pendingTransactions = dailyTransactions.filter(t => t.status === 'pending');
-
-                const handleAmountChange = (txId, value) => {
-                    setVerificationAmounts(prev => ({ ...prev, [txId]: value }));
-                }
-
-                const getWorkerTotalsForDay = () => {
-                    const totals = {};
-                    workers.forEach(w => {
-                        totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id };
-                    });
-                    dailyTransactions.forEach(tx => {
-                        const amount = tx.status === 'approved' ? (tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : tx.workerSubmittedAmount) : 0;
-                        if (totals[tx.workerId]) {
-                            totals[tx.workerId].total += amount;
-                        }
-                    });
-                    return Object.values(totals);
-                }
-
-                const getWorkerAllTimeTotals = () => {
-                    const totals = {};
-                    workers.forEach(w => {
-                        totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id };
-                    });
-                    transactions.forEach(tx => {
-                         const amount = tx.status === 'approved' ? (tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : tx.workerSubmittedAmount) : 0;
-                        if (totals[tx.workerId]) {
-                            totals[tx.workerId].total += amount;
-                        }
-                    });
-                    return Object.values(totals);
-                }
-
-                const workerDailyTotals = getWorkerTotalsForDay();
-                const workerAllTimeTotals = getWorkerAllTimeTotals();
-                const totalClubEarningsDay = workerDailyTotals.reduce((sum, w) => sum + w.total, 0);
-                const totalHouseTakeDay = workerDailyTotals.reduce((sum, w) => sum + (w.total * w.split.house), 0);
-
-                return React.createElement('div', { className: "p-4 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8" },
-                    React.createElement('div', { className: "lg:col-span-1" },
-                        React.createElement('div', { className: "flex justify-between items-center mb-4" },
-                            React.createElement('h2', { className: "text-2xl font-bold text-white" }, "Admin Tools"),
-                            React.createElement('button', { onClick: () => setView('adminAddWorker'), className: "flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white transition-transform duration-200 transform bg-blue-600 rounded-md hover:bg-blue-700 active:scale-95" }, React.createElement(UserPlus, { size: 16 }), " Add Worker")
-                        ),
-                        React.createElement(Calendar, { selectedDate, onDateChange: setSelectedDate, transactions }),
-                        React.createElement('div', { className: "bg-gray-800 p-4 rounded-lg mt-4" },
-                            React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "Daily Worker Payouts"),
-                            React.createElement('div', { className: "space-y-2" },
-                                workerDailyTotals.map(w =>
-                                    React.createElement('div', { key: w.id, className: "flex justify-between items-center text-sm" },
-                                        React.createElement('span', { className: "font-semibold text-white" }, w.name),
-                                        React.createElement('span', { className: "font-bold text-pink-400" }, `$${(w.total * w.split.worker).toFixed(2)}`)
-                                    )
-                                )
-                            )
-                        ),
-                        React.createElement('div', { className: "bg-gray-800 p-4 rounded-lg mt-4" },
-                            React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "All-Time Worker Payouts"),
-                            React.createElement('div', { className: "space-y-2" },
-                                workerAllTimeTotals.map(w =>
-                                    React.createElement('div', { key: w.id, className: "flex justify-between items-center text-sm" },
-                                        React.createElement('span', { className: "font-semibold text-white" }, w.name),
-                                        React.createElement('span', { className: "font-bold text-green-400" }, `$${(w.total * w.split.worker).toFixed(2)}`)
-                                    )
-                                )
-                            )
-                        )
-                    ),
-                    React.createElement('div', { className: "lg:col-span-2" },
-                        React.createElement('h2', { className: "text-2xl font-bold text-white mb-2" }, "Daily Summary"),
-                        React.createElement('p', { className: "text-lg text-pink-400 mb-4" }, formatDate(selectedDate)),
-                        React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" },
-                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "Club Earnings (Day)"), React.createElement('p', { className: "text-3xl font-bold text-green-400" }, `$${totalClubEarningsDay.toFixed(2)}`)),
-                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "House Take (Day)"), React.createElement('p', { className: "text-3xl font-bold text-pink-400" }, `$${totalHouseTakeDay.toFixed(2)}`))
-                        ),
-                        React.createElement('div', { className: "grid grid-cols-1 xl:grid-cols-2 gap-8" },
-                            React.createElement('div', null,
-                                React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "Worker Totals (Day)"),
-                                React.createElement('div', { className: "space-y-3" },
-                                    workerDailyTotals.map(w =>
-                                        React.createElement('div', { key: w.id, onClick: () => { setSelectedWorkerId(w.id); setView('adminWorkerDetail'); }, className: "bg-gray-800 p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-700 transition-colors" },
-                                            React.createElement('p', { className: "font-bold text-white text-lg" }, w.name),
-                                            React.createElement('p', { className: "font-semibold text-green-400 text-lg" }, `$${w.total.toFixed(2)}`)
-                                        )
-                                    )
-                                )
-                            ),
-                            React.createElement('div', null,
-                                React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, `Pending Verifications (${pendingTransactions.length})`),
-                                React.createElement('div', { className: "space-y-4 max-h-96 overflow-y-auto pr-2" },
-                                    pendingTransactions.length > 0 ? pendingTransactions.map(tx =>
-                                        React.createElement('div', { key: tx.id, className: "bg-gray-800 p-4 rounded-lg" },
-                                            React.createElement('div', { className: "flex justify-between items-center mb-3" },
-                                                React.createElement('div', null, React.createElement('p', { className: "font-bold text-white" }, `${tx.workerName} - `, React.createElement('span', { className: "font-mono text-pink-400" }, tx.transactionCode)), React.createElement('p', { className: "text-sm text-gray-400" }, `Submitted: $${tx.workerSubmittedAmount.toFixed(2)}`)),
-                                                React.createElement(StatusBadge, { status: tx.status })
-                                            ),
-                                            React.createElement('div', { className: "flex gap-2" },
-                                                React.createElement('input', { type: "number", placeholder: "Enter counted amount", value: verificationAmounts[tx.id] || '', onChange: e => handleAmountChange(tx.id, e.target.value), className: "flex-grow px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" }),
-                                                React.createElement('button', { onClick: () => handleVerification(tx.id, verificationAmounts[tx.id] || tx.workerSubmittedAmount), disabled: !verificationAmounts[tx.id], className: "px-4 py-2 font-semibold text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed" }, "Verify")
-                                            )
-                                        )
-                                    ) : React.createElement('p', { className: "text-gray-400" }, "No pending transactions for this day.")
-                                )
-                            )
-                        )
-                    )
-                );
-            };
-
-            const AdminWorkerDetail = ({ users, selectedWorkerId, transactions, selectedDate, setView }) => {
-                const { useMemo } = React;
-                const selectedWorkerProfile = useMemo(() => users.find(u => u.id === selectedWorkerId), [users, selectedWorkerId]);
-
-                const dailyTransactions = useMemo(() => {
-                    return transactions.filter(t => t.workerId === selectedWorkerId && isSameDay(new Date(t.submissionTimestamp), selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
-                }, [transactions, selectedWorkerId, selectedDate]);
-
-                const allTimeTransactions = useMemo(() => {
-                    return transactions.filter(t => t.workerId === selectedWorkerId);
-                }, [transactions, selectedWorkerId]);
-
-                if (!selectedWorkerProfile) return React.createElement('div', { className: "p-8 text-white" }, "Worker not found.");
-
-                const getApprovedAmount = (tx) => tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : tx.workerSubmittedAmount;
-
-                const dailyApprovedTotal = dailyTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + getApprovedAmount(t), 0);
-                const allTimeApprovedTotal = allTimeTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + getApprovedAmount(t), 0);
-
-                const { payoutSplit } = selectedWorkerProfile;
-                const dailyWorkerTake = dailyApprovedTotal * payoutSplit.worker;
-                const dailyHouseTake = dailyApprovedTotal * payoutSplit.house;
-                const allTimeWorkerTake = allTimeApprovedTotal * payoutSplit.worker;
-                const allTimeHouseTake = allTimeApprovedTotal * payoutSplit.house;
-
-                return React.createElement('div', { className: "p-4 md:p-8" },
-                    React.createElement('div', { className: "flex justify-between items-start" },
-                        React.createElement('button', { onClick: () => setView('adminDashboard'), className: "mb-6 text-pink-400 hover:text-pink-300" }, "\u2190 Back to Dashboard"),
-                        React.createElement('button', { onClick: () => setView('adminEditWorker'), className: "flex items-center gap-2 px-4 py-2 font-semibold text-white transition-transform duration-200 transform bg-yellow-600 rounded-md hover:bg-yellow-700 active:scale-95" },
-                            React.createElement(Edit, { size: 16 }), " Edit Worker"
-                        )
-                    ),
-                    React.createElement('h2', { className: "text-3xl font-bold text-white mb-2 mt-4" }, `${selectedWorkerProfile.name}'s Summary`),
-                    React.createElement('div', { className: "mb-8 p-4 border border-gray-700 rounded-lg" },
-                        React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "All-Time Totals"),
-                        React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-3 gap-4" },
-                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "Total Approved"), React.createElement('p', { className: "text-3xl font-bold text-green-400" }, `$${allTimeApprovedTotal.toFixed(2)}`)),
-                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, `Total Payout (${payoutSplit.worker * 100}%)`), React.createElement('p', { className: "text-3xl font-bold text-pink-400" }, `$${allTimeWorkerTake.toFixed(2)}`)),
-                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, `Total House Take (${payoutSplit.house * 100}%)`), React.createElement('p', { className: "text-3xl font-bold text-blue-400" }, `$${allTimeHouseTake.toFixed(2)}`))
-                        )
-                    ),
-                    React.createElement('p', { className: "text-lg text-pink-400 mb-4 font-bold" }, formatDate(selectedDate)),
-                    React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" },
-                        React.createElement('div', { className: "p-4 bg-gray-700 rounded-lg" }, React.createElement('h3', { className: "text-gray-300 text-sm" }, "Approved (Day)"), React.createElement('p', { className: "text-2xl font-bold text-green-300" }, `$${dailyApprovedTotal.toFixed(2)}`)),
-                        React.createElement('div', { className: "p-4 bg-gray-700 rounded-lg" }, React.createElement('h3', { className: "text-gray-300 text-sm" }, "Payout (Day)"), React.createElement('p', { className: "text-2xl font-bold text-pink-300" }, `$${dailyWorkerTake.toFixed(2)}`)),
-                        React.createElement('div', { className: "p-4 bg-gray-700 rounded-lg" }, React.createElement('h3', { className: "text-gray-300 text-sm" }, "House Take (Day)"), React.createElement('p', { className: "text-2xl font-bold text-blue-300" }, `$${dailyHouseTake.toFixed(2)}`))
-                    ),
-                    React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "Transaction History (Day)"),
-                    React.createElement('div', { className: "space-y-4" },
-                        dailyTransactions.length > 0 ? dailyTransactions.map(tx =>
-                            React.createElement('div', { key: tx.id, className: "bg-gray-800 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4" },
-                                React.createElement('div', null, React.createElement('p', { className: "font-bold text-white" }, "ID: ", React.createElement('span', { className: "font-mono text-pink-400" }, tx.transactionCode)), React.createElement('p', { className: "text-sm text-gray-400" }, new Date(tx.submissionTimestamp).toLocaleTimeString())),
-                                React.createElement('div', { className: "text-left md:text-right" }, React.createElement('p', { className: "text-lg font-bold text-white" }, `Submitted: $${tx.workerSubmittedAmount.toFixed(2)}`), tx.managerVerifiedAmount !== null && React.createElement('p', { className: "text-md font-semibold text-yellow-400" }, `Verified: $${tx.managerVerifiedAmount.toFixed(2)}`)),
-                                React.createElement(StatusBadge, { status: tx.status })
-                            )
-                        ) : React.createElement('p', { className: "text-gray-400" }, "No transactions found for this worker on this day.")
-                    )
-                );
-            };
-
-            const AddWorkerForm = ({ isEdit = false, users, selectedWorkerId, setView, handleAddWorker, handleUpdateWorker }) => {
-                const { useState } = React;
-                const workerToEdit = isEdit ? users.find(u => u.id === selectedWorkerId) : null;
-
-                const [name, setName] = useState(workerToEdit?.name || '');
-                const [pin, setPin] = useState(workerToEdit?.pin || '');
-                const [split, setSplit] = useState(workerToEdit ? workerToEdit.payoutSplit.worker * 100 : '70');
-
-                const handleSubmit = (e) => {
-                    e.preventDefault();
-                    if (isEdit) {
-                        handleUpdateWorker(selectedWorkerId, name, pin, split);
-                    } else {
-                        handleAddWorker(name, pin, split);
-                    }
-                }
-
-                return React.createElement('div', { className: "p-4 md:p-8" },
-                    React.createElement('button', { onClick: () => setView(isEdit ? 'adminWorkerDetail' : 'adminDashboard'), className: "mb-6 text-pink-400 hover:text-pink-300" }, "\u2190 Back"),
-                    React.createElement('div', { className: "max-w-md mx-auto bg-gray-800 p-8 rounded-lg" },
-                        React.createElement('h2', { className: "text-2xl font-bold text-white mb-6" }, isEdit ? 'Edit Worker Profile' : 'Add New Worker'),
-                        React.createElement('form', { onSubmit: handleSubmit, className: "space-y-4" },
-                            React.createElement('div', null, React.createElement('label', { htmlFor: "worker-name", className: "block text-sm font-medium text-gray-300" }, "Worker Name"), React.createElement('input', { type: "text", id: "worker-name", value: name, onChange: e => setName(e.target.value), className: "w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500", required: true })),
-                            React.createElement('div', null, React.createElement('label', { htmlFor: "worker-pin", className: "block text-sm font-medium text-gray-300" }, "4-Digit PIN"), React.createElement('input', { type: "text", pattern: "\\d{4}", title: "PIN must be 4 digits", id: "worker-pin", value: pin, onChange: e => setPin(e.target.value), className: "w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500", required: true })),
-                            React.createElement('div', null, React.createElement('label', { htmlFor: "worker-split", className: "block text-sm font-medium text-gray-300" }, "Worker Payout Split (%)"), React.createElement('input', { type: "number", min: "0", max: "100", id: "worker-split", value: split, onChange: e => setSplit(e.target.value), className: "w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500", required: true })),
-                            React.createElement('button', { type: "submit", className: "w-full py-3 font-semibold text-white transition-transform duration-200 transform bg-pink-600 rounded-md hover:bg-pink-700 active:scale-95" },
-                                isEdit ? 'Save Changes' : 'Create Worker Profile'
-                            )
-                        )
-                    )
-                );
+            if (state.currentUser) {
+                currentUserNameEl.textContent = state.currentUser.name;
             }
 
-            // --- Main App Component ---
-            function App() {
-              const { useState, useEffect, useMemo } = React;
-
-              const [users, setUsers] = useState([]);
-              const [transactions, setTransactions] = useState([]);
-              const [currentUser, setCurrentUser] = useState(null);
-              const [view, setView] = useState('login');
-              const [selectedWorkerId, setSelectedWorkerId] = useState(null);
-              const [loginError, setLoginError] = useState('');
-              const [pinInput, setPinInput] = useState('');
-              const [selectedLoginUser, setSelectedLoginUser] = useState('');
-              const [selectedDate, setSelectedDate] = useState(new Date());
-
-              useEffect(() => {
-                const unsubscribeUsers = db.collection('users').onSnapshot(snapshot => {
-                    const usersData = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
-                    setUsers(usersData);
-                    if (!selectedLoginUser && usersData.length > 0) {
-                      setSelectedLoginUser(usersData[0].id);
-                    }
-                }, (error) => {
-                    console.error("Error fetching users:", error);
-                    alert("Failed to load user data. The application may not function correctly.");
-                });
-
-                const unsubscribeTransactions = db.collection('transactions').onSnapshot(snapshot => {
-                    const transactionsData = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
-                    setTransactions(transactionsData);
-                }, (error) => {
-                    console.error("Error fetching transactions:", error);
-                });
-
-                return () => {
-                  unsubscribeUsers();
-                  unsubscribeTransactions();
-                };
-              }, []);
-
-              const workers = useMemo(() => users.filter(u => u.role === 'worker'), [users]);
-
-              const handleLogin = (e) => {
-                e.preventDefault();
-                const user = users.find(u => u.id === selectedLoginUser);
-                if (user && user.pin === pinInput) {
-                  setCurrentUser(user);
-                  setView(user.role === 'admin' ? 'adminDashboard' : 'workerDashboard');
-                  setLoginError('');
-                  setPinInput('');
-                  setSelectedDate(new Date());
-                } else {
-                  setLoginError('Invalid PIN. Please try again.');
-                }
-              };
-
-              const handleLogout = () => {
-                setCurrentUser(null);
-                setView('login');
-                setSelectedWorkerId(null);
-              };
-
-              const handleAddTransaction = async (amount) => {
-                if (!amount || amount <= 0) return;
-                const newTransaction = {
-                  workerId: currentUser.id,
-                  workerName: currentUser.name,
-                  transactionCode: `${currentUser.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
-                  workerSubmittedAmount: parseFloat(amount),
-                  managerVerifiedAmount: null,
-                  status: 'pending',
-                  submissionTimestamp: new Date().toISOString(),
-                  verificationTimestamp: null,
-                };
-                // Firestore will generate the ID
-                await db.collection('transactions').add(newTransaction);
-              };
-
-              const handleVerification = async (txId, managerAmountStr) => {
-                const managerAmount = parseFloat(managerAmountStr)
-                if (isNaN(managerAmount)) {
-                    alert('Please enter a valid number for verification.');
-                    return;
-                }
-                const txRef = db.collection('transactions').doc(txId);
-                const txDoc = await txRef.get();
-                if (txDoc.exists) {
-                    const tx = txDoc.data();
-                    const workerAmount = tx.workerSubmittedAmount;
-                    const status = managerAmount === workerAmount ? 'approved' : 'disputed';
-                    await txRef.update({
-                        managerVerifiedAmount: managerAmount,
-                        status,
-                        verificationTimestamp: new Date().toISOString(),
-                    });
-                }
-              };
-
-              const handleWorkerAcceptance = async (txId) => {
-                 const txRef = db.collection('transactions').doc(txId);
-                 const txDoc = await txRef.get();
-                 if (txDoc.exists && txDoc.data().status === 'disputed') {
-                    await txRef.update({
-                        status: 'approved',
-                        // The workerSubmittedAmount is now updated to the manager's count upon acceptance
-                        workerSubmittedAmount: txDoc.data().managerVerifiedAmount
-                    });
-                 }
-              };
-
-              const handleAddWorker = async (name, pin, split) => {
-                  if (!name || !pin || !split) return;
-                  const newWorker = {
-                      name,
-                      role: 'worker',
-                      pin,
-                      payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
-                  };
-                  // Firestore will generate the ID
-                  await db.collection('users').add(newWorker);
-                  setView('adminDashboard');
-              };
-
-              const handleUpdateWorker = async (id, name, pin, split) => {
-                if (!id || !name || !pin || !split) return;
-                const workerRef = db.collection('users').doc(id);
-                await workerRef.update({
-                    name,
-                    pin,
-                    payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
-                });
-                setView('adminWorkerDetail');
-              };
-
-              const renderView = () => {
-                switch (view) {
-                  case 'workerDashboard':
-                    return React.createElement(WorkerDashboard, { currentUser, transactions, selectedDate, setSelectedDate, handleAddTransaction, handleWorkerAcceptance });
-                  case 'adminDashboard':
-                    return React.createElement(AdminDashboard, { workers, transactions, selectedDate, setView, setSelectedWorkerId, setSelectedDate, handleVerification });
-                  case 'adminWorkerDetail':
-                    return React.createElement(AdminWorkerDetail, { users, selectedWorkerId, transactions, selectedDate, setView });
-                  case 'adminAddWorker':
-                    return React.createElement(AddWorkerForm, { isEdit: false, users, setView, handleAddWorker });
-                  case 'adminEditWorker':
-                    return React.createElement(AddWorkerForm, { isEdit: true, users, selectedWorkerId, setView, handleUpdateWorker });
-                  case 'login':
-                  default:
-                    return React.createElement(LoginScreen, { users, selectedLoginUser, pinInput, loginError, handleLogin, setSelectedLoginUser, setPinInput });
-                }
-              };
-
-              return React.createElement('div', { className: "min-h-screen bg-gray-900 text-gray-100 font-sans" },
-                currentUser && React.createElement('header', { className: "bg-gray-800 p-4 flex justify-between items-center shadow-md" },
-                    React.createElement('div', null,
-                        React.createElement('h1', { className: "text-xl font-bold text-white" }, "TipTally"),
-                        React.createElement('p', { className: "text-sm text-gray-400" }, "Logged in as: ", React.createElement('span', { className: "font-semibold text-pink-400" }, currentUser.name))
-                    ),
-                    React.createElement('button', { onClick: handleLogout, className: "flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white transition-colors bg-gray-700 rounded-md hover:bg-gray-600" }, React.createElement(LogOut, { size: 16 }), "Logout")
-                ),
-                React.createElement('main', null, renderView())
-              );
+            // Render the correct dashboard
+            if (state.view === 'workerDashboard') {
+                renderWorkerDashboard();
+            } else if (state.view === 'adminDashboard') {
+                renderAdminDashboard();
             }
-
-            // Use the modern React 18 createRoot API
-            const container = document.getElementById('root');
-            const root = ReactDOM.createRoot(container);
-            root.render(React.createElement(App));
-
-        } catch (error) {
-            console.error("A critical error occurred while loading the application:", error);
-            document.getElementById('root').innerHTML = '<div style="color: white; padding: 2rem; text-align: center;"><h2>Application Failed to Load</h2><p>There was a critical error. Please check the console for details.</p></div>';
         }
-    };
+        
+        // --- Render Partials ---
+        function renderWorkerDashboard() {
+            const dailyTransactions = state.transactions.filter(t => t.workerId === state.currentUser.id && isSameDay(new Date(t.submissionTimestamp), state.selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
+            const allTimeTransactions = state.transactions.filter(t => t.workerId === state.currentUser.id);
+            const getApprovedAmount = (tx) => tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : tx.workerSubmittedAmount;
+            const dailyApprovedTotal = dailyTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + getApprovedAmount(t), 0);
+            const allTimeApprovedTotal = allTimeTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + getApprovedAmount(t), 0);
+            const allTimeTake = allTimeApprovedTotal * state.currentUser.payoutSplit.worker;
+            const isToday = isSameDay(state.selectedDate, new Date());
+
+            let html = `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1 space-y-4">
+                        <div class="card">${renderCalendar()}</div>
+                        <div class="card">
+                            <h3 class="text-text-muted text-sm">Your Total Take (All Time)</h3>
+                            <p class="text-4xl font-bold text-brand-green">$${allTimeTake.toFixed(2)}</p>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2 space-y-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white mb-1">My Daily Summary</h2>
+                            <p class="text-lg text-brand-pink">${formatDate(state.selectedDate)}</p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="card"><h3 class="text-text-muted text-sm">Approved Earnings (Day)</h3><p class="text-2xl font-bold text-brand-green">$${dailyApprovedTotal.toFixed(2)}</p></div>
+                            <div class="card"><h3 class="text-text-muted text-sm">Your Take (Day)</h3><p class="text-2xl font-bold text-brand-pink">$${(dailyApprovedTotal * state.currentUser.payoutSplit.worker).toFixed(2)}</p></div>
+                            <div class="card"><h3 class="text-text-muted text-sm">House Take (Day)</h3><p class="text-2xl font-bold text-brand-blue">$${(dailyApprovedTotal * state.currentUser.payoutSplit.house).toFixed(2)}</p></div>
+                        </div>
+                        ${isToday ? `
+                        <div class="card">
+                            <h3 class="text-xl font-bold text-white mb-4">Submit New Earnings</h3>
+                            <div class="flex flex-col md:flex-row gap-4">
+                                <input type="number" id="new-transaction-amount" placeholder="Enter amount" class="input-field flex-grow"/>
+                                <button data-action="add-transaction" class="btn btn-primary">Submit</button>
+                            </div>
+                        </div>` : ''}
+                        <div>
+                            <h3 class="text-xl font-bold text-white mb-4">Submissions for this day</h3>
+                            <div class="space-y-4">
+                                ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => `
+                                <div class="card flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                    <div><p class="font-bold text-white">ID: <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">${new Date(tx.submissionTimestamp).toLocaleTimeString()}</p></div>
+                                    <div class="text-left md:text-right"><p class="text-lg font-bold text-white">You Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p>${tx.status === 'disputed' ? `<p class="text-md font-semibold text-brand-yellow">Manager Counted: $${tx.managerVerifiedAmount.toFixed(2)}</p>` : ''}</div>
+                                    <div class="flex items-center gap-4 w-full md:w-auto">${renderStatusBadge(tx.status)} ${tx.status === 'disputed' ? `<button data-action="worker-accept" data-id="${tx.id}" class="btn text-xs bg-brand-green text-white">Accept</button>` : ''}</div>
+                                </div>`).join('') : `<p class="text-text-muted">No transactions submitted on this day.</p>`}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            dashboardContent.innerHTML = html;
+        }
+
+        function renderAdminDashboard() {
+            const dailyTransactions = state.transactions.filter(t => isSameDay(new Date(t.submissionTimestamp), state.selectedDate));
+            const pendingTransactions = dailyTransactions.filter(t => t.status === 'pending');
+            const workers = state.users.filter(u => u.role === 'worker');
+            
+            const getApprovedAmount = (tx) => tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : tx.workerSubmittedAmount;
+            
+            const getWorkerTotals = (txList) => {
+                const totals = {};
+                workers.forEach(w => {
+                    totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id };
+                });
+                txList.forEach(tx => {
+                    if (tx.status === 'approved' && totals[tx.workerId]) {
+                        totals[tx.workerId].total += getApprovedAmount(tx);
+                    }
+                });
+                return Object.values(totals);
+            };
+
+            const workerDailyTotals = getWorkerTotals(dailyTransactions);
+            const workerAllTimeTotals = getWorkerTotals(state.transactions);
+            const totalClubEarningsDay = workerDailyTotals.reduce((sum, w) => sum + w.total, 0);
+            const totalHouseTakeDay = workerDailyTotals.reduce((sum, w) => sum + (w.total * w.split.house), 0);
+
+            let html = `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1 space-y-4">
+                        <div class="card">${renderCalendar()}</div>
+                        <div class="card">
+                            <h3 class="text-xl font-bold text-white mb-4">Daily Worker Payouts</h3>
+                            <div class="space-y-2">${workerDailyTotals.map(w => `<div class="flex justify-between items-center text-sm"><span class="font-semibold text-white">${w.name}</span><span class="font-bold text-brand-pink">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('')}</div>
+                        </div>
+                         <div class="card">
+                            <h3 class="text-xl font-bold text-white mb-4">All-Time Worker Payouts</h3>
+                            <div class="space-y-2">${workerAllTimeTotals.map(w => `<div class="flex justify-between items-center text-sm"><span class="font-semibold text-white">${w.name}</span><span class="font-bold text-brand-green">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('')}</div>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2 space-y-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white mb-1">Daily Summary</h2>
+                            <p class="text-lg text-brand-pink">${formatDate(state.selectedDate)}</p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="card"><h3 class="text-text-muted text-sm">Club Earnings (Day)</h3><p class="text-3xl font-bold text-brand-green">$${totalClubEarningsDay.toFixed(2)}</p></div>
+                            <div class="card"><h3 class="text-text-muted text-sm">House Take (Day)</h3><p class="text-3xl font-bold text-brand-pink">$${totalHouseTakeDay.toFixed(2)}</p></div>
+                        </div>
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                            <div class="card">
+                                <h3 class="text-xl font-bold text-white mb-4">Worker Totals (Day)</h3>
+                                <div class="space-y-3">${workerDailyTotals.map(w => `<div class="bg-bg-tertiary p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors"><p class="font-bold text-white text-lg">${w.name}</p><p class="font-semibold text-brand-green text-lg">$${w.total.toFixed(2)}</p></div>`).join('')}</div>
+                            </div>
+                            <div class="card">
+                                <h3 class="text-xl font-bold text-white mb-4">Pending Verifications (${pendingTransactions.length})</h3>
+                                <div class="space-y-4 max-h-96 overflow-y-auto pr-2">${pendingTransactions.length > 0 ? pendingTransactions.map(tx => `
+                                    <div class="bg-bg-tertiary p-4 rounded-lg">
+                                        <div class="flex justify-between items-center mb-3">
+                                            <div><p class="font-bold text-white">${tx.workerName} - <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p></div>
+                                            ${renderStatusBadge(tx.status)}
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <input type="number" data-id="${tx.id}" placeholder="Enter counted amount" class="input-field verification-amount flex-grow"/>
+                                            <button data-action="verify" data-id="${tx.id}" class="btn bg-brand-green text-white">Verify</button>
+                                        </div>
+                                    </div>`).join('') : `<p class="text-text-muted">No pending transactions.</p>`}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            dashboardContent.innerHTML = html;
+        }
+        
+        function renderCalendar() {
+            const { selectedDate, transactions } = state;
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            const year = selectedDate.getFullYear();
+            const month = selectedDate.getMonth();
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const transactionDays = new Set(transactions.map(tx => new Date(tx.submissionTimestamp).toDateString()));
+
+            let daysHtml = '';
+            for (let i = 0; i < firstDay; i++) {
+                daysHtml += `<div class="w-10 h-10"></div>`;
+            }
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const isSelected = isSameDay(date, selectedDate);
+                const isToday = isSameDay(date, new Date());
+                const hasTransactions = transactionDays.has(date.toDateString());
+                const dayClasses = `w-10 h-10 flex items-center justify-center rounded-full cursor-pointer transition-colors relative ${isSelected ? 'bg-brand-pink text-white font-bold' : isToday ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'}`;
+                daysHtml += `<div data-action="select-date" data-date="${date.toISOString()}" class="${dayClasses}"><span>${day}</span>${hasTransactions && !isSelected ? '<div class="absolute bottom-1 w-1.5 h-1.5 bg-brand-blue rounded-full"></div>' : ''}</div>`;
+            }
+
+            return `
+                <div class="flex justify-between items-center mb-4">
+                    <button data-action="prev-month" class="p-2 rounded-full hover:bg-bg-tertiary">&lt;</button>
+                    <h3 class="text-lg font-semibold text-white">${monthNames[month]} ${year}</h3>
+                    <button data-action="next-month" class="p-2 rounded-full hover:bg-bg-tertiary">&gt;</button>
+                </div>
+                <div class="grid grid-cols-7 gap-y-2 place-items-center text-xs text-text-muted mb-2">
+                    ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<div>${d}</div>`).join('')}
+                </div>
+                <div class="grid grid-cols-7 gap-y-2 place-items-center">${daysHtml}</div>
+            `;
+        }
+
+        function renderStatusBadge(status) {
+            const badgeMap = {
+                approved: { text: 'Approved', color: 'brand-green' },
+                disputed: { text: 'Disputed', color: 'brand-yellow' },
+                pending: { text: 'Pending', color: 'gray-500' }
+            };
+            const { text, color } = badgeMap[status] || badgeMap.pending;
+            return `<span class="px-2 py-1 text-xs font-bold rounded-full text-white bg-${color}">${text}</span>`;
+        }
+        
+        // --- Event Handlers & Actions ---
+        function handleAction(e) {
+            const action = e.target.dataset.action;
+            if (!action) return;
+
+            switch(action) {
+                case 'login':
+                    handleLogin();
+                    break;
+                case 'logout':
+                    handleLogout();
+                    break;
+                case 'select-date':
+                    state.selectedDate = new Date(e.target.dataset.date);
+                    render();
+                    break;
+                case 'prev-month':
+                    state.selectedDate.setMonth(state.selectedDate.getMonth() - 1);
+                    render();
+                    break;
+                case 'next-month':
+                    state.selectedDate.setMonth(state.selectedDate.getMonth() + 1);
+                    render();
+                    break;
+                case 'add-transaction':
+                    handleAddTransaction();
+                    break;
+                case 'verify':
+                    handleVerification(e.target.dataset.id);
+                    break;
+                case 'worker-accept':
+                    handleWorkerAcceptance(e.target.dataset.id);
+                    break;
+            }
+        }
+        
+        async function handleLogin() {
+            const selectedId = userSelect.value;
+            const pin = pinInput.value;
+            const user = state.users.find(u => u.id === selectedId);
+
+            if (user && user.pin === pin) {
+                state.currentUser = user;
+                state.view = user.role === 'admin' ? 'adminDashboard' : 'workerDashboard';
+                state.loginError = '';
+                pinInput.value = '';
+                state.selectedDate = new Date();
+            } else {
+                state.loginError = 'Invalid PIN. Please try again.';
+            }
+            render();
+        }
+
+        function handleLogout() {
+            state.currentUser = null;
+            state.view = 'login';
+            render();
+        }
+        
+        async function handleAddTransaction() {
+            const amountInput = document.getElementById('new-transaction-amount');
+            const amount = parseFloat(amountInput.value);
+            if (!amount || amount <= 0) return;
+
+            const newTransaction = {
+              workerId: state.currentUser.id,
+              workerName: state.currentUser.name,
+              transactionCode: `${state.currentUser.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
+              workerSubmittedAmount: amount,
+              managerVerifiedAmount: null,
+              status: 'pending',
+              submissionTimestamp: new Date().toISOString(),
+              verificationTimestamp: null,
+            };
+            await db.collection('transactions').add(newTransaction);
+            amountInput.value = '';
+        }
+
+        async function handleVerification(txId) {
+            const amountInput = document.querySelector(`input.verification-amount[data-id="${txId}"]`);
+            const managerAmount = parseFloat(amountInput.value);
+            if (isNaN(managerAmount)) {
+                alert('Please enter a valid number.');
+                return;
+            }
+            const txRef = db.collection('transactions').doc(txId);
+            const txDoc = await txRef.get();
+            if (txDoc.exists) {
+                const tx = txDoc.data();
+                const status = managerAmount === tx.workerSubmittedAmount ? 'approved' : 'disputed';
+                await txRef.update({
+                    managerVerifiedAmount: managerAmount,
+                    status,
+                    verificationTimestamp: new Date().toISOString(),
+                });
+            }
+        }
+        
+        async function handleWorkerAcceptance(txId) {
+            const txRef = db.collection('transactions').doc(txId);
+            const txDoc = await txRef.get();
+            if (txDoc.exists && txDoc.data().status === 'disputed') {
+                await txRef.update({ status: 'approved' });
+            }
+        }
+
+        // --- Initial Setup ---
+        getInitialData();
+        
+        db.collection('users').onSnapshot(snapshot => {
+            state.users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            if (!state.selectedLoginUser && state.users.length > 0) {
+                state.selectedLoginUser = state.users[0].id;
+            }
+            render();
+        }, error => console.error("Error fetching users:", error));
+
+        db.collection('transactions').orderBy("submissionTimestamp", "desc").onSnapshot(snapshot => {
+            state.transactions = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            render();
+        }, error => console.error("Error fetching transactions:", error));
+        
+        document.body.addEventListener('click', handleAction);
+        userSelect.addEventListener('change', (e) => { state.selectedLoginUser = e.target.value; });
+
+    });
     </script>
 </body>
 </html>
