@@ -1,17 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TipTally - Cloud Version</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        /* --- START: Duda Override Fix --- */
+<meta>
+ 
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ 
+ <title>
+  TipTally - Cloud Version
+ </title>
+ <script src="https://cdn.tailwindcss.com">
+ </script>
+ <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js">
+ </script>
+ <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js">
+ </script>
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+ <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+ <style>
+  /* --- START: Duda Override Fix --- */
         #tiptally-app-wrapper {
             --bg-primary: #111827; /* Gray 900 */
             --bg-secondary: #1f2937; /* Gray 800 */
@@ -26,7 +30,6 @@
             --brand-yellow: #f59e0b; /* Amber 500 */
             --brand-blue: #3b82f6; /* Blue 500 */
             --brand-red: #ef4444; /* Red 500 */
-            
             font-family: 'Inter', sans-serif !important;
             background-color: var(--bg-primary) !important;
             color: var(--text-primary) !important;
@@ -41,7 +44,6 @@
             --text-muted: #6b7280; /* Gray 500 */
         }
         /* --- END: Duda Override Fix --- */
-
         body {
             font-family: 'Inter', sans-serif;
         }
@@ -130,7 +132,6 @@
         #tiptally-app-wrapper .bg-yellow-500 {
             color: white !important;
         }
-
         #tiptally-app-wrapper .text-text-muted {
             color: var(--text-muted) !important;
         }
@@ -158,21 +159,19 @@
         #tiptally-app-wrapper .bg-brand-blue { background-color: var(--brand-blue) !important; }
         #tiptally-app-wrapper .bg-brand-red { background-color: var(--brand-red) !important; }
         #tiptally-app-wrapper .bg-gray-500 { background-color: #6b7280 !important; }
-
-    </style>
-</head>
-<body>
-    <div id="tiptally-app-wrapper">
-        <div id="app-container" class="min-h-screen">
-            <!-- App content is rendered here by JavaScript -->
-            <div class="flex items-center justify-center min-h-screen">
-                <p class="text-text-muted">Loading TipTally...</p>
-            </div>
-        </div>
-    </div>
-
-    <script>
-    document.addEventListener('DOMContentLoaded', () => {
+ </style>
+ <div id="tiptally-app-wrapper">
+  <div id="app-container" class="min-h-screen">
+   <!-- App content is rendered here by JavaScript -->
+   <div class="flex items-center justify-center min-h-screen">
+    <p class="text-text-muted">
+     Loading TipTally...
+    </p>
+   </div>
+  </div>
+ </div>
+ <script>
+  document.addEventListener('DOMContentLoaded', () => {
         // --- App State ---
         let state = {
             users: [],
@@ -186,7 +185,6 @@
             dailyPayoutsExpanded: false,
             allTimePayoutsExpanded: false
         };
-
         // --- Firebase Initialization ---
         const firebaseConfig = {
           apiKey: "AIzaSyCbX8RkQxxDMxkhSDMzeKmDi5m07GoCEGQ",
@@ -199,23 +197,18 @@
         };
         const app = firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-
         // --- DOM Elements ---
         const appContainer = document.getElementById('app-container');
         const appWrapper = document.getElementById('tiptally-app-wrapper');
-
-
         // --- Helper Functions ---
         const isAdmin = (user) => {
             if (!user) return false;
             return ['Manager', 'General Manager'].includes(user.role);
         };
-
         const isWorker = (user) => {
             if (!user) return false;
             return ['Entertainer', 'Server', 'Security'].includes(user.role);
         };
-
         const isSameDay = (date1, date2) => {
             if (!date1 || !date2) return false;
             const d1 = new Date(date1);
@@ -224,16 +217,13 @@
                    d1.getMonth() === d2.getMonth() &&
                    d1.getDate() === d2.getDate();
         };
-
         const formatDate = (date) => {
             return new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(date));
         };
-        
         const getApprovedAmount = (tx) => {
             if (tx.status !== 'approved') return 0;
             return tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : tx.workerSubmittedAmount;
         };
-
         // --- Main Render Function ---
         function render() {
             let currentViewHtml = '';
@@ -262,7 +252,6 @@
             }
             appContainer.innerHTML = currentViewHtml;
         }
-        
         // --- View Templates ---
         function renderLoginView() {
             return `
@@ -290,13 +279,11 @@
                 </div>
             `;
         }
-        
         function renderMainAppView(content) {
             const isLight = appWrapper.classList.contains('light-mode');
             const themeIcon = isLight ? 
-                `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>` : 
-                `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>`;
-
+                `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>` : 
+                `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>`;
             return `
                 <header class="bg-bg-secondary p-4 flex justify-between items-center shadow-md border-b border-border-color">
                     <div>
@@ -311,7 +298,6 @@
                 <main class="p-4 md:p-8">${content}</main>
             `;
         }
-
         function renderWorkerDashboard() {
             const dailyTransactions = state.transactions.filter(t => t.workerId === state.currentUser.id && isSameDay(t.submissionTimestamp, state.selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
             const allTimeTransactions = state.transactions.filter(t => t.workerId === state.currentUser.id);
@@ -319,7 +305,6 @@
             const allTimeApprovedTotal = allTimeTransactions.reduce((sum, t) => sum + getApprovedAmount(t), 0);
             const allTimeTake = allTimeApprovedTotal * state.currentUser.payoutSplit.worker;
             const isToday = isSameDay(state.selectedDate, new Date());
-
             return `
                 <div class="max-w-7xl mx-auto flex flex-col gap-8">
                     ${isToday ? `
@@ -364,31 +349,25 @@
                 </div>
             `;
         }
-
         function renderAdminDashboard() {
             const dailyTransactions = state.transactions.filter(t => isSameDay(t.submissionTimestamp, state.selectedDate));
             const pendingTransactions = dailyTransactions.filter(t => t.status === 'pending');
             const workers = state.users.filter(u => isWorker(u));
-            
             const getWorkerTotals = (txList) => {
                 const totals = {};
                 workers.forEach(w => { totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id }; });
                 txList.forEach(tx => { if (totals[tx.workerId]) { totals[tx.workerId].total += getApprovedAmount(tx); } });
                 return Object.values(totals);
             };
-
             const workerDailyTotals = getWorkerTotals(dailyTransactions).filter(w => w.total > 0).sort((a,b) => b.total - a.total);
             const workerAllTimeTotals = getWorkerTotals(state.transactions);
             const totalClubEarningsDay = workerDailyTotals.reduce((sum, w) => sum + w.total, 0);
             const totalHouseTakeDay = workerDailyTotals.reduce((sum, w) => sum + (w.total * w.split.house), 0);
-
             // Sorting for payout lists
             const sortedDailyPayouts = [...workerDailyTotals].sort((a, b) => (b.total * b.split.worker) - (a.total * a.split.worker));
             const dailyPayoutsToShow = state.dailyPayoutsExpanded ? sortedDailyPayouts : sortedDailyPayouts.slice(0, 5);
-
             const sortedAllTimePayouts = [...workerAllTimeTotals].sort((a, b) => (b.total * b.split.worker) - (a.total * a.split.worker));
             const allTimePayoutsToShow = state.allTimePayoutsExpanded ? sortedAllTimePayouts : sortedAllTimePayouts.slice(0, 5);
-
             return `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div class="lg:col-span-1 space-y-4">
@@ -446,7 +425,6 @@
                 </div>
             `;
         }
-        
         function renderAdminProfilesView() {
             const workers = state.users.filter(u => isWorker(u));
             return `
@@ -468,17 +446,14 @@
                 </div>
             `;
         }
-
         function renderAdminWorkerDetail() {
             const worker = state.users.find(u => u.id === state.selectedWorkerId);
             if (!worker) return `<p>Worker not found.</p>`;
-
             const dailyTransactions = state.transactions.filter(t => t.workerId === worker.id && isSameDay(t.submissionTimestamp, state.selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
             const allTimeTransactions = state.transactions.filter(t => t.workerId === worker.id);
             const dailyApprovedTotal = dailyTransactions.reduce((sum, t) => sum + getApprovedAmount(t), 0);
             const allTimeApprovedTotal = allTimeTransactions.reduce((sum, t) => sum + getApprovedAmount(t), 0);
             const { payoutSplit } = worker;
-            
             return `
                 <div>
                     <div class="flex justify-between items-center mb-6">
@@ -507,7 +482,6 @@
                 </div>
             `;
         }
-
         function renderAddWorkerForm({ isEdit = false } = {}) {
             const worker = isEdit ? state.users.find(u => u.id === state.selectedWorkerId) : null;
             const roles = ['Entertainer', 'Server', 'Security', 'Manager', 'General Manager'];
@@ -532,7 +506,6 @@
                 </div>
             `;
         }
-        
         function renderCalendar() {
             const { selectedDate, transactions } = state;
             const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -541,7 +514,6 @@
             const firstDay = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             const transactionDays = new Set(transactions.map(tx => new Date(tx.submissionTimestamp).toDateString()));
-
             let daysHtml = '';
             for (let i = 0; i < firstDay; i++) {
                 daysHtml += `<div class="w-10 h-10"></div>`;
@@ -554,7 +526,6 @@
                 const dayClasses = `w-10 h-10 flex items-center justify-center rounded-full cursor-pointer transition-colors relative ${isSelected ? 'bg-brand-pink text-white font-bold ring-2 ring-brand-pink-hover' : isToday ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'}`;
                 daysHtml += `<div data-action="select-date" data-date="${date.toISOString()}" class="${dayClasses}"><span>${day}</span>${hasTransactions && !isSelected ? '<div class="absolute bottom-1 w-1.5 h-1.5 bg-brand-blue rounded-full"></div>' : ''}</div>`;
             }
-
             return `
                 <div class="flex justify-between items-center mb-4">
                     <button data-action="prev-month" class="p-2 rounded-full hover:bg-bg-tertiary">&lt;</button>
@@ -567,7 +538,6 @@
                 <div class="grid grid-cols-7 gap-y-2 place-items-center">${daysHtml}</div>
             `;
         }
-
         function renderStatusBadge(status) {
             const badgeMap = {
                 approved: { text: 'Approved', color: 'bg-brand-green' },
@@ -578,7 +548,6 @@
             const { text, color } = badgeMap[status] || badgeMap.pending;
             return `<span class="px-2 py-1 text-xs font-bold rounded-full text-white ${color}">${text}</span>`;
         }
-
         function renderPinUpdateForm() {
             const container = document.getElementById('pin-change-container');
             if (!container) return;
@@ -589,13 +558,11 @@
                 </div>
             `;
         }
-        
         // --- Event Handlers & Actions ---
         function handleAction(e) {
             const target = e.target.closest('[data-action]');
             if (!target) return;
             const { action, id } = target.dataset;
-
             switch(action) {
                 case 'login': handleLogin(); break;
                 case 'logout': handleLogout(); break;
@@ -652,12 +619,10 @@
                     break;
             }
         }
-        
         async function handleLogin() {
             const selectedId = document.getElementById('user-select').value;
             const pin = document.getElementById('pin-input').value;
             const user = state.users.find(u => u.id === selectedId);
-
             if (user && user.pin === pin) {
                 localStorage.setItem('tipTallyUserId', user.id);
                 state.currentUser = user;
@@ -668,19 +633,16 @@
             }
             render();
         }
-
         function handleLogout() {
             localStorage.removeItem('tipTallyUserId');
             state.currentUser = null;
             state.view = 'login';
             render();
         }
-        
         async function handleAddTransaction() {
             const amountInput = document.getElementById('new-transaction-amount');
             const amount = parseFloat(amountInput.value);
             if (!amount || amount <= 0) { alert("Please enter a valid amount."); return; }
-
             const newTransaction = {
               workerId: state.currentUser.id,
               workerName: state.currentUser.name,
@@ -694,12 +656,10 @@
             await db.collection('transactions').add(newTransaction);
             amountInput.value = '';
         }
-
         async function handleVerification(txId) {
             const amountInput = document.querySelector(`input.verification-amount[data-id="${txId}"]`);
             const managerAmount = parseFloat(amountInput.value);
             if (isNaN(managerAmount)) { alert('Please enter a valid number.'); return; }
-
             const txRef = db.collection('transactions').doc(txId);
             const txDoc = await txRef.get();
             if (txDoc.exists) {
@@ -708,24 +668,20 @@
                 await txRef.update({ managerVerifiedAmount: managerAmount, status, verificationTimestamp: new Date().toISOString() });
             }
         }
-        
         async function handleDenyTransaction(txId) {
             const txRef = db.collection('transactions').doc(txId);
             await txRef.update({ status: 'denied', verificationTimestamp: new Date().toISOString() });
         }
-        
         async function handleWorkerAcceptance(txId) {
             const txRef = db.collection('transactions').doc(txId);
             await txRef.update({ status: 'approved' });
         }
-
         async function handleAddWorker() {
             const name = document.getElementById('worker-name').value;
             const pin = document.getElementById('worker-pin').value;
             const split = document.getElementById('worker-split').value;
             const role = document.getElementById('worker-role').value;
             if (!name || !pin || !split || !role) { alert("All fields are required."); return; }
-
             const newWorker = {
                 name, role, pin,
                 payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
@@ -734,14 +690,12 @@
             state.view = 'adminDashboard';
             render();
         }
-
         async function handleUpdateWorker(id) {
             const name = document.getElementById('worker-name').value;
             const pin = document.getElementById('worker-pin').value;
             const split = document.getElementById('worker-split').value;
             const role = document.getElementById('worker-role').value;
             if (!id || !name || !pin || !split || !role) { alert("All fields are required."); return; }
-            
             const workerRef = db.collection('users').doc(id);
             await workerRef.update({
                 name, pin, role,
@@ -750,16 +704,13 @@
             state.view = 'adminDashboard';
             render();
         }
-
         async function handleUpdatePin() {
             const newPinInput = document.getElementById('new-pin-input');
             const newPin = newPinInput.value;
-
             if (!/^\d{4}$/.test(newPin)) {
                 alert("PIN must be 4 digits.");
                 return;
             }
-
             try {
                 const userRef = db.collection('users').doc(state.currentUser.id);
                 await userRef.update({ pin: newPin });
@@ -770,14 +721,12 @@
                 alert("Failed to update PIN. Please try again.");
             }
         }
-        
         function handleToggleTheme() {
             const appWrapper = document.getElementById('tiptally-app-wrapper');
             const isLight = appWrapper.classList.toggle('light-mode');
             localStorage.setItem('tipTallyTheme', isLight ? 'light' : 'dark');
             render(); // Re-render to update the theme icon
         }
-
         // --- Initializer ---
         async function init() {
             function applyTheme() {
@@ -788,7 +737,6 @@
                 }
             }
             applyTheme();
-
             // Seed data if necessary
             const usersRef = db.collection('users');
             try {
@@ -813,11 +761,9 @@
                 appContainer.innerHTML = `<div class="p-8 text-center text-red-400"><h2>Connection Error</h2><p>Could not connect to the database. Please ensure your Firestore security rules are set to allow reads and writes.</p></div>`;
                 return;
             }
-
             // Set up real-time listeners
             db.collection('users').onSnapshot(snapshot => {
                 const usersData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                
                 // Custom sorting logic for login dropdown
                 const roleOrder = { 'General Manager': 0, 'Manager': 1, 'Entertainer': 2, 'Server': 3, 'Security': 4 };
                 usersData.sort((a, b) => {
@@ -828,9 +774,7 @@
                     }
                     return a.name.localeCompare(b.name);
                 });
-                
                 state.users = usersData;
-
                 const savedUserId = localStorage.getItem('tipTallyUserId');
                 if (savedUserId && !state.currentUser) {
                     const savedUser = state.users.find(u => u.id === savedUserId);
@@ -844,12 +788,10 @@
                 }
                 render();
             }, error => console.error("Error fetching users:", error));
-
             db.collection('transactions').orderBy("submissionTimestamp", "desc").onSnapshot(snapshot => {
                 state.transactions = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
                 if (state.view !== 'login') render();
             }, error => console.error("Error fetching transactions:", error));
-            
             // Add global event listeners
             appContainer.addEventListener('click', handleAction);
             appContainer.addEventListener('change', (e) => {
@@ -858,10 +800,6 @@
                 }
             });
         }
-
         init();
-
     });
-    </script>
-</body>
-</html>
+ </script>
