@@ -5,660 +5,648 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TipTally - Cloud Version</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Icon Library -->
     <script src="https://unpkg.com/lucide-react@latest/dist/lucide-react.js"></script>
-
+    <!-- Firebase Libraries -->
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
 </head>
 <body class="bg-gray-900">
     <div id="root"></div>
 
-    <script type="text/babel">
-
-    // --- MODIFICATION: Firebase Configuration & Initialization ---
-    // PASTE YOUR FIREBASE CONFIG OBJECT HERE
-    const firebaseConfig = {
-      apiKey: "AIzaSyCbX8RkQxxDMxkhSDMzeKmDi5m07GoCEGQ",
-      authDomain: "tiptally-b3e22.firebaseapp.com",
-      projectId: "tiptally-b3e22",
-      storageBucket: "tiptally-b3e22.firebasestorage.app",
-      messagingSenderId: "455968198845",
-      appId: "1:455968198845:web:fb55125d3d82b24eafe7d4",
-      measurementId: "G-SRDQRGLQ5Y"
-    };
-
-    // Initialize Firebase
-    const app = firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-
-    // --- Helper Functions & Initial Data ---
-
-    const getInitialData = async () => {
-      try {
-        const usersRef = db.collection('users');
-        const usersSnapshot = await usersRef.get();
-
-        if (usersSnapshot.empty) {
-          console.log('No users found in Firestore, seeding initial data.');
-          const initialUsers = [
-            { id: 'admin-1', name: 'Manager', role: 'admin', pin: '1234', payoutSplit: { worker: 0, house: 1 } },
-            { id: 'worker-1', name: 'Destiny', role: 'worker', pin: '1111', payoutSplit: { worker: 0.7, house: 0.3 } },
-            { id: 'worker-2', name: 'Crystal', role: 'worker', pin: '2222', payoutSplit: { worker: 0.7, house: 0.3 } },
-          ];
-
-          const batch = db.batch();
-          initialUsers.forEach(user => {
-            const docRef = usersRef.doc(user.id);
-            batch.set(docRef, user);
-          });
-          await batch.commit();
-          console.log('Initial users have been added to Firestore.');
-        }
-      } catch (error) {
-        // Log the error and inform the user if necessary
-        console.error("Error initializing data from Firebase:", error);
-        alert("Could not connect to the database. Please check your connection and Firebase configuration.");
-      }
-    };
-
-    getInitialData();
-
-    // Date Helper
-    const isSameDay = (date1, date2) => {
-        if (!date1 || !date2) return false;
-        return date1.getFullYear() === date2.getFullYear() &&
-               date1.getMonth() === date2.getMonth() &&
-               date1.getDate() === date2.getDate();
-    };
-
-    const formatDate = (date) => {
-        return new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(date);
-    }
-
-    // --- UI Components (These remain unchanged as they are stateless) ---
-
-    const StatusBadge = ({ status }) => {
-        const { CheckCircle, AlertTriangle, List } = lucide;
-        const baseClasses = "px-2 py-1 text-xs font-bold rounded-full text-white inline-flex items-center";
-        switch (status) {
-          case 'approved':
-            return <span className={`${baseClasses} bg-green-500`}><CheckCircle className="w-4 h-4 mr-1"/>Approved</span>;
-          case 'disputed':
-            return <span className={`${baseClasses} bg-yellow-500`}><AlertTriangle className="w-4 h-4 mr-1"/>Disputed</span>;
-          case 'pending':
-          default:
-            return <span className={`${baseClasses} bg-gray-500`}><List className="w-4 h-4 mr-1"/>Pending</span>;
-        }
-    };
-
-    const Calendar = ({ selectedDate, onDateChange, transactions }) => {
-        const { ChevronLeft, ChevronRight } = lucide;
-        const { useState, useEffect, useMemo } = React;
-        const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
-
-        useEffect(() => {
-            setCurrentMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
-        }, [selectedDate]);
-
-        const transactionDays = useMemo(() => {
-            const days = new Set();
-            transactions.forEach(tx => {
-                const d = new Date(tx.submissionTimestamp);
-                days.add(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime());
-            });
-            return days;
-        }, [transactions]);
-
-        const changeMonth = (offset) => {
-            setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
-        };
-
-        const renderHeader = () => (
-            <div className="flex justify-between items-center mb-4">
-                <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-600"><ChevronLeft /></button>
-                <h3 className="text-lg font-semibold text-white">
-                    {new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(currentMonth)}
-                </h3>
-                <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-600"><ChevronRight /></button>
-            </div>
-        );
-
-        const renderDays = () => {
-            const days = [];
-            const startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-            const startDay = startDate.getDay();
-
-            for (let i = 0; i < startDay; i++) {
-                days.push(<div key={`empty-start-${i}`} className="w-10 h-10"></div>);
-            }
-
-            const month = currentMonth.getMonth();
-            let day = 1;
-            while (new Date(currentMonth.getFullYear(), month, day).getMonth() === month) {
-                const date = new Date(currentMonth.getFullYear(), month, day);
-                const isSelected = isSameDay(date, selectedDate);
-                const isToday = isSameDay(date, new Date());
-                const hasTransactions = transactionDays.has(date.getTime());
-
-                const dayClasses = `w-10 h-10 flex items-center justify-center rounded-full cursor-pointer transition-colors ${
-                    isSelected ? 'bg-pink-600 text-white font-bold' :
-                    isToday ? 'bg-gray-700' : 'hover:bg-gray-600'
-                }`;
-
-                days.push(
-                    <div key={day} onClick={() => onDateChange(date)} className={dayClasses}>
-                        <span>{day}</span>
-                        {hasTransactions && !isSelected && <div className="absolute mt-6 w-1 h-1 bg-pink-400 rounded-full"></div>}
-                    </div>
-                );
-                day++;
-            }
-            return <div className="grid grid-cols-7 gap-y-2 place-items-center">{days}</div>;
-        };
-
-        const renderWeekdays = () => {
-            const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            return (
-                <div className="grid grid-cols-7 gap-y-2 place-items-center mb-2 text-xs text-gray-400">
-                    {weekdays.map(day => <div key={day}>{day}</div>)}
-                </div>
-            );
-        }
-
-        return (
-            <div className="bg-gray-800 p-4 rounded-lg">
-                {renderHeader()}
-                {renderWeekdays()}
-                {renderDays()}
-            </div>
-        );
-    };
-
-    const LoginScreen = ({ users, selectedLoginUser, pinInput, loginError, handleLogin, setSelectedLoginUser, setPinInput }) => (
-        <div className="flex items-center justify-center min-h-screen bg-gray-900">
-          <div className="w-full max-w-sm p-8 space-y-6 bg-gray-800 rounded-xl shadow-lg">
-            <div className="text-center">
-              <h1 className="text-4xl font-bold text-white">TipTally</h1>
-              <p className="text-gray-400">Streamlined Earnings Management</p>
-            </div>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label htmlFor="user-select" className="block text-sm font-medium text-gray-300">Select User</label>
-                <select id="user-select" value={selectedLoginUser} onChange={(e) => setSelectedLoginUser(e.target.value)} className="w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500">
-                  <option value="" disabled>Select a user...</option>
-                  {users.map(user => (<option key={user.id} value={user.id}>{user.name} ({user.role})</option>))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="pin" className="block text-sm font-medium text-gray-300">PIN</label>
-                <input type="password" id="pin" value={pinInput} onChange={(e) => setPinInput(e.target.value)} className="w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" placeholder="****"/>
-              </div>
-              {loginError && <p className="text-sm text-red-400">{loginError}</p>}
-              <button type="submit" className="w-full py-3 font-semibold text-white transition-transform duration-200 transform bg-pink-600 rounded-md hover:bg-pink-700 active:scale-95">Login</button>
-            </form>
-          </div>
-        </div>
-    );
-
-    const WorkerDashboard = ({ currentUser, transactions, selectedDate, setSelectedDate, handleAddTransaction, handleWorkerAcceptance }) => {
-        const { useState, useMemo } = React;
-        const [amount, setAmount] = useState('');
-        const isToday = isSameDay(selectedDate, new Date());
-
-        const dailyTransactions = useMemo(() => {
-            return transactions.filter(t => t.workerId === currentUser.id && isSameDay(new Date(t.submissionTimestamp), selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
-        }, [transactions, currentUser, selectedDate]);
-
-        const allTimeTransactions = useMemo(() => {
-            return transactions.filter(t => t.workerId === currentUser.id);
-        }, [transactions, currentUser]);
-
-        const dailyApprovedTotal = dailyTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
-        const allTimeApprovedTotal = allTimeTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
-
-        const allTimeTake = allTimeApprovedTotal * currentUser.payoutSplit.worker;
-
-        const handleSubmit = (e) => {
-            e.preventDefault();
-            handleAddTransaction(amount);
-            setAmount('');
-        }
-
-        return (
-          <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1">
-                 <h2 className="text-2xl font-bold text-white mb-4">Calendar & Totals</h2>
-                 <Calendar selectedDate={selectedDate} onDateChange={setSelectedDate} transactions={allTimeTransactions} />
-                 <div className="p-4 bg-gray-800 rounded-lg mt-4">
-                    <h3 className="text-gray-400 text-sm">Your Total Take (All Time)</h3>
-                    <p className="text-4xl font-bold text-green-400">${allTimeTake.toFixed(2)}</p>
-                 </div>
-            </div>
-            <div className="lg:col-span-2">
-                <h2 className="text-2xl font-bold text-white mb-2">My Daily Summary</h2>
-                <p className="text-lg text-pink-400 mb-4">{formatDate(selectedDate)}</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div className="p-4 bg-gray-800 rounded-lg"><h3 className="text-gray-400 text-sm">Approved Earnings (Day)</h3><p className="text-2xl font-bold text-green-400">${dailyApprovedTotal.toFixed(2)}</p></div>
-                    <div className="p-4 bg-gray-800 rounded-lg"><h3 className="text-gray-400 text-sm">Your Take (Day)</h3><p className="text-2xl font-bold text-pink-400">${(dailyApprovedTotal * currentUser.payoutSplit.worker).toFixed(2)}</p></div>
-                    <div className="p-4 bg-gray-800 rounded-lg"><h3 className="text-gray-400 text-sm">House Take (Day)</h3><p className="text-2xl font-bold text-blue-400">${(dailyApprovedTotal * currentUser.payoutSplit.house).toFixed(2)}</p></div>
-                </div>
-                {isToday && (
-                    <div className="bg-gray-800 p-6 rounded-lg mb-6">
-                        <h3 className="text-xl font-bold text-white mb-4">Submit New Earnings</h3>
-                        <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-4">
-                            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Enter amount" className="flex-grow px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"/>
-                            <button type="submit" className="px-6 py-2 font-semibold text-white transition-transform duration-200 transform bg-pink-600 rounded-md hover:bg-pink-700 active:scale-95">Submit</button>
-                        </form>
-                    </div>
-                )}
-                <div>
-                    <h3 className="text-xl font-bold text-white mb-4">Submissions for this day</h3>
-                    <div className="space-y-4">
-                        {dailyTransactions.length > 0 ? dailyTransactions.map(tx => (
-                            <div key={tx.id} className="bg-gray-800 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div><p className="font-bold text-white">ID: <span className="font-mono text-pink-400">{tx.transactionCode}</span></p><p className="text-sm text-gray-400">{new Date(tx.submissionTimestamp).toLocaleTimeString()}</p></div>
-                                <div className="text-left md:text-right"><p className="text-lg font-bold text-white">You Submitted: ${tx.workerSubmittedAmount.toFixed(2)}</p>{tx.status === 'disputed' && (<p className="text-md font-semibold text-yellow-400">Manager Counted: ${tx.managerVerifiedAmount.toFixed(2)}</p>)}</div>
-                                <div className="flex items-center gap-4 w-full md:w-auto"><StatusBadge status={tx.status} />{tx.status === 'disputed' && (<button onClick={() => handleWorkerAcceptance(tx.id)} className="px-3 py-1 text-sm font-semibold text-white bg-green-600 rounded-md hover:bg-green-700">Accept Count</button>)}</div>
-                            </div>
-                        )) : <p className="text-gray-400">No transactions submitted on this day.</p>}
-                    </div>
-                </div>
-            </div>
-          </div>
-        );
-    };
-
-    const AdminDashboard = ({ workers, transactions, selectedDate, setView, setSelectedWorkerId, setSelectedDate, handleVerification }) => {
-        const { useState, useMemo } = React;
-        const { UserPlus } = lucide;
-        const [verificationAmounts, setVerificationAmounts] = useState({});
-
-        const dailyTransactions = useMemo(() => {
-            return transactions.filter(t => isSameDay(new Date(t.submissionTimestamp), selectedDate));
-        }, [transactions, selectedDate]);
-
-        const pendingTransactions = dailyTransactions.filter(t => t.status === 'pending');
-
-        const handleAmountChange = (txId, value) => {
-            setVerificationAmounts(prev => ({...prev, [txId]: value}));
-        }
-
-        const getWorkerTotalsForDay = () => {
-            const totals = {};
-            workers.forEach(w => {
-                totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id };
-            });
-            dailyTransactions.forEach(tx => {
-                if (tx.status === 'approved' && totals[tx.workerId]) {
-                    totals[tx.workerId].total += tx.workerSubmittedAmount;
-                }
-            });
-            return Object.values(totals);
-        }
-
-        const getWorkerAllTimeTotals = () => {
-            const totals = {};
-            workers.forEach(w => {
-                totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id };
-            });
-            transactions.forEach(tx => {
-                if (tx.status === 'approved' && totals[tx.workerId]) {
-                    totals[tx.workerId].total += tx.workerSubmittedAmount;
-                }
-            });
-            return Object.values(totals);
-        }
-
-        const workerDailyTotals = getWorkerTotalsForDay();
-        const workerAllTimeTotals = getWorkerAllTimeTotals();
-        const totalClubEarningsDay = workerDailyTotals.reduce((sum, w) => sum + w.total, 0);
-        const totalHouseTakeDay = workerDailyTotals.reduce((sum, w) => sum + (w.total * w.split.house), 0);
-
-        return (
-            <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-1">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-2xl font-bold text-white">Admin Tools</h2>
-                        <button onClick={() => setView('adminAddWorker')} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white transition-transform duration-200 transform bg-blue-600 rounded-md hover:bg-blue-700 active:scale-95"><UserPlus size={16} /> Add Worker</button>
-                    </div>
-                    <Calendar selectedDate={selectedDate} onDateChange={setSelectedDate} transactions={transactions} />
-                     <div className="bg-gray-800 p-4 rounded-lg mt-4">
-                        <h3 className="text-xl font-bold text-white mb-4">Daily Worker Payouts</h3>
-                        <div className="space-y-2">
-                            {workerDailyTotals.map(w => (
-                                <div key={w.id} className="flex justify-between items-center text-sm">
-                                    <span className="font-semibold text-white">{w.name}</span>
-                                    <span className="font-bold text-pink-400">${(w.total * w.split.worker).toFixed(2)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                     <div className="bg-gray-800 p-4 rounded-lg mt-4">
-                        <h3 className="text-xl font-bold text-white mb-4">All-Time Worker Payouts</h3>
-                        <div className="space-y-2">
-                            {workerAllTimeTotals.map(w => (
-                                <div key={w.id} className="flex justify-between items-center text-sm">
-                                    <span className="font-semibold text-white">{w.name}</span>
-                                    <span className="font-bold text-green-400">${(w.total * w.split.worker).toFixed(2)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-                <div className="lg:col-span-2">
-                    <h2 className="text-2xl font-bold text-white mb-2">Daily Summary</h2>
-                    <p className="text-lg text-pink-400 mb-4">{formatDate(selectedDate)}</p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div className="p-4 bg-gray-800 rounded-lg"><h3 className="text-gray-400 text-sm">Club Earnings (Day)</h3><p className="text-3xl font-bold text-green-400">${totalClubEarningsDay.toFixed(2)}</p></div>
-                        <div className="p-4 bg-gray-800 rounded-lg"><h3 className="text-gray-400 text-sm">House Take (Day)</h3><p className="text-3xl font-bold text-pink-400">${totalHouseTakeDay.toFixed(2)}</p></div>
-                    </div>
-
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                        <div>
-                            <h3 className="text-xl font-bold text-white mb-4">Worker Totals (Day)</h3>
-                            <div className="space-y-3">
-                                {workerDailyTotals.map(w => (
-                                    <div key={w.id} onClick={() => { setSelectedWorkerId(w.id); setView('adminWorkerDetail'); }} className="bg-gray-800 p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-700 transition-colors">
-                                        <p className="font-bold text-white text-lg">{w.name}</p>
-                                        <p className="font-semibold text-green-400 text-lg">${w.total.toFixed(2)}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div>
-                            <h3 className="text-xl font-bold text-white mb-4">Pending Verifications ({pendingTransactions.length})</h3>
-                            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                                {pendingTransactions.length > 0 ? pendingTransactions.map(tx => (
-                                    <div key={tx.id} className="bg-gray-800 p-4 rounded-lg">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <div><p className="font-bold text-white">{tx.workerName} - <span className="font-mono text-pink-400">{tx.transactionCode}</span></p><p className="text-sm text-gray-400">Submitted: ${tx.workerSubmittedAmount.toFixed(2)}</p></div>
-                                            <StatusBadge status={tx.status} />
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <input type="number" placeholder="Enter counted amount" value={verificationAmounts[tx.id] || ''} onChange={e => handleAmountChange(tx.id, e.target.value)} className="flex-grow px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"/>
-                                            <button onClick={() => handleVerification(tx.id, verificationAmounts[tx.id] || 0)} disabled={!verificationAmounts[tx.id]} className="px-4 py-2 font-semibold text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed">Verify</button>
-                                        </div>
-                                    </div>
-                                )) : <p className="text-gray-400">No pending transactions for this day.</p>}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const AdminWorkerDetail = ({ users, selectedWorkerId, transactions, selectedDate, setView }) => {
-        const { useMemo } = React;
-        const { Edit } = lucide;
-        const selectedWorkerProfile = useMemo(() => users.find(u => u.id === selectedWorkerId), [users, selectedWorkerId]);
-
-        const dailyTransactions = useMemo(() => {
-            return transactions.filter(t => t.workerId === selectedWorkerId && isSameDay(new Date(t.submissionTimestamp), selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
-        }, [transactions, selectedWorkerId, selectedDate]);
-
-        const allTimeTransactions = useMemo(() => {
-            return transactions.filter(t => t.workerId === selectedWorkerId);
-        }, [transactions, selectedWorkerId]);
-
-        if (!selectedWorkerProfile) return <div className="p-8 text-white">Worker not found.</div>;
-
-        const dailyApprovedTotal = dailyTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
-        const allTimeApprovedTotal = allTimeTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
-
-        const { payoutSplit } = selectedWorkerProfile;
-        const dailyWorkerTake = dailyApprovedTotal * payoutSplit.worker;
-        const dailyHouseTake = dailyApprovedTotal * payoutSplit.house;
-        const allTimeWorkerTake = allTimeApprovedTotal * payoutSplit.worker;
-        const allTimeHouseTake = allTimeApprovedTotal * payoutSplit.house;
-
-        return (
-          <div className="p-4 md:p-8">
-            <div className="flex justify-between items-start">
-                <button onClick={() => setView('adminDashboard')} className="mb-6 text-pink-400 hover:text-pink-300">&larr; Back to Dashboard</button>
-                <button onClick={() => setView('adminEditWorker')} className="flex items-center gap-2 px-4 py-2 font-semibold text-white transition-transform duration-200 transform bg-yellow-600 rounded-md hover:bg-yellow-700 active:scale-95">
-                    <Edit size={16} /> Edit Worker
-                </button>
-            </div>
-            <h2 className="text-3xl font-bold text-white mb-2 mt-4">{selectedWorkerProfile.name}'s Summary</h2>
-
-            <div className="mb-8 p-4 border border-gray-700 rounded-lg">
-                <h3 className="text-xl font-bold text-white mb-4">All-Time Totals</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 bg-gray-800 rounded-lg"><h3 className="text-gray-400 text-sm">Total Approved</h3><p className="text-3xl font-bold text-green-400">${allTimeApprovedTotal.toFixed(2)}</p></div>
-                    <div className="p-4 bg-gray-800 rounded-lg"><h3 className="text-gray-400 text-sm">Total Payout ({payoutSplit.worker * 100}%)</h3><p className="text-3xl font-bold text-pink-400">${allTimeWorkerTake.toFixed(2)}</p></div>
-                    <div className="p-4 bg-gray-800 rounded-lg"><h3 className="text-gray-400 text-sm">Total House Take ({payoutSplit.house * 100}%)</h3><p className="text-3xl font-bold text-blue-400">${allTimeHouseTake.toFixed(2)}</p></div>
-                </div>
-            </div>
-
-            <p className="text-lg text-pink-400 mb-4 font-bold">{formatDate(selectedDate)}</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="p-4 bg-gray-700 rounded-lg"><h3 className="text-gray-300 text-sm">Approved (Day)</h3><p className="text-2xl font-bold text-green-300">${dailyApprovedTotal.toFixed(2)}</p></div>
-                <div className="p-4 bg-gray-700 rounded-lg"><h3 className="text-gray-300 text-sm">Payout (Day)</h3><p className="text-2xl font-bold text-pink-300">${dailyWorkerTake.toFixed(2)}</p></div>
-                <div className="p-4 bg-gray-700 rounded-lg"><h3 className="text-gray-300 text-sm">House Take (Day)</h3><p className="text-2xl font-bold text-blue-300">${dailyHouseTake.toFixed(2)}</p></div>
-            </div>
-
-            <h3 className="text-xl font-bold text-white mb-4">Transaction History (Day)</h3>
-            <div className="space-y-4">
-                {dailyTransactions.length > 0 ? dailyTransactions.map(tx => (
-                    <div key={tx.id} className="bg-gray-800 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div><p className="font-bold text-white">ID: <span className="font-mono text-pink-400">{tx.transactionCode}</span></p><p className="text-sm text-gray-400">{new Date(tx.submissionTimestamp).toLocaleTimeString()}</p></div>
-                        <div className="text-left md:text-right"><p className="text-lg font-bold text-white">Submitted: ${tx.workerSubmittedAmount.toFixed(2)}</p>{tx.managerVerifiedAmount !== null && (<p className="text-md font-semibold text-yellow-400">Verified: ${tx.managerVerifiedAmount.toFixed(2)}</p>)}</div>
-                        <StatusBadge status={tx.status} />
-                    </div>
-                )) : <p className="text-gray-400">No transactions found for this worker on this day.</p>}
-            </div>
-          </div>
-        );
-    };
-
-    const AddWorkerForm = ({ isEdit = false, users, selectedWorkerId, setView, handleAddWorker, handleUpdateWorker }) => {
-        const { useState } = React;
-        const workerToEdit = isEdit ? users.find(u => u.id === selectedWorkerId) : null;
-
-        const [name, setName] = useState(workerToEdit?.name || '');
-        const [pin, setPin] = useState(workerToEdit?.pin || '');
-        const [split, setSplit] = useState(workerToEdit ? workerToEdit.payoutSplit.worker * 100 : '70');
-
-        const handleSubmit = (e) => {
-            e.preventDefault();
-            if(isEdit) {
-                handleUpdateWorker(selectedWorkerId, name, pin, split);
-            } else {
-                handleAddWorker(name, pin, split);
-            }
-        }
-
-        return (
-            <div className="p-4 md:p-8">
-                <button onClick={() => setView(isEdit ? 'adminWorkerDetail' : 'adminDashboard')} className="mb-6 text-pink-400 hover:text-pink-300">&larr; Back</button>
-                <div className="max-w-md mx-auto bg-gray-800 p-8 rounded-lg">
-                    <h2 className="text-2xl font-bold text-white mb-6">{isEdit ? 'Edit Worker Profile' : 'Add New Worker'}</h2>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div><label htmlFor="worker-name" className="block text-sm font-medium text-gray-300">Worker Name</label><input type="text" id="worker-name" value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" required /></div>
-                        <div><label htmlFor="worker-pin" className="block text-sm font-medium text-gray-300">4-Digit PIN</label><input type="text" pattern="\\d{4}" title="PIN must be 4 digits" id="worker-pin" value={pin} onChange={e => setPin(e.target.value)} className="w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" required /></div>
-                        <div><label htmlFor="worker-split" className="block text-sm font-medium text-gray-300">Worker Payout Split (%)</label><input type="number" min="0" max="100" id="worker-split" value={split} onChange={e => setSplit(e.target.value)} className="w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" required /></div>
-                        <button type="submit" className="w-full py-3 font-semibold text-white transition-transform duration-200 transform bg-pink-600 rounded-md hover:bg-pink-700 active:scale-95">
-                            {isEdit ? 'Save Changes' : 'Create Worker Profile'}
-                        </button>
-                    </form>
-                </div>
-            </div>
-        );
-    }
-
-    // --- Main App Component ---
-    function App() {
-      const { useState, useEffect, useMemo } = React;
-      const { LogOut } = lucide;
-
-      // --- MODIFICATION: State is now fetched from Firebase ---
-      const [users, setUsers] = useState([]);
-      const [transactions, setTransactions] = useState([]);
-      const [currentUser, setCurrentUser] = useState(null);
-      const [view, setView] = useState('login');
-      const [selectedWorkerId, setSelectedWorkerId] = useState(null);
-      const [loginError, setLoginError] = useState('');
-      const [pinInput, setPinInput] = useState('');
-      const [selectedLoginUser, setSelectedLoginUser] = useState('');
-      const [selectedDate, setSelectedDate] = useState(new Date());
-
-      // --- MODIFICATION: Effects for Real-time Data Fetching ---
-      useEffect(() => {
-        // Listen for real-time updates to the users collection
-        const unsubscribeUsers = db.collection('users').onSnapshot(snapshot => {
-            const usersData = snapshot.docs.map(doc => doc.data());
-            setUsers(usersData);
-            if (!selectedLoginUser && usersData.length > 0) {
-              setSelectedLoginUser(usersData[0].id);
-            }
-        });
-
-        // Listen for real-time updates to the transactions collection
-        const unsubscribeTransactions = db.collection('transactions').onSnapshot(snapshot => {
-            const transactionsData = snapshot.docs.map(doc => doc.data());
-            setTransactions(transactionsData);
-        });
-
-        // Cleanup function to unsubscribe when the component unmounts
-        return () => {
-          unsubscribeUsers();
-          unsubscribeTransactions();
-        };
-      }, []); // Empty dependency array ensures this runs only once on mount
-
-      const workers = useMemo(() => users.filter(u => u.role === 'worker'), [users]);
-
-      const handleLogin = (e) => {
-        e.preventDefault();
-        const user = users.find(u => u.id === selectedLoginUser);
-        if (user && user.pin === pinInput) {
-          setCurrentUser(user);
-          setView(user.role === 'admin' ? 'adminDashboard' : 'workerDashboard');
-          setLoginError('');
-          setPinInput('');
-          setSelectedDate(new Date()); // Reset to today on login
-        } else {
-          setLoginError('Invalid PIN. Please try again.');
-        }
-      };
-
-      const handleLogout = () => {
-        setCurrentUser(null);
-        setView('login');
-        setSelectedWorkerId(null);
-      };
-
-      const handleAddTransaction = async (amount) => {
-        if (!amount || amount <= 0) return;
-        const transactionId = `txn-${Date.now()}`;
-        const newTransaction = {
-          id: transactionId,
-          workerId: currentUser.id,
-          workerName: currentUser.name,
-          transactionCode: `${currentUser.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
-          workerSubmittedAmount: parseFloat(amount),
-          managerVerifiedAmount: null,
-          status: 'pending',
-          submissionTimestamp: new Date().toISOString(),
-          verificationTimestamp: null,
-        };
-        await db.collection('transactions').doc(transactionId).set(newTransaction);
-      };
-
-      const handleVerification = async (txId, managerAmount) => {
-        const txRef = db.collection('transactions').doc(txId);
-        const txDoc = await txRef.get();
-        if (txDoc.exists) {
-            const tx = txDoc.data();
-            const workerAmount = tx.workerSubmittedAmount;
-            const status = parseFloat(managerAmount) === workerAmount ? 'approved' : 'disputed';
-            await txRef.update({
-                managerVerifiedAmount: parseFloat(managerAmount),
-                status,
-                verificationTimestamp: new Date().toISOString(),
-            });
-        }
-      };
-
-      const handleWorkerAcceptance = async (txId) => {
-         const txRef = db.collection('transactions').doc(txId);
-         const txDoc = await txRef.get();
-         if (txDoc.exists && txDoc.data().status === 'disputed') {
-            await txRef.update({
-                status: 'approved',
-                workerSubmittedAmount: txDoc.data().managerVerifiedAmount
-            });
-         }
-      };
-
-      const handleAddWorker = async (name, pin, split) => {
-          if (!name || !pin || !split) return;
-          const workerId = `worker-${Date.now()}`;
-          const newWorker = {
-              id: workerId,
-              name,
-              role: 'worker',
-              pin,
-              payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
-          };
-          await db.collection('users').doc(workerId).set(newWorker);
-          setView('adminDashboard');
-      };
-
-      const handleUpdateWorker = async (id, name, pin, split) => {
-        if (!id || !name || !pin || !split) return;
-        const workerRef = db.collection('users').doc(id);
-        await workerRef.update({
-            name,
-            pin,
-            payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
-        });
-        setView('adminWorkerDetail');
-      };
-
-      const renderView = () => {
-        switch (view) {
-          case 'workerDashboard':
-            return <WorkerDashboard currentUser={currentUser} transactions={transactions} selectedDate={selectedDate} setSelectedDate={setSelectedDate} handleAddTransaction={handleAddTransaction} handleWorkerAcceptance={handleWorkerAcceptance} />;
-          case 'adminDashboard':
-            return <AdminDashboard workers={workers} transactions={transactions} selectedDate={selectedDate} setView={setView} setSelectedWorkerId={setSelectedWorkerId} setSelectedDate={setSelectedDate} handleVerification={handleVerification} />;
-          case 'adminWorkerDetail':
-            return <AdminWorkerDetail users={users} selectedWorkerId={selectedWorkerId} transactions={transactions} selectedDate={selectedDate} setView={setView} />;
-          case 'adminAddWorker':
-            return <AddWorkerForm isEdit={false} setView={setView} handleAddWorker={handleAddWorker} />;
-          case 'adminEditWorker':
-            return <AddWorkerForm isEdit={true} users={users} selectedWorkerId={selectedWorkerId} setView={setView} handleUpdateWorker={handleUpdateWorker} />;
-          case 'login':
-          default:
-            return <LoginScreen users={users} selectedLoginUser={selectedLoginUser} pinInput={pinInput} loginError={loginError} handleLogin={handleLogin} setSelectedLoginUser={setSelectedLoginUser} setPinInput={setPinInput} />;
-        }
-      };
-
-      return (
-        <div className="min-h-screen bg-gray-900 text-gray-100 font-sans">
-          {currentUser && (
-            <header className="bg-gray-800 p-4 flex justify-between items-center shadow-md">
-                <div><h1 className="text-xl font-bold text-white">TipTally</h1><p className="text-sm text-gray-400">Logged in as: <span className="font-semibold text-pink-400">{currentUser.name}</span></p></div>
-                <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white transition-colors bg-gray-700 rounded-md hover:bg-gray-600"><LogOut size={16} />Logout</button>
-            </header>
-          )}
-          <main>
-            {renderView()}
-          </main>
-        </div>
-      );
-    }
+    <script>
+    // This script block contains standard JavaScript, not "text/babel".
+    // The JSX has been manually transpiled to React.createElement calls to ensure it runs on any server.
 
     window.onload = function() {
-      ReactDOM.render(<App />, document.getElementById('root'));
-    };
+        try {
+            // --- Firebase Configuration & Initialization ---
+            const firebaseConfig = {
+              apiKey: "AIzaSyCbX8RkQxxDMxkhSDMzeKmDi5m07GoCEGQ",
+              authDomain: "tiptally-b3e22.firebaseapp.com",
+              projectId: "tiptally-b3e22",
+              storageBucket: "tiptally-b3e22.firebasestorage.app",
+              messagingSenderId: "455968198845",
+              appId: "1:455968198845:web:fb55125d3d82b24eafe7d4",
+              measurementId: "G-SRDQRGLQ5Y"
+            };
 
+            // Initialize Firebase
+            const app = firebase.initializeApp(firebaseConfig);
+            const db = firebase.firestore();
+            
+            // --- FIX: Explicitly get the icon library from the window object ---
+            const LucideIcons = window.LucideReact;
+            if (!LucideIcons) {
+                throw new Error("LucideReact icon library failed to load.");
+            }
+
+            // --- Helper Functions & Initial Data ---
+            const getInitialData = async () => {
+              try {
+                  const usersRef = db.collection('users');
+                  const usersSnapshot = await usersRef.get();
+
+                  if (usersSnapshot.empty) {
+                    console.log('No users found in Firestore, seeding initial data.');
+                    const initialUsers = [
+                      { id: 'admin-1', name: 'Manager', role: 'admin', pin: '1234', payoutSplit: { worker: 0, house: 1 } },
+                      { id: 'worker-1', name: 'Destiny', role: 'worker', pin: '1111', payoutSplit: { worker: 0.7, house: 0.3 } },
+                      { id: 'worker-2', name: 'Crystal', role: 'worker', pin: '2222', payoutSplit: { worker: 0.7, house: 0.3 } },
+                    ];
+
+                    const batch = db.batch();
+                    initialUsers.forEach(user => {
+                      const docRef = usersRef.doc(user.id);
+                      batch.set(docRef, user);
+                    });
+                    await batch.commit();
+                    console.log('Initial users have been added to Firestore.');
+                  }
+              } catch (error) {
+                  console.error("Error initializing data from Firebase:", error);
+                  alert("Could not connect to the database. Please check your connection and Firebase configuration.");
+              }
+            };
+
+            getInitialData();
+
+            // Date Helper
+            const isSameDay = (date1, date2) => {
+                if (!date1 || !date2) return false;
+                return date1.getFullYear() === date2.getFullYear() &&
+                       date1.getMonth() === date2.getMonth() &&
+                       date1.getDate() === date2.getDate();
+            };
+
+            const formatDate = (date) => {
+                return new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(date);
+            }
+
+            // --- UI Components (Stateless) ---
+
+            const StatusBadge = ({ status }) => {
+                const { CheckCircle, AlertTriangle, List } = LucideIcons;
+                const baseClasses = "px-2 py-1 text-xs font-bold rounded-full text-white inline-flex items-center";
+                switch (status) {
+                  case 'approved':
+                    return React.createElement('span', { className: `${baseClasses} bg-green-500` },
+                        React.createElement(CheckCircle, { className: "w-4 h-4 mr-1" }), 'Approved');
+                  case 'disputed':
+                    return React.createElement('span', { className: `${baseClasses} bg-yellow-500` },
+                        React.createElement(AlertTriangle, { className: "w-4 h-4 mr-1" }), 'Disputed');
+                  case 'pending':
+                  default:
+                    return React.createElement('span', { className: `${baseClasses} bg-gray-500` },
+                        React.createElement(List, { className: "w-4 h-4 mr-1" }), 'Pending');
+                }
+            };
+
+            const Calendar = ({ selectedDate, onDateChange, transactions }) => {
+                const { ChevronLeft, ChevronRight } = LucideIcons;
+                const { useState, useEffect, useMemo } = React;
+                const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+
+                useEffect(() => {
+                    setCurrentMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+                }, [selectedDate]);
+
+                const transactionDays = useMemo(() => {
+                    const days = new Set();
+                    transactions.forEach(tx => {
+                        const d = new Date(tx.submissionTimestamp);
+                        days.add(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime());
+                    });
+                    return days;
+                }, [transactions]);
+
+                const changeMonth = (offset) => {
+                    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
+                };
+
+                const renderHeader = () => React.createElement('div', { className: "flex justify-between items-center mb-4" },
+                    React.createElement('button', { onClick: () => changeMonth(-1), className: "p-2 rounded-full hover:bg-gray-600" }, React.createElement(ChevronLeft, null)),
+                    React.createElement('h3', { className: "text-lg font-semibold text-white" }, new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(currentMonth)),
+                    React.createElement('button', { onClick: () => changeMonth(1), className: "p-2 rounded-full hover:bg-gray-600" }, React.createElement(ChevronRight, null))
+                );
+
+                const renderDays = () => {
+                    const days = [];
+                    const startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+                    const startDay = startDate.getDay();
+
+                    for (let i = 0; i < startDay; i++) {
+                        days.push(React.createElement('div', { key: `empty-start-${i}`, className: "w-10 h-10" }));
+                    }
+
+                    const month = currentMonth.getMonth();
+                    let day = 1;
+                    while (new Date(currentMonth.getFullYear(), month, day).getMonth() === month) {
+                        const date = new Date(currentMonth.getFullYear(), month, day);
+                        const isSelected = isSameDay(date, selectedDate);
+                        const isToday = isSameDay(date, new Date());
+                        const hasTransactions = transactionDays.has(date.getTime());
+
+                        const dayClasses = `w-10 h-10 flex items-center justify-center rounded-full cursor-pointer transition-colors ${
+                            isSelected ? 'bg-pink-600 text-white font-bold' :
+                            isToday ? 'bg-gray-700' : 'hover:bg-gray-600'
+                        }`;
+
+                        days.push(
+                            React.createElement('div', { key: day, onClick: () => onDateChange(date), className: dayClasses },
+                                React.createElement('span', null, day),
+                                hasTransactions && !isSelected && React.createElement('div', { className: "absolute mt-6 w-1 h-1 bg-pink-400 rounded-full" })
+                            )
+                        );
+                        day++;
+                    }
+                    return React.createElement('div', { className: "grid grid-cols-7 gap-y-2 place-items-center" }, days);
+                };
+
+                const renderWeekdays = () => {
+                    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    return React.createElement('div', { className: "grid grid-cols-7 gap-y-2 place-items-center mb-2 text-xs text-gray-400" },
+                        weekdays.map(day => React.createElement('div', { key: day }, day))
+                    );
+                }
+
+                return React.createElement('div', { className: "bg-gray-800 p-4 rounded-lg" },
+                    renderHeader(),
+                    renderWeekdays(),
+                    renderDays()
+                );
+            };
+
+            const LoginScreen = ({ users, selectedLoginUser, pinInput, loginError, handleLogin, setSelectedLoginUser, setPinInput }) => React.createElement('div', { className: "flex items-center justify-center min-h-screen bg-gray-900" },
+                React.createElement('div', { className: "w-full max-w-sm p-8 space-y-6 bg-gray-800 rounded-xl shadow-lg" },
+                    React.createElement('div', { className: "text-center" },
+                        React.createElement('h1', { className: "text-4xl font-bold text-white" }, "TipTally"),
+                        React.createElement('p', { className: "text-gray-400" }, "Streamlined Earnings Management")
+                    ),
+                    React.createElement('form', { onSubmit: handleLogin, className: "space-y-4" },
+                        React.createElement('div', null,
+                            React.createElement('label', { htmlFor: "user-select", className: "block text-sm font-medium text-gray-300" }, "Select User"),
+                            React.createElement('select', { id: "user-select", value: selectedLoginUser, onChange: (e) => setSelectedLoginUser(e.target.value), className: "w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" },
+                                React.createElement('option', { value: "", disabled: true }, "Select a user..."),
+                                users.map(user => React.createElement('option', { key: user.id, value: user.id }, `${user.name} (${user.role})`))
+                            )
+                        ),
+                        React.createElement('div', null,
+                            React.createElement('label', { htmlFor: "pin", className: "block text-sm font-medium text-gray-300" }, "PIN"),
+                            React.createElement('input', { type: "password", id: "pin", value: pinInput, onChange: (e) => setPinInput(e.target.value), className: "w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500", placeholder: "****" })
+                        ),
+                        loginError && React.createElement('p', { className: "text-sm text-red-400" }, loginError),
+                        React.createElement('button', { type: "submit", className: "w-full py-3 font-semibold text-white transition-transform duration-200 transform bg-pink-600 rounded-md hover:bg-pink-700 active:scale-95" }, "Login")
+                    )
+                )
+            );
+
+            const WorkerDashboard = ({ currentUser, transactions, selectedDate, setSelectedDate, handleAddTransaction, handleWorkerAcceptance }) => {
+                const { useState, useMemo } = React;
+                const [amount, setAmount] = useState('');
+                const isToday = isSameDay(selectedDate, new Date());
+
+                const dailyTransactions = useMemo(() => {
+                    return transactions.filter(t => t.workerId === currentUser.id && isSameDay(new Date(t.submissionTimestamp), selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
+                }, [transactions, currentUser, selectedDate]);
+
+                const allTimeTransactions = useMemo(() => {
+                    return transactions.filter(t => t.workerId === currentUser.id);
+                }, [transactions, currentUser]);
+
+                const dailyApprovedTotal = dailyTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
+                const allTimeApprovedTotal = allTimeTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
+
+                const allTimeTake = allTimeApprovedTotal * currentUser.payoutSplit.worker;
+
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    handleAddTransaction(amount);
+                    setAmount('');
+                }
+
+                return React.createElement('div', { className: "p-4 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8" },
+                    React.createElement('div', { className: "lg:col-span-1" },
+                        React.createElement('h2', { className: "text-2xl font-bold text-white mb-4" }, "Calendar & Totals"),
+                        React.createElement(Calendar, { selectedDate, onDateChange: setSelectedDate, transactions: allTimeTransactions }),
+                        React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg mt-4" },
+                            React.createElement('h3', { className: "text-gray-400 text-sm" }, "Your Total Take (All Time)"),
+                            React.createElement('p', { className: "text-4xl font-bold text-green-400" }, `$${allTimeTake.toFixed(2)}`)
+                        )
+                    ),
+                    React.createElement('div', { className: "lg:col-span-2" },
+                        React.createElement('h2', { className: "text-2xl font-bold text-white mb-2" }, "My Daily Summary"),
+                        React.createElement('p', { className: "text-lg text-pink-400 mb-4" }, formatDate(selectedDate)),
+                        React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" },
+                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "Approved Earnings (Day)"), React.createElement('p', { className: "text-2xl font-bold text-green-400" }, `$${dailyApprovedTotal.toFixed(2)}`)),
+                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "Your Take (Day)"), React.createElement('p', { className: "text-2xl font-bold text-pink-400" }, `$${(dailyApprovedTotal * currentUser.payoutSplit.worker).toFixed(2)}`)),
+                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "House Take (Day)"), React.createElement('p', { className: "text-2xl font-bold text-blue-400" }, `$${(dailyApprovedTotal * currentUser.payoutSplit.house).toFixed(2)}`))
+                        ),
+                        isToday && React.createElement('div', { className: "bg-gray-800 p-6 rounded-lg mb-6" },
+                            React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "Submit New Earnings"),
+                            React.createElement('form', { onSubmit: handleSubmit, className: "flex flex-col md:flex-row gap-4" },
+                                React.createElement('input', { type: "number", value: amount, onChange: e => setAmount(e.target.value), placeholder: "Enter amount", className: "flex-grow px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" }),
+                                React.createElement('button', { type: "submit", className: "px-6 py-2 font-semibold text-white transition-transform duration-200 transform bg-pink-600 rounded-md hover:bg-pink-700 active:scale-95" }, "Submit")
+                            )
+                        ),
+                        React.createElement('div', null,
+                            React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "Submissions for this day"),
+                            React.createElement('div', { className: "space-y-4" },
+                                dailyTransactions.length > 0 ? dailyTransactions.map(tx =>
+                                    React.createElement('div', { key: tx.id, className: "bg-gray-800 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4" },
+                                        React.createElement('div', null, React.createElement('p', { className: "font-bold text-white" }, "ID: ", React.createElement('span', { className: "font-mono text-pink-400" }, tx.transactionCode)), React.createElement('p', { className: "text-sm text-gray-400" }, new Date(tx.submissionTimestamp).toLocaleTimeString())),
+                                        React.createElement('div', { className: "text-left md:text-right" }, React.createElement('p', { className: "text-lg font-bold text-white" }, `You Submitted: $${tx.workerSubmittedAmount.toFixed(2)}`), tx.status === 'disputed' && React.createElement('p', { className: "text-md font-semibold text-yellow-400" }, `Manager Counted: $${tx.managerVerifiedAmount.toFixed(2)}`)),
+                                        React.createElement('div', { className: "flex items-center gap-4 w-full md:w-auto" }, React.createElement(StatusBadge, { status: tx.status }), tx.status === 'disputed' && React.createElement('button', { onClick: () => handleWorkerAcceptance(tx.id), className: "px-3 py-1 text-sm font-semibold text-white bg-green-600 rounded-md hover:bg-green-700" }, "Accept Count"))
+                                    )
+                                ) : React.createElement('p', { className: "text-gray-400" }, "No transactions submitted on this day.")
+                            )
+                        )
+                    )
+                );
+            };
+
+            const AdminDashboard = ({ workers, transactions, selectedDate, setView, setSelectedWorkerId, setSelectedDate, handleVerification }) => {
+                const { useState, useMemo } = React;
+                const { UserPlus } = LucideIcons;
+                const [verificationAmounts, setVerificationAmounts] = useState({});
+
+                const dailyTransactions = useMemo(() => {
+                    return transactions.filter(t => isSameDay(new Date(t.submissionTimestamp), selectedDate));
+                }, [transactions, selectedDate]);
+
+                const pendingTransactions = dailyTransactions.filter(t => t.status === 'pending');
+
+                const handleAmountChange = (txId, value) => {
+                    setVerificationAmounts(prev => ({ ...prev, [txId]: value }));
+                }
+
+                const getWorkerTotalsForDay = () => {
+                    const totals = {};
+                    workers.forEach(w => {
+                        totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id };
+                    });
+                    dailyTransactions.forEach(tx => {
+                        if (tx.status === 'approved' && totals[tx.workerId]) {
+                            totals[tx.workerId].total += tx.workerSubmittedAmount;
+                        }
+                    });
+                    return Object.values(totals);
+                }
+
+                const getWorkerAllTimeTotals = () => {
+                    const totals = {};
+                    workers.forEach(w => {
+                        totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id };
+                    });
+                    transactions.forEach(tx => {
+                        if (tx.status === 'approved' && totals[tx.workerId]) {
+                            totals[tx.workerId].total += tx.workerSubmittedAmount;
+                        }
+                    });
+                    return Object.values(totals);
+                }
+
+                const workerDailyTotals = getWorkerTotalsForDay();
+                const workerAllTimeTotals = getWorkerAllTimeTotals();
+                const totalClubEarningsDay = workerDailyTotals.reduce((sum, w) => sum + w.total, 0);
+                const totalHouseTakeDay = workerDailyTotals.reduce((sum, w) => sum + (w.total * w.split.house), 0);
+
+                return React.createElement('div', { className: "p-4 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8" },
+                    React.createElement('div', { className: "lg:col-span-1" },
+                        React.createElement('div', { className: "flex justify-between items-center mb-4" },
+                            React.createElement('h2', { className: "text-2xl font-bold text-white" }, "Admin Tools"),
+                            React.createElement('button', { onClick: () => setView('adminAddWorker'), className: "flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white transition-transform duration-200 transform bg-blue-600 rounded-md hover:bg-blue-700 active:scale-95" }, React.createElement(UserPlus, { size: 16 }), " Add Worker")
+                        ),
+                        React.createElement(Calendar, { selectedDate, onDateChange: setSelectedDate, transactions }),
+                        React.createElement('div', { className: "bg-gray-800 p-4 rounded-lg mt-4" },
+                            React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "Daily Worker Payouts"),
+                            React.createElement('div', { className: "space-y-2" },
+                                workerDailyTotals.map(w =>
+                                    React.createElement('div', { key: w.id, className: "flex justify-between items-center text-sm" },
+                                        React.createElement('span', { className: "font-semibold text-white" }, w.name),
+                                        React.createElement('span', { className: "font-bold text-pink-400" }, `$${(w.total * w.split.worker).toFixed(2)}`)
+                                    )
+                                )
+                            )
+                        ),
+                        React.createElement('div', { className: "bg-gray-800 p-4 rounded-lg mt-4" },
+                            React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "All-Time Worker Payouts"),
+                            React.createElement('div', { className: "space-y-2" },
+                                workerAllTimeTotals.map(w =>
+                                    React.createElement('div', { key: w.id, className: "flex justify-between items-center text-sm" },
+                                        React.createElement('span', { className: "font-semibold text-white" }, w.name),
+                                        React.createElement('span', { className: "font-bold text-green-400" }, `$${(w.total * w.split.worker).toFixed(2)}`)
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    React.createElement('div', { className: "lg:col-span-2" },
+                        React.createElement('h2', { className: "text-2xl font-bold text-white mb-2" }, "Daily Summary"),
+                        React.createElement('p', { className: "text-lg text-pink-400 mb-4" }, formatDate(selectedDate)),
+                        React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" },
+                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "Club Earnings (Day)"), React.createElement('p', { className: "text-3xl font-bold text-green-400" }, `$${totalClubEarningsDay.toFixed(2)}`)),
+                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "House Take (Day)"), React.createElement('p', { className: "text-3xl font-bold text-pink-400" }, `$${totalHouseTakeDay.toFixed(2)}`))
+                        ),
+                        React.createElement('div', { className: "grid grid-cols-1 xl:grid-cols-2 gap-8" },
+                            React.createElement('div', null,
+                                React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "Worker Totals (Day)"),
+                                React.createElement('div', { className: "space-y-3" },
+                                    workerDailyTotals.map(w =>
+                                        React.createElement('div', { key: w.id, onClick: () => { setSelectedWorkerId(w.id); setView('adminWorkerDetail'); }, className: "bg-gray-800 p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-700 transition-colors" },
+                                            React.createElement('p', { className: "font-bold text-white text-lg" }, w.name),
+                                            React.createElement('p', { className: "font-semibold text-green-400 text-lg" }, `$${w.total.toFixed(2)}`)
+                                        )
+                                    )
+                                )
+                            ),
+                            React.createElement('div', null,
+                                React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, `Pending Verifications (${pendingTransactions.length})`),
+                                React.createElement('div', { className: "space-y-4 max-h-96 overflow-y-auto pr-2" },
+                                    pendingTransactions.length > 0 ? pendingTransactions.map(tx =>
+                                        React.createElement('div', { key: tx.id, className: "bg-gray-800 p-4 rounded-lg" },
+                                            React.createElement('div', { className: "flex justify-between items-center mb-3" },
+                                                React.createElement('div', null, React.createElement('p', { className: "font-bold text-white" }, `${tx.workerName} - `, React.createElement('span', { className: "font-mono text-pink-400" }, tx.transactionCode)), React.createElement('p', { className: "text-sm text-gray-400" }, `Submitted: $${tx.workerSubmittedAmount.toFixed(2)}`)),
+                                                React.createElement(StatusBadge, { status: tx.status })
+                                            ),
+                                            React.createElement('div', { className: "flex gap-2" },
+                                                React.createElement('input', { type: "number", placeholder: "Enter counted amount", value: verificationAmounts[tx.id] || '', onChange: e => handleAmountChange(tx.id, e.target.value), className: "flex-grow px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" }),
+                                                React.createElement('button', { onClick: () => handleVerification(tx.id, verificationAmounts[tx.id] || 0), disabled: !verificationAmounts[tx.id], className: "px-4 py-2 font-semibold text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed" }, "Verify")
+                                            )
+                                        )
+                                    ) : React.createElement('p', { className: "text-gray-400" }, "No pending transactions for this day.")
+                                )
+                            )
+                        )
+                    )
+                );
+            };
+
+            const AdminWorkerDetail = ({ users, selectedWorkerId, transactions, selectedDate, setView }) => {
+                const { useMemo } = React;
+                const { Edit } = LucideIcons;
+                const selectedWorkerProfile = useMemo(() => users.find(u => u.id === selectedWorkerId), [users, selectedWorkerId]);
+
+                const dailyTransactions = useMemo(() => {
+                    return transactions.filter(t => t.workerId === selectedWorkerId && isSameDay(new Date(t.submissionTimestamp), selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
+                }, [transactions, selectedWorkerId, selectedDate]);
+
+                const allTimeTransactions = useMemo(() => {
+                    return transactions.filter(t => t.workerId === selectedWorkerId);
+                }, [transactions, selectedWorkerId]);
+
+                if (!selectedWorkerProfile) return React.createElement('div', { className: "p-8 text-white" }, "Worker not found.");
+
+                const dailyApprovedTotal = dailyTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
+                const allTimeApprovedTotal = allTimeTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
+
+                const { payoutSplit } = selectedWorkerProfile;
+                const dailyWorkerTake = dailyApprovedTotal * payoutSplit.worker;
+                const dailyHouseTake = dailyApprovedTotal * payoutSplit.house;
+                const allTimeWorkerTake = allTimeApprovedTotal * payoutSplit.worker;
+                const allTimeHouseTake = allTimeApprovedTotal * payoutSplit.house;
+
+                return React.createElement('div', { className: "p-4 md:p-8" },
+                    React.createElement('div', { className: "flex justify-between items-start" },
+                        React.createElement('button', { onClick: () => setView('adminDashboard'), className: "mb-6 text-pink-400 hover:text-pink-300" }, "\u2190 Back to Dashboard"),
+                        React.createElement('button', { onClick: () => setView('adminEditWorker'), className: "flex items-center gap-2 px-4 py-2 font-semibold text-white transition-transform duration-200 transform bg-yellow-600 rounded-md hover:bg-yellow-700 active:scale-95" },
+                            React.createElement(Edit, { size: 16 }), " Edit Worker"
+                        )
+                    ),
+                    React.createElement('h2', { className: "text-3xl font-bold text-white mb-2 mt-4" }, `${selectedWorkerProfile.name}'s Summary`),
+                    React.createElement('div', { className: "mb-8 p-4 border border-gray-700 rounded-lg" },
+                        React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "All-Time Totals"),
+                        React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-3 gap-4" },
+                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, "Total Approved"), React.createElement('p', { className: "text-3xl font-bold text-green-400" }, `$${allTimeApprovedTotal.toFixed(2)}`)),
+                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, `Total Payout (${payoutSplit.worker * 100}%)`), React.createElement('p', { className: "text-3xl font-bold text-pink-400" }, `$${allTimeWorkerTake.toFixed(2)}`)),
+                            React.createElement('div', { className: "p-4 bg-gray-800 rounded-lg" }, React.createElement('h3', { className: "text-gray-400 text-sm" }, `Total House Take (${payoutSplit.house * 100}%)`), React.createElement('p', { className: "text-3xl font-bold text-blue-400" }, `$${allTimeHouseTake.toFixed(2)}`))
+                        )
+                    ),
+                    React.createElement('p', { className: "text-lg text-pink-400 mb-4 font-bold" }, formatDate(selectedDate)),
+                    React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" },
+                        React.createElement('div', { className: "p-4 bg-gray-700 rounded-lg" }, React.createElement('h3', { className: "text-gray-300 text-sm" }, "Approved (Day)"), React.createElement('p', { className: "text-2xl font-bold text-green-300" }, `$${dailyApprovedTotal.toFixed(2)}`)),
+                        React.createElement('div', { className: "p-4 bg-gray-700 rounded-lg" }, React.createElement('h3', { className: "text-gray-300 text-sm" }, "Payout (Day)"), React.createElement('p', { className: "text-2xl font-bold text-pink-300" }, `$${dailyWorkerTake.toFixed(2)}`)),
+                        React.createElement('div', { className: "p-4 bg-gray-700 rounded-lg" }, React.createElement('h3', { className: "text-gray-300 text-sm" }, "House Take (Day)"), React.createElement('p', { className: "text-2xl font-bold text-blue-300" }, `$${dailyHouseTake.toFixed(2)}`))
+                    ),
+                    React.createElement('h3', { className: "text-xl font-bold text-white mb-4" }, "Transaction History (Day)"),
+                    React.createElement('div', { className: "space-y-4" },
+                        dailyTransactions.length > 0 ? dailyTransactions.map(tx =>
+                            React.createElement('div', { key: tx.id, className: "bg-gray-800 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4" },
+                                React.createElement('div', null, React.createElement('p', { className: "font-bold text-white" }, "ID: ", React.createElement('span', { className: "font-mono text-pink-400" }, tx.transactionCode)), React.createElement('p', { className: "text-sm text-gray-400" }, new Date(tx.submissionTimestamp).toLocaleTimeString())),
+                                React.createElement('div', { className: "text-left md:text-right" }, React.createElement('p', { className: "text-lg font-bold text-white" }, `Submitted: $${tx.workerSubmittedAmount.toFixed(2)}`), tx.managerVerifiedAmount !== null && React.createElement('p', { className: "text-md font-semibold text-yellow-400" }, `Verified: $${tx.managerVerifiedAmount.toFixed(2)}`)),
+                                React.createElement(StatusBadge, { status: tx.status })
+                            )
+                        ) : React.createElement('p', { className: "text-gray-400" }, "No transactions found for this worker on this day.")
+                    )
+                );
+            };
+
+            const AddWorkerForm = ({ isEdit = false, users, selectedWorkerId, setView, handleAddWorker, handleUpdateWorker }) => {
+                const { useState } = React;
+                const workerToEdit = isEdit ? users.find(u => u.id === selectedWorkerId) : null;
+
+                const [name, setName] = useState(workerToEdit?.name || '');
+                const [pin, setPin] = useState(workerToEdit?.pin || '');
+                const [split, setSplit] = useState(workerToEdit ? workerToEdit.payoutSplit.worker * 100 : '70');
+
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    if (isEdit) {
+                        handleUpdateWorker(selectedWorkerId, name, pin, split);
+                    } else {
+                        handleAddWorker(name, pin, split);
+                    }
+                }
+
+                return React.createElement('div', { className: "p-4 md:p-8" },
+                    React.createElement('button', { onClick: () => setView(isEdit ? 'adminWorkerDetail' : 'adminDashboard'), className: "mb-6 text-pink-400 hover:text-pink-300" }, "\u2190 Back"),
+                    React.createElement('div', { className: "max-w-md mx-auto bg-gray-800 p-8 rounded-lg" },
+                        React.createElement('h2', { className: "text-2xl font-bold text-white mb-6" }, isEdit ? 'Edit Worker Profile' : 'Add New Worker'),
+                        React.createElement('form', { onSubmit: handleSubmit, className: "space-y-4" },
+                            React.createElement('div', null, React.createElement('label', { htmlFor: "worker-name", className: "block text-sm font-medium text-gray-300" }, "Worker Name"), React.createElement('input', { type: "text", id: "worker-name", value: name, onChange: e => setName(e.target.value), className: "w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500", required: true })),
+                            React.createElement('div', null, React.createElement('label', { htmlFor: "worker-pin", className: "block text-sm font-medium text-gray-300" }, "4-Digit PIN"), React.createElement('input', { type: "text", pattern: "\\d{4}", title: "PIN must be 4 digits", id: "worker-pin", value: pin, onChange: e => setPin(e.target.value), className: "w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500", required: true })),
+                            React.createElement('div', null, React.createElement('label', { htmlFor: "worker-split", className: "block text-sm font-medium text-gray-300" }, "Worker Payout Split (%)"), React.createElement('input', { type: "number", min: "0", max: "100", id: "worker-split", value: split, onChange: e => setSplit(e.target.value), className: "w-full px-3 py-2 mt-1 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500", required: true })),
+                            React.createElement('button', { type: "submit", className: "w-full py-3 font-semibold text-white transition-transform duration-200 transform bg-pink-600 rounded-md hover:bg-pink-700 active:scale-95" },
+                                isEdit ? 'Save Changes' : 'Create Worker Profile'
+                            )
+                        )
+                    )
+                );
+            }
+
+            // --- Main App Component ---
+            function App() {
+              const { useState, useEffect, useMemo } = React;
+              const { LogOut } = LucideIcons;
+
+              const [users, setUsers] = useState([]);
+              const [transactions, setTransactions] = useState([]);
+              const [currentUser, setCurrentUser] = useState(null);
+              const [view, setView] = useState('login');
+              const [selectedWorkerId, setSelectedWorkerId] = useState(null);
+              const [loginError, setLoginError] = useState('');
+              const [pinInput, setPinInput] = useState('');
+              const [selectedLoginUser, setSelectedLoginUser] = useState('');
+              const [selectedDate, setSelectedDate] = useState(new Date());
+
+              useEffect(() => {
+                const unsubscribeUsers = db.collection('users').onSnapshot(snapshot => {
+                    const usersData = snapshot.docs.map(doc => doc.data());
+                    setUsers(usersData);
+                    if (!selectedLoginUser && usersData.length > 0) {
+                      setSelectedLoginUser(usersData[0].id);
+                    }
+                }, (error) => {
+                    console.error("Error fetching users:", error);
+                    alert("Failed to load user data. The application may not function correctly.");
+                });
+
+                const unsubscribeTransactions = db.collection('transactions').onSnapshot(snapshot => {
+                    const transactionsData = snapshot.docs.map(doc => doc.data());
+                    setTransactions(transactionsData);
+                }, (error) => {
+                    console.error("Error fetching transactions:", error);
+                });
+
+                return () => {
+                  unsubscribeUsers();
+                  unsubscribeTransactions();
+                };
+              }, []);
+
+              const workers = useMemo(() => users.filter(u => u.role === 'worker'), [users]);
+
+              const handleLogin = (e) => {
+                e.preventDefault();
+                const user = users.find(u => u.id === selectedLoginUser);
+                if (user && user.pin === pinInput) {
+                  setCurrentUser(user);
+                  setView(user.role === 'admin' ? 'adminDashboard' : 'workerDashboard');
+                  setLoginError('');
+                  setPinInput('');
+                  setSelectedDate(new Date());
+                } else {
+                  setLoginError('Invalid PIN. Please try again.');
+                }
+              };
+
+              const handleLogout = () => {
+                setCurrentUser(null);
+                setView('login');
+                setSelectedWorkerId(null);
+              };
+
+              const handleAddTransaction = async (amount) => {
+                if (!amount || amount <= 0) return;
+                const transactionId = `txn-${Date.now()}`;
+                const newTransaction = {
+                  id: transactionId,
+                  workerId: currentUser.id,
+                  workerName: currentUser.name,
+                  transactionCode: `${currentUser.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
+                  workerSubmittedAmount: parseFloat(amount),
+                  managerVerifiedAmount: null,
+                  status: 'pending',
+                  submissionTimestamp: new Date().toISOString(),
+                  verificationTimestamp: null,
+                };
+                await db.collection('transactions').doc(transactionId).set(newTransaction);
+              };
+
+              const handleVerification = async (txId, managerAmount) => {
+                const txRef = db.collection('transactions').doc(txId);
+                const txDoc = await txRef.get();
+                if (txDoc.exists) {
+                    const tx = txDoc.data();
+                    const workerAmount = tx.workerSubmittedAmount;
+                    const status = parseFloat(managerAmount) === workerAmount ? 'approved' : 'disputed';
+                    await txRef.update({
+                        managerVerifiedAmount: parseFloat(managerAmount),
+                        status,
+                        verificationTimestamp: new Date().toISOString(),
+                    });
+                }
+              };
+
+              const handleWorkerAcceptance = async (txId) => {
+                 const txRef = db.collection('transactions').doc(txId);
+                 const txDoc = await txRef.get();
+                 if (txDoc.exists && txDoc.data().status === 'disputed') {
+                    await txRef.update({
+                        status: 'approved',
+                        workerSubmittedAmount: txDoc.data().managerVerifiedAmount
+                    });
+                 }
+              };
+
+              const handleAddWorker = async (name, pin, split) => {
+                  if (!name || !pin || !split) return;
+                  const workerId = `worker-${Date.now()}`;
+                  const newWorker = {
+                      id: workerId,
+                      name,
+                      role: 'worker',
+                      pin,
+                      payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
+                  };
+                  await db.collection('users').doc(workerId).set(newWorker);
+                  setView('adminDashboard');
+              };
+
+              const handleUpdateWorker = async (id, name, pin, split) => {
+                if (!id || !name || !pin || !split) return;
+                const workerRef = db.collection('users').doc(id);
+                await workerRef.update({
+                    name,
+                    pin,
+                    payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
+                });
+                setView('adminWorkerDetail');
+              };
+
+              const renderView = () => {
+                switch (view) {
+                  case 'workerDashboard':
+                    return React.createElement(WorkerDashboard, { currentUser, transactions, selectedDate, setSelectedDate, handleAddTransaction, handleWorkerAcceptance });
+                  case 'adminDashboard':
+                    return React.createElement(AdminDashboard, { workers, transactions, selectedDate, setView, setSelectedWorkerId, setSelectedDate, handleVerification });
+                  case 'adminWorkerDetail':
+                    return React.createElement(AdminWorkerDetail, { users, selectedWorkerId, transactions, selectedDate, setView });
+                  case 'adminAddWorker':
+                    return React.createElement(AddWorkerForm, { isEdit: false, users, setView, handleAddWorker });
+                  case 'adminEditWorker':
+                    return React.createElement(AddWorkerForm, { isEdit: true, users, selectedWorkerId, setView, handleUpdateWorker });
+                  case 'login':
+                  default:
+                    return React.createElement(LoginScreen, { users, selectedLoginUser, pinInput, loginError, handleLogin, setSelectedLoginUser, setPinInput });
+                }
+              };
+
+              return React.createElement('div', { className: "min-h-screen bg-gray-900 text-gray-100 font-sans" },
+                currentUser && React.createElement('header', { className: "bg-gray-800 p-4 flex justify-between items-center shadow-md" },
+                    React.createElement('div', null,
+                        React.createElement('h1', { className: "text-xl font-bold text-white" }, "TipTally"),
+                        React.createElement('p', { className: "text-sm text-gray-400" }, "Logged in as: ", React.createElement('span', { className: "font-semibold text-pink-400" }, currentUser.name))
+                    ),
+                    React.createElement('button', { onClick: handleLogout, className: "flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white transition-colors bg-gray-700 rounded-md hover:bg-gray-600" }, React.createElement(LogOut, { size: 16 }), "Logout")
+                ),
+                React.createElement('main', null, renderView())
+              );
+            }
+
+            // Use the modern React 18 createRoot API
+            const container = document.getElementById('root');
+            const root = ReactDOM.createRoot(container);
+            root.render(React.createElement(App));
+
+        } catch (error) {
+            console.error("A critical error occurred while loading the application:", error);
+            document.getElementById('root').innerHTML = '<div style="color: white; padding: 2rem; text-align: center;"><h2>Application Failed to Load</h2><p>There was a critical error. Please check the console for details.</p></div>';
+        }
+    };
     </script>
 </body>
 </html>
