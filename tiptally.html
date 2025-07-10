@@ -11,6 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
+        /* Default (Dark Mode) Theme */
         :root {
             --bg-primary: #111827; /* Gray 900 */
             --bg-secondary: #1f2937; /* Gray 800 */
@@ -25,10 +26,23 @@
             --brand-yellow: #f59e0b; /* Amber 500 */
             --brand-blue: #3b82f6; /* Blue 500 */
         }
+
+        /* Light Mode Theme */
+        body.light-mode {
+            --bg-primary: #f3f4f6; /* Gray 100 */
+            --bg-secondary: #ffffff; /* White */
+            --bg-tertiary: #e5e7eb; /* Gray 200 */
+            --border-color: #d1d5db; /* Gray 300 */
+            --text-primary: #111827; /* Gray 900 */
+            --text-secondary: #4b5563; /* Gray 600 */
+            --text-muted: #6b7280; /* Gray 500 */
+        }
+
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-primary);
             color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
         }
         .font-mono {
             font-family: 'Roboto Mono', monospace;
@@ -61,7 +75,7 @@
             border-radius: 0.5rem;
             padding: 0.75rem 1rem;
             color: var(--text-primary);
-            transition: border-color 0.2s, box-shadow 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s, background-color 0.3s;
         }
         .input-field:focus {
             outline: none;
@@ -73,6 +87,7 @@
             border-radius: 0.75rem;
             padding: 1.5rem;
             border: 1px solid var(--border-color);
+            transition: background-color 0.3s, border-color 0.3s;
         }
         .hidden {
             display: none !important;
@@ -197,7 +212,10 @@
                         <h1 class="text-xl font-bold text-white">TipTally</h1>
                         <p class="text-sm text-text-muted">Logged in as: <span class="font-semibold text-brand-pink">${state.currentUser?.name}</span></p>
                     </div>
-                    <button data-action="logout" class="btn bg-bg-tertiary hover:bg-gray-600 text-white">Logout</button>
+                    <div class="flex items-center gap-4">
+                        <button data-action="toggle-theme" class="btn bg-bg-tertiary hover:bg-gray-600 text-white">Toggle Theme</button>
+                        <button data-action="logout" class="btn bg-bg-tertiary hover:bg-gray-600 text-white">Logout</button>
+                    </div>
                 </header>
                 <main class="p-4 md:p-8">${content}</main>
             `;
@@ -436,6 +454,11 @@
             switch(action) {
                 case 'login': handleLogin(); break;
                 case 'logout': handleLogout(); break;
+                case 'toggle-theme': handleToggleTheme(); break;
+                case 'select-date':
+                    state.selectedDate = new Date(target.dataset.date);
+                    render();
+                    break;
                 case 'select-date':
                     state.selectedDate = new Date(target.dataset.date);
                     render();
@@ -493,6 +516,11 @@
             state.currentUser = null;
             state.view = 'login';
             render();
+        }
+
+        function handleToggleTheme() {
+            const isLight = document.body.classList.toggle('light-mode');
+            localStorage.setItem('tipTallyTheme', isLight ? 'light' : 'dark');
         }
         
         async function handleAddTransaction() {
@@ -565,6 +593,10 @@
 
         // --- Initializer ---
         async function init() {
+            function applyTheme() {
+                const savedTheme = localStorage.getItem('tipTallyTheme') || 'dark';
+                document.body.classList.toggle('light-mode', savedTheme === 'light');
+            }
             // Seed data if necessary
             const usersRef = db.collection('users');
             try {
