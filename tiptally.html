@@ -43,6 +43,8 @@
             if (!LucideIcons) {
                 throw new Error("LucideReact icon library failed to load.");
             }
+            const { CheckCircle, AlertTriangle, List, ChevronLeft, ChevronRight, UserPlus, Edit, LogOut } = LucideIcons;
+
 
             // --- Helper Functions & Initial Data ---
             const getInitialData = async () => {
@@ -89,7 +91,6 @@
             // --- UI Components (Stateless) ---
 
             const StatusBadge = ({ status }) => {
-                const { CheckCircle, AlertTriangle, List } = LucideIcons;
                 const baseClasses = "px-2 py-1 text-xs font-bold rounded-full text-white inline-flex items-center";
                 switch (status) {
                   case 'approved':
@@ -106,7 +107,6 @@
             };
 
             const Calendar = ({ selectedDate, onDateChange, transactions }) => {
-                const { ChevronLeft, ChevronRight } = LucideIcons;
                 const { useState, useEffect, useMemo } = React;
                 const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
 
@@ -270,7 +270,6 @@
 
             const AdminDashboard = ({ workers, transactions, selectedDate, setView, setSelectedWorkerId, setSelectedDate, handleVerification }) => {
                 const { useState, useMemo } = React;
-                const { UserPlus } = LucideIcons;
                 const [verificationAmounts, setVerificationAmounts] = useState({});
 
                 const dailyTransactions = useMemo(() => {
@@ -289,8 +288,9 @@
                         totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id };
                     });
                     dailyTransactions.forEach(tx => {
-                        if (tx.status === 'approved' && totals[tx.workerId]) {
-                            totals[tx.workerId].total += tx.workerSubmittedAmount;
+                        const amount = tx.status === 'approved' ? (tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : tx.workerSubmittedAmount) : 0;
+                        if (totals[tx.workerId]) {
+                            totals[tx.workerId].total += amount;
                         }
                     });
                     return Object.values(totals);
@@ -302,8 +302,9 @@
                         totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id };
                     });
                     transactions.forEach(tx => {
-                        if (tx.status === 'approved' && totals[tx.workerId]) {
-                            totals[tx.workerId].total += tx.workerSubmittedAmount;
+                         const amount = tx.status === 'approved' ? (tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : tx.workerSubmittedAmount) : 0;
+                        if (totals[tx.workerId]) {
+                            totals[tx.workerId].total += amount;
                         }
                     });
                     return Object.values(totals);
@@ -374,7 +375,7 @@
                                             ),
                                             React.createElement('div', { className: "flex gap-2" },
                                                 React.createElement('input', { type: "number", placeholder: "Enter counted amount", value: verificationAmounts[tx.id] || '', onChange: e => handleAmountChange(tx.id, e.target.value), className: "flex-grow px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500" }),
-                                                React.createElement('button', { onClick: () => handleVerification(tx.id, verificationAmounts[tx.id] || 0), disabled: !verificationAmounts[tx.id], className: "px-4 py-2 font-semibold text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed" }, "Verify")
+                                                React.createElement('button', { onClick: () => handleVerification(tx.id, verificationAmounts[tx.id] || tx.workerSubmittedAmount), disabled: !verificationAmounts[tx.id], className: "px-4 py-2 font-semibold text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed" }, "Verify")
                                             )
                                         )
                                     ) : React.createElement('p', { className: "text-gray-400" }, "No pending transactions for this day.")
@@ -387,7 +388,6 @@
 
             const AdminWorkerDetail = ({ users, selectedWorkerId, transactions, selectedDate, setView }) => {
                 const { useMemo } = React;
-                const { Edit } = LucideIcons;
                 const selectedWorkerProfile = useMemo(() => users.find(u => u.id === selectedWorkerId), [users, selectedWorkerId]);
 
                 const dailyTransactions = useMemo(() => {
@@ -400,8 +400,10 @@
 
                 if (!selectedWorkerProfile) return React.createElement('div', { className: "p-8 text-white" }, "Worker not found.");
 
-                const dailyApprovedTotal = dailyTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
-                const allTimeApprovedTotal = allTimeTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
+                const getApprovedAmount = (tx) => tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : tx.workerSubmittedAmount;
+
+                const dailyApprovedTotal = dailyTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + getApprovedAmount(t), 0);
+                const allTimeApprovedTotal = allTimeTransactions.filter(t => t.status === 'approved').reduce((sum, t) => sum + getApprovedAmount(t), 0);
 
                 const { payoutSplit } = selectedWorkerProfile;
                 const dailyWorkerTake = dailyApprovedTotal * payoutSplit.worker;
@@ -480,7 +482,6 @@
             // --- Main App Component ---
             function App() {
               const { useState, useEffect, useMemo } = React;
-              const { LogOut } = LucideIcons;
 
               const [users, setUsers] = useState([]);
               const [transactions, setTransactions] = useState([]);
@@ -494,7 +495,7 @@
 
               useEffect(() => {
                 const unsubscribeUsers = db.collection('users').onSnapshot(snapshot => {
-                    const usersData = snapshot.docs.map(doc => doc.data());
+                    const usersData = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
                     setUsers(usersData);
                     if (!selectedLoginUser && usersData.length > 0) {
                       setSelectedLoginUser(usersData[0].id);
@@ -505,7 +506,7 @@
                 });
 
                 const unsubscribeTransactions = db.collection('transactions').onSnapshot(snapshot => {
-                    const transactionsData = snapshot.docs.map(doc => doc.data());
+                    const transactionsData = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
                     setTransactions(transactionsData);
                 }, (error) => {
                     console.error("Error fetching transactions:", error);
@@ -541,9 +542,7 @@
 
               const handleAddTransaction = async (amount) => {
                 if (!amount || amount <= 0) return;
-                const transactionId = `txn-${Date.now()}`;
                 const newTransaction = {
-                  id: transactionId,
                   workerId: currentUser.id,
                   workerName: currentUser.name,
                   transactionCode: `${currentUser.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
@@ -553,18 +552,24 @@
                   submissionTimestamp: new Date().toISOString(),
                   verificationTimestamp: null,
                 };
-                await db.collection('transactions').doc(transactionId).set(newTransaction);
+                // Firestore will generate the ID
+                await db.collection('transactions').add(newTransaction);
               };
 
-              const handleVerification = async (txId, managerAmount) => {
+              const handleVerification = async (txId, managerAmountStr) => {
+                const managerAmount = parseFloat(managerAmountStr)
+                if (isNaN(managerAmount)) {
+                    alert('Please enter a valid number for verification.');
+                    return;
+                }
                 const txRef = db.collection('transactions').doc(txId);
                 const txDoc = await txRef.get();
                 if (txDoc.exists) {
                     const tx = txDoc.data();
                     const workerAmount = tx.workerSubmittedAmount;
-                    const status = parseFloat(managerAmount) === workerAmount ? 'approved' : 'disputed';
+                    const status = managerAmount === workerAmount ? 'approved' : 'disputed';
                     await txRef.update({
-                        managerVerifiedAmount: parseFloat(managerAmount),
+                        managerVerifiedAmount: managerAmount,
                         status,
                         verificationTimestamp: new Date().toISOString(),
                     });
@@ -577,6 +582,7 @@
                  if (txDoc.exists && txDoc.data().status === 'disputed') {
                     await txRef.update({
                         status: 'approved',
+                        // The workerSubmittedAmount is now updated to the manager's count upon acceptance
                         workerSubmittedAmount: txDoc.data().managerVerifiedAmount
                     });
                  }
@@ -584,15 +590,14 @@
 
               const handleAddWorker = async (name, pin, split) => {
                   if (!name || !pin || !split) return;
-                  const workerId = `worker-${Date.now()}`;
                   const newWorker = {
-                      id: workerId,
                       name,
                       role: 'worker',
                       pin,
                       payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
                   };
-                  await db.collection('users').doc(workerId).set(newWorker);
+                  // Firestore will generate the ID
+                  await db.collection('users').add(newWorker);
                   setView('adminDashboard');
               };
 
