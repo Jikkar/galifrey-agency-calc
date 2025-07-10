@@ -11,8 +11,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        /* Default (Dark Mode) Theme */
-        :root {
+        /* --- START: Duda Override Fix --- */
+        /* All styles are now scoped to the #tiptally-app-wrapper to increase specificity. */
+        /* The `!important` rule is used to ensure these styles take priority over Duda's global CSS. */
+        #tiptally-app-wrapper {
             --bg-primary: #111827; /* Gray 900 */
             --bg-secondary: #1f2937; /* Gray 800 */
             --bg-tertiary: #374151; /* Gray 700 */
@@ -25,10 +27,12 @@
             --brand-green: #22c55e; /* Green 500 */
             --brand-yellow: #f59e0b; /* Amber 500 */
             --brand-blue: #3b82f6; /* Blue 500 */
+            
+            font-family: 'Inter', sans-serif !important;
+            background-color: var(--bg-primary) !important;
+            color: var(--text-primary) !important;
         }
-
-        /* Light Mode Theme */
-        body.light-mode {
+        #tiptally-app-wrapper.light-mode {
             --bg-primary: #f3f4f6; /* Gray 100 */
             --bg-secondary: #ffffff; /* White */
             --bg-tertiary: #e5e7eb; /* Gray 200 */
@@ -37,17 +41,16 @@
             --text-secondary: #4b5563; /* Gray 600 */
             --text-muted: #6b7280; /* Gray 500 */
         }
+        /* --- END: Duda Override Fix --- */
 
         body {
+            /* Body styles are minimal to avoid conflicts */
             font-family: 'Inter', sans-serif;
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            transition: background-color 0.3s, color 0.3s;
         }
-        .font-mono {
-            font-family: 'Roboto Mono', monospace;
+        #tiptally-app-wrapper .font-mono {
+            font-family: 'Roboto Mono', monospace !important;
         }
-        .btn {
+        #tiptally-app-wrapper .btn {
             padding: 0.75rem 1.25rem;
             border-radius: 0.5rem;
             font-weight: 600;
@@ -56,51 +59,90 @@
             border: none;
             cursor: pointer;
         }
-        .btn-primary {
-            background-color: var(--brand-pink);
-            color: white;
+        #tiptally-app-wrapper .btn-primary {
+            background-color: var(--brand-pink) !important;
+            color: white !important;
         }
-        .btn-primary:hover {
-            background-color: var(--brand-pink-hover);
+        #tiptally-app-wrapper .btn-primary:hover {
+            background-color: var(--brand-pink-hover) !important;
         }
-        .btn-primary:disabled {
-            background-color: var(--bg-tertiary);
+        #tiptally-app-wrapper .btn-primary:disabled {
+            background-color: var(--bg-tertiary) !important;
             cursor: not-allowed;
             opacity: 0.6;
         }
-        .input-field {
+        #tiptally-app-wrapper .input-field {
             width: 100%;
-            background-color: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary) !important;
+            border: 1px solid var(--border-color) !important;
             border-radius: 0.5rem;
             padding: 0.75rem 1rem;
-            color: var(--text-primary);
+            color: var(--text-primary) !important;
             transition: border-color 0.2s, box-shadow 0.2s, background-color 0.3s;
         }
-        .input-field:focus {
-            outline: none;
-            border-color: var(--brand-pink);
-            box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.3);
+        #tiptally-app-wrapper .input-field:focus {
+            outline: none !important;
+            border-color: var(--brand-pink) !important;
+            box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.3) !important;
         }
-        .card {
-            background-color: var(--bg-secondary);
+        #tiptally-app-wrapper .card {
+            background-color: var(--bg-secondary) !important;
             border-radius: 0.75rem;
             padding: 1.5rem;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--border-color) !important;
             transition: background-color 0.3s, border-color 0.3s;
         }
-        .hidden {
+        #tiptally-app-wrapper .hidden {
             display: none !important;
+        }
+        /* Scoped text color overrides */
+        #tiptally-app-wrapper h1, 
+        #tiptally-app-wrapper h2, 
+        #tiptally-app-wrapper h3, 
+        #tiptally-app-wrapper h4, 
+        #tiptally-app-wrapper p, 
+        #tiptally-app-wrapper div,
+        #tiptally-app-wrapper span,
+        #tiptally-app-wrapper label,
+        #tiptally-app-wrapper button,
+        #tiptally-app-wrapper select,
+        #tiptally-app-wrapper option {
+            color: var(--text-primary);
+        }
+        #tiptally-app-wrapper .text-text-muted {
+            color: var(--text-muted) !important;
+        }
+        #tiptally-app-wrapper .text-text-secondary {
+             color: var(--text-secondary) !important;
+        }
+        #tiptally-app-wrapper .text-brand-pink {
+            color: var(--brand-pink) !important;
+        }
+         #tiptally-app-wrapper .text-brand-green {
+            color: var(--brand-green) !important;
+        }
+         #tiptally-app-wrapper .text-brand-blue {
+            color: var(--brand-blue) !important;
+        }
+         #tiptally-app-wrapper .text-brand-yellow {
+            color: var(--brand-yellow) !important;
+        }
+        #tiptally-app-wrapper .bg-bg-tertiary {
+            background-color: var(--bg-tertiary) !important;
         }
     </style>
 </head>
 <body>
-    <div id="app-container" class="min-h-screen">
-        <!-- App content is rendered here by JavaScript -->
-        <div class="flex items-center justify-center min-h-screen">
-            <p class="text-text-muted">Loading TipTally...</p>
+    <!-- START: Duda Override Fix - Added a wrapper div with a unique ID -->
+    <div id="tiptally-app-wrapper">
+        <div id="app-container" class="min-h-screen">
+            <!-- App content is rendered here by JavaScript -->
+            <div class="flex items-center justify-center min-h-screen">
+                <p class="text-text-muted">Loading TipTally...</p>
+            </div>
         </div>
     </div>
+    <!-- END: Duda Override Fix -->
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -131,6 +173,8 @@
 
         // --- DOM Elements ---
         const appContainer = document.getElementById('app-container');
+        const appWrapper = document.getElementById('tiptally-app-wrapper');
+
 
         // --- Helper Functions ---
         const isSameDay = (date1, date2) => {
@@ -183,7 +227,7 @@
                 <div class="flex items-center justify-center min-h-screen">
                     <div class="w-full max-w-sm p-8 space-y-6 card">
                         <div class="text-center">
-                            <h1 class="text-4xl font-bold text-white">TipTally</h1>
+                            <h1 class="text-4xl font-bold text-primary">TipTally</h1>
                             <p class="text-text-muted mt-2">Streamlined Earnings Management</p>
                         </div>
                         <div class="space-y-4">
@@ -209,12 +253,12 @@
             return `
                 <header class="bg-bg-secondary p-4 flex justify-between items-center shadow-md border-b border-border-color">
                     <div>
-                        <h1 class="text-xl font-bold text-white">TipTally</h1>
+                        <h1 class="text-xl font-bold text-primary">TipTally</h1>
                         <p class="text-sm text-text-muted">Logged in as: <span class="font-semibold text-brand-pink">${state.currentUser?.name}</span></p>
                     </div>
                     <div class="flex items-center gap-4">
-                        <button data-action="toggle-theme" class="btn bg-bg-tertiary hover:bg-gray-600 text-white">Toggle Theme</button>
-                        <button data-action="logout" class="btn bg-bg-tertiary hover:bg-gray-600 text-white">Logout</button>
+                        <button data-action="toggle-theme" class="btn bg-bg-tertiary hover:bg-gray-600 text-primary">Toggle Theme</button>
+                        <button data-action="logout" class="btn bg-bg-tertiary hover:bg-gray-600 text-primary">Logout</button>
                     </div>
                 </header>
                 <main class="p-4 md:p-8">${content}</main>
@@ -240,7 +284,7 @@
                     </div>
                     <div class="lg:col-span-2 space-y-6">
                         <div>
-                            <h2 class="text-2xl font-bold text-white mb-1">My Daily Summary</h2>
+                            <h2 class="text-2xl font-bold text-primary mb-1">My Daily Summary</h2>
                             <p class="text-lg text-brand-pink">${formatDate(state.selectedDate)}</p>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -250,19 +294,19 @@
                         </div>
                         ${isToday ? `
                         <div class="card">
-                            <h3 class="text-xl font-bold text-white mb-4">Submit New Earnings</h3>
+                            <h3 class="text-xl font-bold text-primary mb-4">Submit New Earnings</h3>
                             <div class="flex flex-col md:flex-row gap-4">
                                 <input type="number" id="new-transaction-amount" placeholder="Enter amount" class="input-field flex-grow"/>
                                 <button data-action="add-transaction" class="btn btn-primary">Submit</button>
                             </div>
                         </div>` : ''}
                         <div>
-                            <h3 class="text-xl font-bold text-white mb-4">Submissions for this day</h3>
+                            <h3 class="text-xl font-bold text-primary mb-4">Submissions for this day</h3>
                             <div class="space-y-4">
                                 ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => `
                                 <div class="card flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                    <div><p class="font-bold text-white">ID: <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">${new Date(tx.submissionTimestamp).toLocaleTimeString()}</p></div>
-                                    <div class="text-left md:text-right"><p class="text-lg font-bold text-white">You Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p>${tx.status === 'disputed' ? `<p class="text-md font-semibold text-brand-yellow">Manager Counted: $${tx.managerVerifiedAmount.toFixed(2)}</p>` : ''}</div>
+                                    <div><p class="font-bold text-primary">ID: <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">${new Date(tx.submissionTimestamp).toLocaleTimeString()}</p></div>
+                                    <div class="text-left md:text-right"><p class="text-lg font-bold text-primary">You Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p>${tx.status === 'disputed' ? `<p class="text-md font-semibold text-brand-yellow">Manager Counted: $${tx.managerVerifiedAmount.toFixed(2)}</p>` : ''}</div>
                                     <div class="flex items-center gap-4 w-full md:w-auto">${renderStatusBadge(tx.status)} ${tx.status === 'disputed' ? `<button data-action="worker-accept" data-id="${tx.id}" class="btn text-xs bg-brand-green text-white">Accept</button>` : ''}</div>
                                 </div>`).join('') : `<p class="text-text-muted">No transactions submitted on this day.</p>`}
                             </div>
@@ -294,23 +338,23 @@
                     <div class="lg:col-span-1 space-y-4">
                         <div class="card">
                             <div class="flex justify-between items-center mb-4">
-                                <h2 class="text-xl font-bold text-white">Admin Tools</h2>
+                                <h2 class="text-xl font-bold text-primary">Admin Tools</h2>
                                 <button data-action="admin-add-worker-view" class="btn text-sm bg-brand-blue text-white">Add Worker</button>
                             </div>
                             ${renderCalendar()}
                         </div>
                         <div class="card">
-                            <h3 class="text-xl font-bold text-white mb-4">Daily Worker Payouts</h3>
-                            <div class="space-y-2">${workerDailyTotals.map(w => `<div class="flex justify-between items-center text-sm"><span class="font-semibold text-white">${w.name}</span><span class="font-bold text-brand-pink">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('')}</div>
+                            <h3 class="text-xl font-bold text-primary mb-4">Daily Worker Payouts</h3>
+                            <div class="space-y-2">${workerDailyTotals.map(w => `<div class="flex justify-between items-center text-sm"><span class="font-semibold text-primary">${w.name}</span><span class="font-bold text-brand-pink">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('')}</div>
                         </div>
                          <div class="card">
-                            <h3 class="text-xl font-bold text-white mb-4">All-Time Worker Payouts</h3>
-                            <div class="space-y-2">${workerAllTimeTotals.map(w => `<div class="flex justify-between items-center text-sm"><span class="font-semibold text-white">${w.name}</span><span class="font-bold text-brand-green">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('')}</div>
+                            <h3 class="text-xl font-bold text-primary mb-4">All-Time Worker Payouts</h3>
+                            <div class="space-y-2">${workerAllTimeTotals.map(w => `<div class="flex justify-between items-center text-sm"><span class="font-semibold text-primary">${w.name}</span><span class="font-bold text-brand-green">$${(w.total * w.split.worker).toFixed(2)}</span></div>`).join('')}</div>
                         </div>
                     </div>
                     <div class="lg:col-span-2 space-y-6">
                         <div>
-                            <h2 class="text-2xl font-bold text-white mb-1">Daily Summary</h2>
+                            <h2 class="text-2xl font-bold text-primary mb-1">Daily Summary</h2>
                             <p class="text-lg text-brand-pink">${formatDate(state.selectedDate)}</p>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -319,15 +363,15 @@
                         </div>
                         <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
                             <div class="card">
-                                <h3 class="text-xl font-bold text-white mb-4">Worker Totals (Day)</h3>
-                                <div class="space-y-3">${workerDailyTotals.map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="bg-bg-tertiary p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors"><p class="font-bold text-white text-lg">${w.name}</p><p class="font-semibold text-brand-green text-lg">$${w.total.toFixed(2)}</p></div>`).join('')}</div>
+                                <h3 class="text-xl font-bold text-primary mb-4">Worker Totals (Day)</h3>
+                                <div class="space-y-3">${workerDailyTotals.map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="bg-bg-tertiary p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors"><p class="font-bold text-primary text-lg">${w.name}</p><p class="font-semibold text-brand-green text-lg">$${w.total.toFixed(2)}</p></div>`).join('')}</div>
                             </div>
                             <div class="card">
-                                <h3 class="text-xl font-bold text-white mb-4">Pending Verifications (${pendingTransactions.length})</h3>
+                                <h3 class="text-xl font-bold text-primary mb-4">Pending Verifications (${pendingTransactions.length})</h3>
                                 <div class="space-y-4 max-h-96 overflow-y-auto pr-2">${pendingTransactions.length > 0 ? pendingTransactions.map(tx => `
                                     <div class="bg-bg-tertiary p-4 rounded-lg">
                                         <div class="flex justify-between items-center mb-3">
-                                            <div><p class="font-bold text-white">${tx.workerName} - <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p></div>
+                                            <div><p class="font-bold text-primary">${tx.workerName} - <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p></div>
                                             ${renderStatusBadge(tx.status)}
                                         </div>
                                         <div class="flex gap-2">
@@ -359,9 +403,9 @@
                         <button data-action="admin-dashboard-view" class="text-brand-pink hover:underline">&larr; Back to Dashboard</button>
                         <button data-action="admin-edit-worker-view" data-id="${worker.id}" class="btn text-sm bg-yellow-500 text-white">Edit Worker</button>
                     </div>
-                    <h2 class="text-3xl font-bold text-white mb-2">${worker.name}'s Summary</h2>
+                    <h2 class="text-3xl font-bold text-primary mb-2">${worker.name}'s Summary</h2>
                     <div class="mb-8 p-4 card mt-4">
-                        <h3 class="text-xl font-bold text-white mb-4">All-Time Totals</h3>
+                        <h3 class="text-xl font-bold text-primary mb-4">All-Time Totals</h3>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="card bg-bg-tertiary"><h3 class="text-text-muted text-sm">Total Approved</h3><p class="text-3xl font-bold text-brand-green">$${allTimeApprovedTotal.toFixed(2)}</p></div>
                             <div class="card bg-bg-tertiary"><h3 class="text-text-muted text-sm">Total Payout (${payoutSplit.worker * 100}%)</h3><p class="text-3xl font-bold text-brand-pink">$${(allTimeApprovedTotal * payoutSplit.worker).toFixed(2)}</p></div>
@@ -369,12 +413,12 @@
                         </div>
                     </div>
                     <p class="text-lg text-brand-pink mb-4 font-bold">${formatDate(state.selectedDate)}</p>
-                    <h3 class="text-xl font-bold text-white mb-4">Transaction History (Day)</h3>
+                    <h3 class="text-xl font-bold text-primary mb-4">Transaction History (Day)</h3>
                     <div class="space-y-4">
                         ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => `
                         <div class="card flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                            <div><p class="font-bold text-white">ID: <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">${new Date(tx.submissionTimestamp).toLocaleTimeString()}</p></div>
-                            <div class="text-left md:text-right"><p class="text-lg font-bold text-white">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p>${tx.managerVerifiedAmount !== null ? `<p class="text-md font-semibold text-brand-yellow">Verified: $${tx.managerVerifiedAmount.toFixed(2)}</p>` : ''}</div>
+                            <div><p class="font-bold text-primary">ID: <span class="font-mono text-brand-pink">${tx.transactionCode}</span></p><p class="text-sm text-text-muted">${new Date(tx.submissionTimestamp).toLocaleTimeString()}</p></div>
+                            <div class="text-left md:text-right"><p class="text-lg font-bold text-primary">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p>${tx.managerVerifiedAmount !== null ? `<p class="text-md font-semibold text-brand-yellow">Verified: $${tx.managerVerifiedAmount.toFixed(2)}</p>` : ''}</div>
                             ${renderStatusBadge(tx.status)}
                         </div>`).join('') : `<p class="text-text-muted">No transactions on this day.</p>`}
                     </div>
@@ -388,7 +432,7 @@
                 <div>
                     <button data-action="admin-dashboard-view" class="mb-6 text-brand-pink hover:underline">&larr; Back to Dashboard</button>
                     <div class="max-w-md mx-auto card">
-                        <h2 class="text-2xl font-bold text-white mb-6">${isEdit ? 'Edit Worker Profile' : 'Add New Worker'}</h2>
+                        <h2 class="text-2xl font-bold text-primary mb-6">${isEdit ? 'Edit Worker Profile' : 'Add New Worker'}</h2>
                         <div class="space-y-4">
                             <div><label for="worker-name" class="block text-sm font-medium text-text-secondary mb-1">Worker Name</label><input type="text" id="worker-name" class="input-field" value="${worker?.name || ''}" required /></div>
                             <div><label for="worker-pin" class="block text-sm font-medium text-text-secondary mb-1">4-Digit PIN</label><input type="text" pattern="\\d{4}" title="PIN must be 4 digits" id="worker-pin" class="input-field" value="${worker?.pin || ''}" required /></div>
@@ -425,7 +469,7 @@
             return `
                 <div class="flex justify-between items-center mb-4">
                     <button data-action="prev-month" class="p-2 rounded-full hover:bg-bg-tertiary">&lt;</button>
-                    <h3 class="text-lg font-semibold text-white">${monthNames[month]} ${year}</h3>
+                    <h3 class="text-lg font-semibold text-primary">${monthNames[month]} ${year}</h3>
                     <button data-action="next-month" class="p-2 rounded-full hover:bg-bg-tertiary">&gt;</button>
                 </div>
                 <div class="grid grid-cols-7 gap-y-2 place-items-center text-xs text-text-muted mb-2">
@@ -454,11 +498,6 @@
             switch(action) {
                 case 'login': handleLogin(); break;
                 case 'logout': handleLogout(); break;
-                case 'toggle-theme': handleToggleTheme(); break;
-                case 'select-date':
-                    state.selectedDate = new Date(target.dataset.date);
-                    render();
-                    break;
                 case 'select-date':
                     state.selectedDate = new Date(target.dataset.date);
                     render();
@@ -494,6 +533,7 @@
                     break;
                 case 'admin-create-worker': handleAddWorker(); break;
                 case 'admin-update-worker': handleUpdateWorker(id); break;
+                case 'toggle-theme': handleToggleTheme(); break;
             }
         }
         
@@ -516,11 +556,6 @@
             state.currentUser = null;
             state.view = 'login';
             render();
-        }
-
-        function handleToggleTheme() {
-            const isLight = document.body.classList.toggle('light-mode');
-            localStorage.setItem('tipTallyTheme', isLight ? 'light' : 'dark');
         }
         
         async function handleAddTransaction() {
@@ -590,13 +625,24 @@
             state.view = 'adminDashboard';
             render();
         }
+        
+        function handleToggleTheme() {
+            const appWrapper = document.getElementById('tiptally-app-wrapper');
+            const isLight = appWrapper.classList.toggle('light-mode');
+            localStorage.setItem('tipTallyTheme', isLight ? 'light' : 'dark');
+        }
 
         // --- Initializer ---
         async function init() {
             function applyTheme() {
                 const savedTheme = localStorage.getItem('tipTallyTheme') || 'dark';
-                document.body.classList.toggle('light-mode', savedTheme === 'light');
+                const appWrapper = document.getElementById('tiptally-app-wrapper');
+                if (appWrapper) {
+                   appWrapper.classList.toggle('light-mode', savedTheme === 'light');
+                }
             }
+            applyTheme();
+
             // Seed data if necessary
             const usersRef = db.collection('users');
             try {
