@@ -113,15 +113,21 @@
             justify-content: center;
             z-index: 50;
         }
+        #edit-item-modal {
+            z-index: 60; /* Ensure edit modal is on top of admin modal */
+        }
         .modal-content {
             background-color: var(--bg-secondary);
             padding: 2rem;
             border-radius: 0.75rem;
             width: 90%;
-            max-width: 900px; /* Increased max-width */
+            max-width: 900px; 
             max-height: 90vh;
             overflow-y: auto;
             border: 1px solid var(--border-color);
+        }
+        .edit-modal-content {
+             max-width: 500px;
         }
         /* Tab Styles for Admin Modal */
         .admin-tab {
@@ -171,6 +177,12 @@
                 <!-- Admin modal content rendered here -->
             </div>
         </div>
+        <!-- Edit Item Modal -->
+        <div id="edit-item-modal" class="modal-overlay hidden">
+             <div id="edit-item-modal-content" class="modal-content edit-modal-content">
+                <!-- Edit modal content rendered here -->
+            </div>
+        </div>
     </div>
 
     <script>
@@ -183,16 +195,17 @@
             activities: [],
             incentives: [],
             currentUser: null,
-            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', 'adminWorkerDetail', 'adminEditWorker', 'adminIncentiveTracker', 'adminEditService'
+            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', 'adminWorkerDetail'
             adminModalView: 'workers', // 'workers', 'services', 'activities', 'incentives'
             selectedDate: new Date(),
             selectedWorkerId: null,
-            selectedServiceId: null,
+            itemToEdit: null, // { type: 'worker'/'service', id: '...' }
             loginError: '',
             selectedLoginUser: '',
-            dailyPayoutsExpanded: false,
-            allTimePayoutsExpanded: false,
             isAdminModalOpen: false,
+            isEditModalOpen: false,
+            dailyPayoutsExpanded: true,
+            allTimePayoutsExpanded: false,
         };
 
         // --- Firebase Initialization ---
@@ -223,7 +236,7 @@
         const formatDate = (date) => new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(date));
         
         const getApprovedAmount = (tx) => {
-            if (tx.status !== 'approved') return 0;
+            if (tx.status !== 'approved' || tx.type !== 'monetary') return 0;
             return tx.managerVerifiedAmount !== null ? tx.managerVerifiedAmount : (tx.workerSubmittedAmount || 0);
         };
 
@@ -231,22 +244,30 @@
         function render() {
             const appContainer = document.getElementById('app-container');
             const adminModal = document.getElementById('admin-tools-modal');
+            const editModal = document.getElementById('edit-item-modal');
             let currentViewHtml = '';
+
             switch (state.view) {
                 case 'login': currentViewHtml = renderLoginView(); break;
                 case 'workerDashboard': currentViewHtml = renderMainAppView(renderWorkerDashboard()); break;
                 case 'adminDashboard': currentViewHtml = renderMainAppView(renderAdminDashboard()); break;
                 case 'adminWorkerDetail': currentViewHtml = renderMainAppView(renderAdminWorkerDetail()); break;
-                case 'adminEditWorker': currentViewHtml = renderMainAppView(renderEditWorkerForm()); break;
-                case 'adminEditService': currentViewHtml = renderMainAppView(renderEditServiceForm()); break;
                 case 'adminIncentiveTracker': currentViewHtml = renderMainAppView(renderAdminIncentiveTracker()); break;
             }
             appContainer.innerHTML = currentViewHtml;
+
             if (state.isAdminModalOpen) {
                 adminModal.classList.remove('hidden');
                 renderAdminModal();
             } else {
                 adminModal.classList.add('hidden');
+            }
+            
+            if (state.isEditModalOpen) {
+                editModal.classList.remove('hidden');
+                renderEditModal();
+            } else {
+                editModal.classList.add('hidden');
             }
         }
 
@@ -302,9 +323,9 @@
 
         function renderWorkerDashboard() {
             const isToday = isSameDay(state.selectedDate, new Date());
-            const dailyTransactions = state.transactions.filter(t => t.workerId === state.currentUser.id && isSameDay(t.submissionTimestamp, state.selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
+            const dailyItems = state.transactions.filter(t => t.workerId === state.currentUser.id && isSameDay(t.submissionTimestamp, state.selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
+            const dailyApprovedTotal = dailyItems.reduce((sum, t) => sum + getApprovedAmount(t), 0);
             const allTimeApprovedTotal = state.transactions.filter(t => t.workerId === state.currentUser.id).reduce((sum, t) => sum + getApprovedAmount(t), 0);
-            const dailyApprovedTotal = dailyTransactions.reduce((sum, t) => sum + getApprovedAmount(t), 0);
             const allTimeTake = (allTimeApprovedTotal || 0) * (state.currentUser.payoutSplit.worker || 0);
 
             return `
@@ -359,7 +380,7 @@
                         <div class="card">
                             <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Submissions for this day</h3>
                             <div class="space-y-4 scrollable-list-short">
-                                ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => renderTransactionItem(tx)).join('') : `<p style="color: var(--text-muted);">No transactions submitted on this day.</p>`}
+                                ${dailyItems.length > 0 ? dailyItems.map(item => item.type === 'activity' ? renderActivityLogItem(item) : renderTransactionItem(item)).join('') : `<p style="color: var(--text-muted);">No submissions on this day.</p>`}
                             </div>
                         </div>
                     </div>
@@ -393,6 +414,21 @@
                         ${tx.status === 'disputed' ? `<button data-action="worker-accept" data-id="${tx.id}" class="btn text-xs" style="background-color: var(--brand-green); color: white;">Accept</button>` : ''}
                     </div>
                 </div>`;
+        }
+
+        function renderActivityLogItem(log) {
+            return `
+                <div class="p-4 rounded-lg flex justify-between items-center" style="background-color: var(--bg-tertiary);">
+                    <div>
+                        <p class="font-bold" style="color: var(--text-primary);">Activity: <span style="color: var(--brand-blue);">${log.activityName}</span></p>
+                        <p class="text-sm" style="color: var(--text-muted);">${new Date(log.submissionTimestamp).toLocaleTimeString()}</p>
+                    </div>
+                    <div class="text-right">
+                        ${log.activityValue > 1 ? `<p class="text-lg font-bold" style="color: var(--text-primary);">${log.activityValue} mins</p>`: ''}
+                        ${renderStatusBadge(log.status)}
+                    </div>
+                </div>
+            `;
         }
         
         function renderIncentivesPanel() {
@@ -487,7 +523,20 @@
                 if (userTotal >= progressMax) {
                     potentialReward = incentive.details.reward;
                 }
+            } else if (incentive.type === 'custom' && incentive.details.metric === 'activity_count') {
+                const userActivities = allApprovedTxs.filter(tx => 
+                    tx.workerId === state.currentUser.id &&
+                    tx.type === 'activity' &&
+                    tx.activityId === incentive.details.targetActivityId
+                );
+                progressValue = userActivities.length;
+                progressMax = incentive.details.targetValue;
+                progressText = `${progressValue} / ${progressMax} logged`;
+                if (progressValue >= progressMax) {
+                     potentialReward = incentive.details.rewardValue;
+                }
             }
+
 
             const progressPercent = Math.min(100, (progressValue / progressMax) * 100);
 
@@ -516,13 +565,21 @@
             const dailyTransactions = state.transactions.filter(t => isSameDay(t.submissionTimestamp, state.selectedDate));
             const pendingTransactions = dailyTransactions.filter(t => t.status === 'pending');
             const workers = state.users.filter(u => isWorker(u));
+            
             const getWorkerTotals = (txList) => {
                 const totals = {};
                 workers.forEach(w => { totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id }; });
-                txList.forEach(tx => { if (totals[tx.workerId]) { totals[tx.workerId].total += getApprovedAmount(tx); } });
-                return Object.values(totals);
+                txList.forEach(tx => { 
+                    if (totals[tx.workerId]) { 
+                        totals[tx.workerId].total += getApprovedAmount(tx); 
+                    } 
+                });
+                return Object.values(totals).sort((a,b) => b.total - a.total);
             };
-            const workerDailyTotals = getWorkerTotals(dailyTransactions).filter(w => w.total > 0).sort((a,b) => b.total - a.total);
+
+            const workerDailyTotals = getWorkerTotals(dailyTransactions);
+            const workerAllTimeTotals = getWorkerTotals(state.transactions);
+
             const totalClubEarningsDay = workerDailyTotals.reduce((sum, w) => sum + w.total, 0);
             const totalHouseTakeDay = workerDailyTotals.reduce((sum, w) => sum + (w.total * w.split.house), 0);
 
@@ -531,11 +588,11 @@
                     <div class="lg:col-span-1 space-y-4">
                         <div class="card">${renderCalendar()}</div>
                         <div class="card">
-                            <h3 class="text-sm" style="color: var(--text-muted);">Club Earnings (Day)</h3>
+                            <h3 class="text-sm" style="color: var(--text-muted);">Club Earnings (${formatDate(state.selectedDate)})</h3>
                             <p class="text-3xl font-bold" style="color: var(--brand-green);">$${totalClubEarningsDay.toFixed(2)}</p>
                         </div>
                         <div class="card">
-                            <h3 class="text-sm" style="color: var(--text-muted);">House Take (Day)</h3>
+                            <h3 class="text-sm" style="color: var(--text-muted);">House Take (${formatDate(state.selectedDate)})</h3>
                             <p class="text-3xl font-bold" style="color: var(--brand-pink);">$${totalHouseTakeDay.toFixed(2)}</p>
                         </div>
                         <button data-action="admin-incentive-tracker-view" class="btn w-full" style="background-color: var(--brand-blue); color: white;">View Incentive Progress</button>
@@ -558,8 +615,22 @@
                             </div>
                         </div>
                         <div class="card flex-1 flex flex-col">
-                            <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Active Worker Totals (${formatDate(state.selectedDate)})</h3>
-                            <div class="flex-grow scrollable-list">${workerDailyTotals.length > 0 ? workerDailyTotals.map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="p-4 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors mb-2" style="background-color: var(--bg-tertiary);"><p class="font-bold text-lg" style="color: var(--text-primary);">${w.name}</p><p class="font-semibold text-lg" style="color: var(--brand-green);">$${w.total.toFixed(2)}</p></div>`).join('') : '<p class="text-sm" style="color: var(--text-muted);">No workers with earnings for this day.</p>'}</div>
+                            <div class="flex justify-between items-center cursor-pointer mb-4" data-action="toggle-daily-payouts">
+                                <h3 class="text-xl font-bold" style="color: var(--text-primary);">Daily Payouts</h3>
+                                <span style="color: var(--text-muted);">${state.dailyPayoutsExpanded ? 'Collapse' : 'Expand'}</span>
+                            </div>
+                            <div id="daily-payouts-list" class="flex-grow scrollable-list ${state.dailyPayoutsExpanded ? '' : 'hidden'}">
+                                ${workerDailyTotals.filter(w => w.total > 0).map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="p-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors mb-2" style="background-color: var(--bg-tertiary);"><p class="font-bold" style="color: var(--text-primary);">${w.name}</p><p class="font-semibold" style="color: var(--brand-pink);">$${(w.total * w.split.worker).toFixed(2)}</p></div>`).join('') || '<p class="text-sm" style="color: var(--text-muted);">No earnings for this day.</p>'}
+                            </div>
+                        </div>
+                        <div class="card flex-1 flex flex-col">
+                           <div class="flex justify-between items-center cursor-pointer mb-4" data-action="toggle-all-time-payouts">
+                                <h3 class="text-xl font-bold" style="color: var(--text-primary);">All-Time Payouts</h3>
+                                <span style="color: var(--text-muted);">${state.allTimePayoutsExpanded ? 'Collapse' : 'Expand'}</span>
+                            </div>
+                            <div id="all-time-payouts-list" class="flex-grow scrollable-list ${state.allTimePayoutsExpanded ? '' : 'hidden'}">
+                                ${workerAllTimeTotals.filter(w => w.total > 0).map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="p-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors mb-2" style="background-color: var(--bg-tertiary);"><p class="font-bold" style="color: var(--text-primary);">${w.name}</p><p class="font-semibold" style="color: var(--brand-green);">$${(w.total * w.split.worker).toFixed(2)}</p></div>`).join('') || '<p class="text-sm" style="color: var(--text-muted);">No earnings recorded yet.</p>'}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -578,7 +649,7 @@
                 <div>
                     <div class="flex justify-between items-center mb-6">
                         <button data-action="admin-dashboard-view" class="hover:underline" style="color: var(--brand-pink);">&larr; Back to Dashboard</button>
-                        <button data-action="admin-edit-worker-view" data-id="${worker.id}" class="btn text-sm" style="background-color: var(--brand-yellow); color: white;">Edit Worker</button>
+                        <button data-action="admin-edit-worker" data-id="${worker.id}" class="btn text-sm" style="background-color: var(--brand-yellow); color: white;">Edit Worker</button>
                     </div>
                     <h2 class="text-3xl font-bold mb-2" style="color: var(--text-primary);">${worker.name}'s Summary</h2>
                     <div class="mb-8 p-4 card mt-4">
@@ -592,21 +663,21 @@
                     <p class="text-lg font-bold mb-4" style="color: var(--brand-pink);">${formatDate(state.selectedDate)}</p>
                     <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Transaction History (Day)</h3>
                     <div class="space-y-4">
-                        ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => renderTransactionItem(tx)).join('') : `<p style="color: var(--text-muted);">No transactions on this day.</p>`}
+                        ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => tx.type === 'activity' ? renderActivityLogItem(tx) : renderTransactionItem(tx)).join('') : `<p style="color: var(--text-muted);">No transactions on this day.</p>`}
                     </div>
                 </div>
             `;
         }
         
         function renderEditWorkerForm() {
-            const worker = state.users.find(u => u.id === state.selectedWorkerId);
+            const worker = state.users.find(u => u.id === state.itemToEdit.id);
             if (!worker) return `<p>Worker not found.</p>`;
 
             return `
-                <div class="max-w-md mx-auto card">
+                <div class="w-full">
                     <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-primary">Edit ${worker.name}</h2>
-                        <button data-action="admin-worker-detail-view" data-id="${worker.id}" class="text-brand-pink hover:underline">Cancel</button>
+                        <h2 class="text-2xl font-bold">Edit ${worker.name}</h2>
+                        <button data-action="close-edit-modal" class="text-brand-pink hover:underline">Cancel</button>
                     </div>
                     <form id="edit-worker-form" class="space-y-4">
                         <div><label for="edit-worker-name" class="block text-sm font-medium text-text-secondary mb-1">Worker Name</label><input type="text" id="edit-worker-name" class="input-field" value="${worker.name}" required /></div>
@@ -619,14 +690,14 @@
         }
         
         function renderEditServiceForm() {
-            const service = state.services.find(s => s.id === state.selectedServiceId);
+            const service = state.services.find(s => s.id === state.itemToEdit.id);
             if (!service) return `<p>Service not found.</p>`;
 
             return `
-                <div class="max-w-md mx-auto card">
+                 <div class="w-full">
                     <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-primary">Edit ${service.name}</h2>
-                        <button data-action="close-admin-modal" class="text-brand-pink hover:underline">Cancel</button>
+                        <h2 class="text-2xl font-bold">Edit ${service.name}</h2>
+                        <button data-action="close-edit-modal" class="text-brand-pink hover:underline">Cancel</button>
                     </div>
                     <form id="edit-service-form" class="space-y-4">
                         <div><label for="edit-service-name" class="block text-sm font-medium text-text-secondary mb-1">Service Name</label><input type="text" id="edit-service-name" class="input-field" value="${service.name}" required /></div>
@@ -817,7 +888,7 @@
                             <option value="duration">Duration (in minutes)</option>
                         </select>
                     </div>
-                    <div class="md:col-span-1"><button type="submit" data-action="admin-add-activity" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Activity</button></div>
+                    <div class="md:col-span-1"><button type="submit" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Activity</button></div>
                 </form>
                 <div class="space-y-2 scrollable-list" style="max-height: 50vh;">
                     ${state.activities.map(a => `
@@ -840,7 +911,7 @@
                     <div class="md:col-span-1"><label class="text-xs font-medium" style="color: var(--text-secondary);">Name</label><input id="new-worker-name" type="text" class="input-field mt-1" required></div>
                     <div class="md:col-span-1"><label class="text-xs font-medium" style="color: var(--text-secondary);">PIN (4 digits)</label><input id="new-worker-pin" type="text" pattern="\\d{4}" class="input-field mt-1" required></div>
                     <div class="md:col-span-1"><label class="text-xs font-medium" style="color: var(--text-secondary);">Payout Split (%)</label><input id="new-worker-split" type="number" min="0" max="100" class="input-field mt-1" required></div>
-                    <div class="md:col-span-1"><button type="submit" data-action="admin-add-worker" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Worker</button></div>
+                    <div class="md:col-span-1"><button type="submit" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Worker</button></div>
                 </form>
                 <div class="space-y-2 scrollable-list" style="max-height: 50vh;">
                     ${state.users.filter(u => isWorker(u)).map(w => `
@@ -850,7 +921,7 @@
                                 <p class="text-xs" style="color: var(--text-muted);">Split: ${w.payoutSplit.worker * 100}%</p>
                             </div>
                             <div class="flex gap-2">
-                                <button data-action="admin-edit-worker-view" data-id="${w.id}" class="btn text-xs" style="background-color: var(--brand-yellow); color: white;">Edit</button>
+                                <button data-action="admin-edit-worker" data-id="${w.id}" class="btn text-xs" style="background-color: var(--brand-yellow); color: white;">Edit</button>
                                 <button data-action="admin-delete-worker" data-id="${w.id}" class="btn text-xs" style="background-color: var(--brand-red); color: white;">Delete</button>
                             </div>
                         </div>
@@ -875,7 +946,7 @@
                             </select>
                         </div>
                     </div>
-                    <div class="sm:col-span-1"><button type="submit" data-action="admin-add-service" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Service</button></div>
+                    <div class="sm:col-span-1"><button type="submit" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Service</button></div>
                 </form>
                 <div class="space-y-2 scrollable-list" style="max-height: 50vh;">
                     ${state.services.map(s => `
@@ -885,7 +956,7 @@
                                 <p class="text-xs capitalize" style="color: var(--text-muted);">${s.category || 'General'}</p>
                             </div>
                             <div class="flex gap-2">
-                                <button data-action="admin-edit-service-view" data-id="${s.id}" class="btn text-xs" style="background-color: var(--brand-yellow); color: white;">Edit</button>
+                                <button data-action="admin-edit-service" data-id="${s.id}" class="btn text-xs" style="background-color: var(--brand-yellow); color: white;">Edit</button>
                                 <button data-action="admin-delete-service" data-id="${s.id}" class="btn text-xs" style="background-color: var(--brand-red); color: white;">Delete</button>
                             </div>
                         </div>
@@ -912,7 +983,7 @@
                         <option value="custom">Custom</option>
                     </select>
                     <div id="incentive-details-form"></div>
-                    <button type="submit" data-action="admin-add-incentive" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Incentive</button>
+                    <button type="submit" class="btn w-full" style="background-color: var(--brand-green); color: white;">Add Incentive</button>
                 </form>
                 <div class="space-y-2 scrollable-list" style="max-height: 40vh;">
                     ${state.incentives.map(inc => `
@@ -966,21 +1037,19 @@
                 html = `
                     <div class="space-y-2 mt-2">
                         <select id="custom-metric" class="select-field">
+                            <option value="">Select Metric...</option>
                             <option value="total_earnings">Total Earnings</option>
                             <option value="service_count">Count of a Service</option>
-                            <option value="service_category_count">Count of a Service Category</option>
+                            <option value="activity_count">Count of an Activity</option>
                             <option value="transaction_count">Number of Transactions</option>
                         </select>
                         <select id="custom-target-service" class="select-field hidden">
                             <option value="">Select Service</option>
                             ${state.services.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
                         </select>
-                        <select id="custom-target-category" class="select-field hidden">
-                            <option value="">Select Category</option>
-                            <option value="vip">VIP</option>
-                            <option value="stage">Stage</option>
-                            <option value="food_drink">Food/Drink</option>
-                            <option value="general">General</option>
+                        <select id="custom-target-activity" class="select-field hidden">
+                            <option value="">Select Activity</option>
+                            ${state.activities.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
                         </select>
                         <div class="grid grid-cols-2 gap-2">
                              <select id="custom-condition" class="select-field">
@@ -1000,6 +1069,20 @@
                 `;
             }
             container.innerHTML = html;
+        }
+
+        // --- Edit Modal ---
+        function renderEditModal() {
+            const container = document.getElementById('edit-item-modal-content');
+            if (!state.itemToEdit) {
+                container.innerHTML = '';
+                return;
+            }
+            if (state.itemToEdit.type === 'worker') {
+                container.innerHTML = renderEditWorkerForm();
+            } else if (state.itemToEdit.type === 'service') {
+                container.innerHTML = renderEditServiceForm();
+            }
         }
 
         // --- Event Handlers & Actions ---
@@ -1026,18 +1109,30 @@
                 case 'deny': handleDenyTransaction(id); break;
                 case 'worker-accept': handleWorkerAcceptance(id); break;
                 case 'toggle-theme': handleToggleTheme(); break;
-                // Admin
+                case 'toggle-daily-payouts': state.dailyPayoutsExpanded = !state.dailyPayoutsExpanded; render(); break;
+                case 'toggle-all-time-payouts': state.allTimePayoutsExpanded = !state.allTimePayoutsExpanded; render(); break;
+                // Admin Modals
                 case 'open-admin-modal': state.isAdminModalOpen = true; render(); break;
                 case 'close-admin-modal': state.isAdminModalOpen = false; render(); break;
+                case 'close-edit-modal': state.isEditModalOpen = false; render(); break;
                 case 'set-admin-view': state.adminModalView = view; renderAdminModal(); break;
-                case 'admin-add-worker': handleAddWorker(); break;
                 case 'admin-delete-worker': handleDelete('users', id, 'Worker'); break;
-                case 'admin-add-service': handleAddService(); break;
                 case 'admin-delete-service': handleDelete('services', id, 'Service'); break;
-                case 'admin-add-activity': handleAddActivity(); break;
                 case 'admin-delete-activity': handleDelete('activities', id, 'Activity'); break;
-                case 'admin-add-incentive': handleAddIncentive(); break;
                 case 'admin-delete-incentive': handleDelete('incentives', id, 'Incentive'); break;
+                case 'admin-edit-worker': 
+                    state.itemToEdit = { type: 'worker', id: id };
+                    state.isEditModalOpen = true;
+                    render();
+                    break;
+                case 'admin-edit-service':
+                    state.itemToEdit = { type: 'service', id: id };
+                    state.isEditModalOpen = true;
+                    render();
+                    break;
+                case 'admin-update-worker': handleUpdateWorker(id); break;
+                case 'admin-update-service': handleUpdateService(id); break;
+                // Views
                 case 'admin-dashboard-view': state.view = 'adminDashboard'; render(); break;
                 case 'admin-incentive-tracker-view': state.view = 'adminIncentiveTracker'; render(); break;
                 case 'admin-worker-detail-view':
@@ -1045,18 +1140,6 @@
                     state.view = 'adminWorkerDetail';
                     render();
                     break;
-                case 'admin-edit-worker-view':
-                    state.selectedWorkerId = id;
-                    state.view = 'adminEditWorker';
-                    render();
-                    break;
-                case 'admin-edit-service-view':
-                    state.selectedServiceId = id;
-                    state.view = 'adminEditService';
-                    render();
-                    break;
-                case 'admin-update-worker': handleUpdateWorker(id); break;
-                case 'admin-update-service': handleUpdateService(id); break;
             }
         }
         
@@ -1192,9 +1275,7 @@
                 name, pin,
                 payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
             });
-            state.view = 'adminDashboard';
-            state.isAdminModalOpen = true;
-            state.adminModalView = 'workers';
+            state.isEditModalOpen = false;
             render();
         }
 
@@ -1216,9 +1297,7 @@
             const category = form.querySelector('#edit-service-category').value;
              if (!name || isNaN(price)) { alert("All fields are required."); return; }
             await db.collection('services').doc(id).update({ name, price, category });
-            state.view = 'adminDashboard';
-            state.isAdminModalOpen = true;
-            state.adminModalView = 'services';
+            state.isEditModalOpen = false;
             render();
         }
 
@@ -1245,7 +1324,7 @@
             }
 
             let details = {};
-            let targetId = null;
+            let targetId = null; // For service_push
             if (type === 'service_push') {
                 targetId = form.querySelector('#incentive-target-service')?.value;
                 details.goal = parseInt(form.querySelector('#incentive-service-goal')?.value);
@@ -1277,9 +1356,9 @@
                 details.rewardType = form.querySelector('#custom-reward-type').value;
                 details.rewardValue = parseFloat(form.querySelector('#custom-reward-value').value);
                 if (details.metric === 'service_count') {
-                    details.targetService = form.querySelector('#custom-target-service').value;
-                } else if (details.metric === 'service_category_count') {
-                    details.targetCategory = form.querySelector('#custom-target-category').value;
+                    details.targetServiceId = form.querySelector('#custom-target-service').value;
+                } else if (details.metric === 'activity_count') {
+                    details.targetActivityId = form.querySelector('#custom-target-activity').value;
                 }
                 if (isNaN(details.targetValue) || isNaN(details.rewardValue)) {
                     alert("Please fill out all fields for the custom incentive.");
@@ -1365,11 +1444,15 @@
             appWrapper.addEventListener('submit', (e) => {
                 e.preventDefault();
                 const form = e.target;
-                if (form.id === 'add-worker-form') handleAddWorker();
-                else if (form.id === 'add-service-form') handleAddService();
-                else if (form.id === 'add-incentive-form') handleAddIncentive();
-                else if (form.id === 'add-activity-form') handleAddActivity();
-                else if (form.id === 'edit-worker-form') {
+                if (form.id === 'add-worker-form') {
+                    handleAddWorker();
+                } else if (form.id === 'add-service-form') {
+                    handleAddService();
+                } else if (form.id === 'add-incentive-form') {
+                    handleAddIncentive();
+                } else if (form.id === 'add-activity-form') {
+                    handleAddActivity();
+                } else if (form.id === 'edit-worker-form') {
                     const workerId = form.querySelector('[data-action="admin-update-worker"]').dataset.id;
                     handleUpdateWorker(workerId);
                 } else if (form.id === 'edit-service-form') {
@@ -1386,9 +1469,13 @@
                 if(target.id === 'custom-metric') {
                     const form = target.closest('form');
                     const targetServiceSelect = form.querySelector('#custom-target-service');
+                    const targetActivitySelect = form.querySelector('#custom-target-activity');
                     const targetCategorySelect = form.querySelector('#custom-target-category');
                     if(targetServiceSelect) {
                         targetServiceSelect.classList.toggle('hidden', target.value !== 'service_count');
+                    }
+                     if(targetActivitySelect) {
+                        targetActivitySelect.classList.toggle('hidden', target.value !== 'activity_count');
                     }
                     if(targetCategorySelect) {
                         targetCategorySelect.classList.toggle('hidden', target.value !== 'service_category_count');
