@@ -91,7 +91,7 @@
             users: [],
             transactions: [],
             currentUser: null,
-            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', 'adminWorkerDetail', 'adminAddWorker'
+            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', 'adminWorkerDetail', 'adminAddWorker', 'adminEditWorker'
             selectedDate: new Date(),
             selectedWorkerId: null,
             loginError: '',
@@ -434,7 +434,7 @@
                 case 'login': handleLogin(); break;
                 case 'logout': handleLogout(); break;
                 case 'select-date':
-                    state.selectedDate = new Date(id || target.parentElement.dataset.date);
+                    state.selectedDate = new Date(target.dataset.date);
                     render();
                     break;
                 case 'prev-month':
@@ -480,7 +480,6 @@
                 state.currentUser = user;
                 state.view = user.role === 'admin' ? 'adminDashboard' : 'workerDashboard';
                 state.loginError = '';
-                state.selectedDate = new Date();
             } else {
                 state.loginError = 'Invalid PIN. Please try again.';
             }
@@ -509,7 +508,6 @@
               verificationTimestamp: null,
             };
             await db.collection('transactions').add(newTransaction);
-            amountInput.value = '';
         }
 
         async function handleVerification(txId) {
@@ -561,12 +559,12 @@
             render();
         }
 
-        // --- Initial Setup & Listeners ---
-        const getInitialData = async () => {
-          try {
-              const usersRef = db.collection('users');
-              const usersSnapshot = await usersRef.get();
-              if (usersSnapshot.empty) {
+        // --- Initializer ---
+        async function init() {
+            // Seed data if necessary
+            const usersRef = db.collection('users');
+            const usersSnapshot = await usersRef.get();
+            if (usersSnapshot.empty) {
                 console.log('No users found, seeding initial data.');
                 const initialUsers = [
                   { id: 'admin-1', name: 'Manager', role: 'admin', pin: '1234', payoutSplit: { worker: 0, house: 1 } },
@@ -579,33 +577,35 @@
                   batch.set(docRef, user);
                 });
                 await batch.commit();
-              }
-          } catch (error) {
-              console.error("Error seeding data:", error);
-          }
-        };
-        
-        getInitialData();
-        
-        db.collection('users').onSnapshot(snapshot => {
-            state.users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            if (!state.selectedLoginUser && state.users.length > 0) {
-                state.selectedLoginUser = state.users[0].id;
             }
-            if (state.view === 'login') render();
-        }, error => console.error("Error fetching users:", error));
 
-        db.collection('transactions').orderBy("submissionTimestamp", "desc").onSnapshot(snapshot => {
-            state.transactions = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            if (state.view !== 'login') render();
-        }, error => console.error("Error fetching transactions:", error));
-        
-        appContainer.addEventListener('click', handleAction);
-        appContainer.addEventListener('change', (e) => {
-            if (e.target.id === 'user-select') {
-                state.selectedLoginUser = e.target.value;
-            }
-        });
+            // Set up real-time listeners
+            db.collection('users').onSnapshot(snapshot => {
+                state.users = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                if (!state.selectedLoginUser && state.users.length > 0) {
+                    state.selectedLoginUser = state.users[0].id;
+                }
+                if (state.view === 'login') render();
+            }, error => console.error("Error fetching users:", error));
+
+            db.collection('transactions').orderBy("submissionTimestamp", "desc").onSnapshot(snapshot => {
+                state.transactions = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                if (state.view !== 'login') render();
+            }, error => console.error("Error fetching transactions:", error));
+            
+            // Add global event listeners
+            appContainer.addEventListener('click', handleAction);
+            appContainer.addEventListener('change', (e) => {
+                if (e.target.id === 'user-select') {
+                    state.selectedLoginUser = e.target.value;
+                }
+            });
+
+            // Initial render
+            render();
+        }
+
+        init();
 
     });
     </script>
