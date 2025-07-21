@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+    <!-- ADD CHART.JS for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -202,25 +204,29 @@
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         // --- App State ---
-        // Encapsulates all dynamic data for the application.
         const state = {
             users: [],
             transactions: [],
             services: [],
             activities: [],
             incentives: [],
+            shifts: [], // NEW: For shift management
+            payouts: [], // NEW: For payout records
+            goals: {},   // NEW: For worker goals { workerId: { goal: 500, period: 'week' } }
             currentUser: null,
-            view: 'login', // 'login', 'workerDashboard', 'adminDashboard', 'adminWorkerDetail'
-            adminModalView: 'workers', // 'workers', 'services', 'activities', 'incentives'
+            activeShiftId: null, // NEW: ID of the currently active shift
+            view: 'login',
+            adminModalView: 'workers',
             selectedDate: new Date(),
             selectedWorkerId: null,
-            itemToEdit: null, // { type: 'worker'/'service', id: '...' }
+            itemToEdit: null,
             loginError: '',
             selectedLoginUser: '',
-            isModalOpen: false, // Unified modal state
-            modalType: null, // 'admin' or 'edit'
+            isModalOpen: false,
+            modalType: null,
             dailyPayoutsExpanded: true,
             allTimePayoutsExpanded: false,
+            charts: {}, // To hold chart instances
         };
 
         // --- Firebase Initialization ---
@@ -257,7 +263,6 @@
         
         const getApprovedAmount = (tx) => {
             if (tx.status !== 'approved' || tx.type !== 'monetary') return 0;
-            // Prioritize manager's verified amount if it exists, otherwise use the worker's submission.
             return tx.managerVerifiedAmount !== null && tx.managerVerifiedAmount !== undefined ? tx.managerVerifiedAmount : (tx.workerSubmittedAmount || 0);
         };
 
@@ -273,7 +278,6 @@
             }
             appContainer.innerHTML = currentViewHtml;
 
-            // Unified modal rendering
             adminModal.classList.toggle('visible', state.isModalOpen && state.modalType === 'admin');
             editModal.classList.toggle('visible', state.isModalOpen && state.modalType === 'edit');
             
@@ -401,13 +405,14 @@
                             <h3 style="color: var(--text-muted);" class="text-sm">Your Total Take (All Time)</h3>
                             <p class="text-4xl font-bold" style="color: var(--brand-green);">$${allTimeTake.toFixed(2)}</p>
                         </div>
+                        <div class="card">${renderGoalSettingCard()}</div>
                         <div class="card">${renderIncentivesPanel()}</div>
                         <div class="card">${renderCalendar()}</div>
                     </div>
                 </div>
             `;
         }
-
+        
         function renderTransactionItem(tx) {
             const service = state.services.find(s => s.id === tx.serviceId);
             return `
@@ -428,98 +433,6 @@
                 </div>`;
         }
         
-        // ... (The rest of the render functions from the original file would go here, with minor adjustments as needed)
-        // ... I will include the most important ones that were refactored.
-
-        function renderAdminDashboard() {
-            const dailyTransactions = state.transactions.filter(t => isSameDay(t.submissionTimestamp, state.selectedDate));
-            const pendingTransactions = dailyTransactions.filter(t => t.status === 'pending');
-            const workers = state.users.filter(u => isWorker(u));
-            
-            const getWorkerTotals = (txList) => {
-                const totals = {};
-                workers.forEach(w => { totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id }; });
-                txList.forEach(tx => { 
-                    if (totals[tx.workerId]) { 
-                        totals[tx.workerId].total += getApprovedAmount(tx); 
-                    } 
-                });
-                return Object.values(totals).sort((a,b) => b.total - a.total);
-            };
-
-            const workerDailyTotals = getWorkerTotals(dailyTransactions);
-            const workerAllTimeTotals = getWorkerTotals(state.transactions);
-            const totalSubmittedDay = dailyTransactions
-                .filter(t => t.type === 'monetary')
-                .reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
-            const totalApprovedDay = workerDailyTotals.reduce((sum, w) => sum + w.total, 0);
-            const totalHouseTakeDay = workerDailyTotals.reduce((sum, w) => sum + (w.total * w.split.house), 0);
-
-            return `
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div class="lg:col-span-1 space-y-4">
-                        <div class="card">${renderCalendar()}</div>
-                        <div class="card">
-                            <h3 class="text-sm" style="color: var(--text-muted);">Total Submitted (${formatDate(state.selectedDate)})</h3>
-                            <p class="text-3xl font-bold" style="color: var(--brand-blue);">$${totalSubmittedDay.toFixed(2)}</p>
-                        </div>
-                        <div class="card">
-                            <h3 class="text-sm" style="color: var(--text-muted);">Total Approved (${formatDate(state.selectedDate)})</h3>
-                            <p class="text-3xl font-bold" style="color: var(--brand-green);">$${totalApprovedDay.toFixed(2)}</p>
-                        </div>
-                        <div class="card">
-                            <h3 class="text-sm" style="color: var(--text-muted);">House Take from Approved (${formatDate(state.selectedDate)})</h3>
-                            <p class="text-3xl font-bold" style="color: var(--brand-pink);">$${totalHouseTakeDay.toFixed(2)}</p>
-                        </div>
-                        <button data-action="admin-incentive-tracker-view" class="btn w-full" style="background-color: var(--brand-blue); color: white;">View Incentive Progress</button>
-                    </div>
-                    <div class="lg:col-span-2 flex flex-col gap-6" style="min-height: 80vh;">
-                        <div class="card flex-1 flex flex-col">
-                            <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Pending Verifications (${pendingTransactions.length})</h3>
-                            <div class="flex-grow scrollable-list">${pendingTransactions.length > 0 ? pendingTransactions.map(tx => `
-                                <div class="p-4 rounded-lg mb-2" style="background-color: var(--bg-tertiary);">
-                                    <div class="flex justify-between items-center mb-3">
-                                        <div><p class="font-bold" style="color: var(--text-primary);">${tx.workerName} - <span class="font-mono" style="color: var(--brand-pink);">${tx.transactionCode}</span></p><p class="text-sm" style="color: var(--text-muted);">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p></div>
-                                        ${renderStatusBadge(tx.status)}
-                                    </div>
-                                    <div class="flex gap-2">
-                                        <input type="number" data-id="${tx.id}" placeholder="Enter counted amount" class="input-field verification-amount flex-grow" step="0.01"/>
-                                        <button data-action="verify" data-id="${tx.id}" class="btn" style="background-color: var(--brand-green); color: white;">Verify</button>
-                                        <button data-action="deny" data-id="${tx.id}" class="btn" style="background-color: var(--brand-red); color: white;">Deny</button>
-                                    </div>
-                                </div>`).join('') : `<p style="color: var(--text-muted);">No pending transactions.</p>`}
-                            </div>
-                        </div>
-                        <div class="card flex-1 flex flex-col">
-                            <div class="flex justify-between items-center cursor-pointer mb-4" data-action="toggle-daily-payouts">
-                                <h3 class="text-xl font-bold" style="color: var(--text-primary);">Daily Payouts</h3>
-                                <span style="color: var(--text-muted);">${state.dailyPayoutsExpanded ? 'Collapse' : 'Expand'}</span>
-                            </div>
-                            <div id="daily-payouts-list" class="flex-grow scrollable-list ${state.dailyPayoutsExpanded ? '' : 'hidden'}">
-                                ${workerDailyTotals.filter(w => w.total > 0).map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="p-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors mb-2" style="background-color: var(--bg-tertiary);"><p class="font-bold" style="color: var(--text-primary);">${w.name}</p><p class="font-semibold" style="color: var(--brand-pink);">$${(w.total * w.split.worker).toFixed(2)}</p></div>`).join('') || '<p class="text-sm" style="color: var(--text-muted);">No earnings for this day.</p>'}
-                            </div>
-                        </div>
-                        <div class="card flex-1 flex flex-col">
-                           <div class="flex justify-between items-center cursor-pointer mb-4" data-action="toggle-all-time-payouts">
-                                <h3 class="text-xl font-bold" style="color: var(--text-primary);">All-Time Payouts</h3>
-                                <span style="color: var(--text-muted);">${state.allTimePayoutsExpanded ? 'Collapse' : 'Expand'}</span>
-                            </div>
-                            <div id="all-time-payouts-list" class="flex-grow scrollable-list ${state.allTimePayoutsExpanded ? '' : 'hidden'}">
-                                ${workerAllTimeTotals.filter(w => w.total > 0).map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="p-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors mb-2" style="background-color: var(--bg-tertiary);"><p class="font-bold" style="color: var(--text-primary);">${w.name}</p><p class="font-semibold" style="color: var(--brand-green);">$${(w.total * w.split.worker).toFixed(2)}</p></div>`).join('') || '<p class="text-sm" style="color: var(--text-muted);">No earnings recorded yet.</p>'}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // ... (rest of the render functions are included here for completeness)
-        // This includes: renderAdminWorkerDetail, renderEditWorkerForm, renderEditServiceForm, renderStatusBadge, renderCalendar,
-        // renderAdminIncentiveTracker, renderAdminIncentiveLeaderboard, renderAdminModal, renderAdminActivitiesContent,
-        // renderAdminWorkersContent, renderAdminServicesContent, renderAdminIncentivesContent, renderIncentiveDetailsForm, renderEditModal
-        // These are largely unchanged but benefit from the new state management and helper functions.
-        // For brevity in this response, I'm omitting their full code, but they are part of the complete script.
-        // The most critical functions have been shown above.
         function renderActivityLogItem(log) {
             return `
                 <div class="p-4 rounded-lg flex justify-between items-center" style="background-color: var(--bg-tertiary);">
@@ -534,6 +447,7 @@
                 </div>
             `;
         }
+
         function renderIncentivesPanel() {
             const now = new Date();
             const activeIncentives = state.incentives.filter(inc => {
@@ -552,6 +466,7 @@
                 </div>
             `;
         }
+
         function renderIncentiveItem(incentive) {
             let progressHtml = '';
             let progressValue = 0;
@@ -649,6 +564,89 @@
                 </div>
             `;
         }
+
+        function renderAdminDashboard() {
+            const dailyTransactions = state.transactions.filter(t => isSameDay(t.submissionTimestamp, state.selectedDate));
+            const pendingTransactions = dailyTransactions.filter(t => t.status === 'pending');
+            const workers = state.users.filter(u => isWorker(u));
+            
+            const getWorkerTotals = (txList) => {
+                const totals = {};
+                workers.forEach(w => { totals[w.id] = { name: w.name, total: 0, split: w.payoutSplit, id: w.id }; });
+                txList.forEach(tx => { 
+                    if (totals[tx.workerId]) { 
+                        totals[tx.workerId].total += getApprovedAmount(tx); 
+                    } 
+                });
+                return Object.values(totals).sort((a,b) => b.total - a.total);
+            };
+
+            const workerDailyTotals = getWorkerTotals(dailyTransactions);
+            const workerAllTimeTotals = getWorkerTotals(state.transactions);
+            const totalSubmittedDay = dailyTransactions
+                .filter(t => t.type === 'monetary')
+                .reduce((sum, t) => sum + t.workerSubmittedAmount, 0);
+            const totalApprovedDay = workerDailyTotals.reduce((sum, w) => sum + w.total, 0);
+            const totalHouseTakeDay = workerDailyTotals.reduce((sum, w) => sum + (w.total * w.split.house), 0);
+
+            return `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1 space-y-4">
+                        <div class="card">${renderCalendar()}</div>
+                        <div class="card">
+                            <h3 class="text-sm" style="color: var(--text-muted);">Total Submitted (${formatDate(state.selectedDate)})</h3>
+                            <p class="text-3xl font-bold" style="color: var(--brand-blue);">$${totalSubmittedDay.toFixed(2)}</p>
+                        </div>
+                        <div class="card">
+                            <h3 class="text-sm" style="color: var(--text-muted);">Total Approved (${formatDate(state.selectedDate)})</h3>
+                            <p class="text-3xl font-bold" style="color: var(--brand-green);">$${totalApprovedDay.toFixed(2)}</p>
+                        </div>
+                        <div class="card">
+                            <h3 class="text-sm" style="color: var(--text-muted);">House Take from Approved (${formatDate(state.selectedDate)})</h3>
+                            <p class="text-3xl font-bold" style="color: var(--brand-pink);">$${totalHouseTakeDay.toFixed(2)}</p>
+                        </div>
+                        <button data-action="admin-incentive-tracker-view" class="btn w-full" style="background-color: var(--brand-blue); color: white;">View Incentive Progress</button>
+                    </div>
+                    <div class="lg:col-span-2 flex flex-col gap-6" style="min-height: 80vh;">
+                        <div class="card flex-1 flex flex-col">
+                            <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Pending Verifications (${pendingTransactions.length})</h3>
+                            <div class="flex-grow scrollable-list">${pendingTransactions.length > 0 ? pendingTransactions.map(tx => `
+                                <div class="p-4 rounded-lg mb-2" style="background-color: var(--bg-tertiary);">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <div><p class="font-bold" style="color: var(--text-primary);">${tx.workerName} - <span class="font-mono" style="color: var(--brand-pink);">${tx.transactionCode}</span></p><p class="text-sm" style="color: var(--text-muted);">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p></div>
+                                        ${renderStatusBadge(tx.status)}
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <input type="number" data-id="${tx.id}" placeholder="Enter counted amount" class="input-field verification-amount flex-grow" step="0.01"/>
+                                        <button data-action="verify" data-id="${tx.id}" class="btn" style="background-color: var(--brand-green); color: white;">Verify</button>
+                                        <button data-action="deny" data-id="${tx.id}" class="btn" style="background-color: var(--brand-red); color: white;">Deny</button>
+                                    </div>
+                                </div>`).join('') : `<p style="color: var(--text-muted);">No pending transactions.</p>`}
+                            </div>
+                        </div>
+                        <div class="card flex-1 flex flex-col">
+                            <div class="flex justify-between items-center cursor-pointer mb-4" data-action="toggle-daily-payouts">
+                                <h3 class="text-xl font-bold" style="color: var(--text-primary);">Daily Payouts</h3>
+                                <span style="color: var(--text-muted);">${state.dailyPayoutsExpanded ? 'Collapse' : 'Expand'}</span>
+                            </div>
+                            <div id="daily-payouts-list" class="flex-grow scrollable-list ${state.dailyPayoutsExpanded ? '' : 'hidden'}">
+                                ${workerDailyTotals.filter(w => w.total > 0).map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="p-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors mb-2" style="background-color: var(--bg-tertiary);"><p class="font-bold" style="color: var(--text-primary);">${w.name}</p><p class="font-semibold" style="color: var(--brand-pink);">$${(w.total * w.split.worker).toFixed(2)}</p></div>`).join('') || '<p class="text-sm" style="color: var(--text-muted);">No earnings for this day.</p>'}
+                            </div>
+                        </div>
+                        <div class="card flex-1 flex flex-col">
+                           <div class="flex justify-between items-center cursor-pointer mb-4" data-action="toggle-all-time-payouts">
+                                <h3 class="text-xl font-bold" style="color: var(--text-primary);">All-Time Payouts</h3>
+                                <span style="color: var(--text-muted);">${state.allTimePayoutsExpanded ? 'Collapse' : 'Expand'}</span>
+                            </div>
+                            <div id="all-time-payouts-list" class="flex-grow scrollable-list ${state.allTimePayoutsExpanded ? '' : 'hidden'}">
+                                ${workerAllTimeTotals.filter(w => w.total > 0).map(w => `<div data-action="admin-worker-detail-view" data-id="${w.id}" class="p-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors mb-2" style="background-color: var(--bg-tertiary);"><p class="font-bold" style="color: var(--text-primary);">${w.name}</p><p class="font-semibold" style="color: var(--brand-green);">$${(w.total * w.split.worker).toFixed(2)}</p></div>`).join('') || '<p class="text-sm" style="color: var(--text-muted);">No earnings recorded yet.</p>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
         function renderAdminWorkerDetail() {
             const worker = state.users.find(u => u.id === state.selectedWorkerId);
             if (!worker) return `<p>Worker not found.</p>`;
@@ -680,6 +678,7 @@
                 </div>
             `;
         }
+
         function renderEditWorkerForm() {
             const worker = state.users.find(u => u.id === state.itemToEdit.id);
             if (!worker) return `<p>Worker not found.</p>`;
@@ -707,6 +706,7 @@
                 </div>
             `;
         }
+
         function renderEditServiceForm() {
             const service = state.services.find(s => s.id === state.itemToEdit.id);
             if (!service) return `<p>Service not found.</p>`;
@@ -732,6 +732,7 @@
                 </div>
             `;
         }
+
         function renderStatusBadge(status) {
             const badgeMap = {
                 approved: { text: 'Approved', color: 'var(--brand-green)' },
@@ -742,6 +743,7 @@
             const { text, color } = badgeMap[status] || badgeMap.pending;
             return `<span class="px-2 py-1 text-xs font-bold rounded-full text-white" style="background-color: ${color};">${text}</span>`;
         }
+
         function renderCalendar() {
             const { selectedDate, transactions } = state;
             const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -790,6 +792,7 @@
                 <div class="grid grid-cols-7 gap-y-2 place-items-center">${daysHtml}</div>
             `;
         }
+
         function renderAdminIncentiveTracker() {
             const now = new Date();
             const activeIncentives = state.incentives.filter(inc => {
@@ -810,6 +813,7 @@
                 </div>
             `;
         }
+
         function renderAdminIncentiveLeaderboard(incentive) {
              const allApprovedTxs = state.transactions.filter(tx => tx.status === 'approved');
              const workers = state.users.filter(u => isWorker(u));
@@ -853,30 +857,41 @@
                 </div>
              `;
         }
-        // --- Admin Modal Render Functions ---
+
         function renderAdminModal() {
             const adminModalContent = document.getElementById('admin-tools-modal-content');
             let content = '';
             switch(state.adminModalView) {
                 case 'workers': content = renderAdminWorkersContent(); break;
                 case 'services': content = renderAdminServicesContent(); break;
-                case 'incentives': content = renderAdminIncentivesContent(); break;
                 case 'activities': content = renderAdminActivitiesContent(); break;
+                case 'incentives': content = renderAdminIncentivesContent(); break;
+                case 'shifts': content = renderAdminShiftsContent(); break;
+                case 'payouts': content = renderAdminPayoutsContent(); break;
+                case 'analytics': content = renderAdminAnalyticsContent(); break;
             }
             adminModalContent.innerHTML = `
                 <div class="flex justify-between items-start mb-6">
                     <h2 class="text-2xl font-bold" style="color: var(--text-primary);">Admin Tools</h2>
                     <button data-action="close-modal" class="text-2xl" style="color: var(--text-muted);">&times;</button>
                 </div>
-                <div class="flex space-x-2 border-b mb-6" style="border-color: var(--border-color);">
+                <div class="flex space-x-2 border-b mb-6 overflow-x-auto pb-2" style="border-color: var(--border-color);">
                     <button data-action="set-admin-view" data-view="workers" class="admin-tab ${state.adminModalView === 'workers' ? 'active' : ''}">Workers</button>
                     <button data-action="set-admin-view" data-view="services" class="admin-tab ${state.adminModalView === 'services' ? 'active' : ''}">Services</button>
                     <button data-action="set-admin-view" data-view="activities" class="admin-tab ${state.adminModalView === 'activities' ? 'active' : ''}">Activities</button>
                     <button data-action="set-admin-view" data-view="incentives" class="admin-tab ${state.adminModalView === 'incentives' ? 'active' : ''}">Incentives</button>
+                    <button data-action="set-admin-view" data-view="shifts" class="admin-tab ${state.adminModalView === 'shifts' ? 'active' : ''}">Shifts</button>
+                    <button data-action="set-admin-view" data-view="payouts" class="admin-tab ${state.adminModalView === 'payouts' ? 'active' : ''}">Payouts</button>
+                    <button data-action="set-admin-view" data-view="analytics" class="admin-tab ${state.adminModalView === 'analytics' ? 'active' : ''}">Analytics</button>
                 </div>
                 <div id="admin-modal-dynamic-content">${content}</div>
             `;
+            // If analytics tab is active, render charts
+            if (state.adminModalView === 'analytics') {
+                renderAnalyticsCharts();
+            }
         }
+
         function renderAdminActivitiesContent() {
             return `
                 <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Manage Loggable Activities</h3>
@@ -903,6 +918,7 @@
                 </div>
             `;
         }
+
         function renderAdminWorkersContent() {
             return `
                 <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Manage Workers</h3>
@@ -937,6 +953,7 @@
                 </div>
             `;
         }
+
         function renderAdminServicesContent() {
              return `
                 <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Manage Services</h3>
@@ -971,6 +988,7 @@
                 </div>
             `;
         }
+
         function renderAdminIncentivesContent() {
             return `
                 <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Manage Incentives</h3>
@@ -1005,6 +1023,7 @@
                 </div>
             `;
         }
+
         function renderIncentiveDetailsForm(type) {
             const container = document.getElementById('incentive-details-form');
             if (!container) return;
@@ -1075,7 +1094,7 @@
             }
             container.innerHTML = html;
         }
-        // --- Edit Modal ---
+
         function renderEditModal() {
             const container = document.getElementById('edit-item-modal-content');
             if (!state.itemToEdit) {
@@ -1089,63 +1108,347 @@
             }
         }
 
+        // --- NEW RENDER FUNCTIONS ---
+        function renderGoalSettingCard() {
+            const workerId = state.currentUser.id;
+            const goalData = state.goals[workerId] || { goal: 0, period: 'day' };
+            
+            let currentEarnings = 0;
+            if (goalData.period === 'day') {
+                currentEarnings = state.transactions
+                    .filter(t => t.workerId === workerId && isSameDay(t.submissionTimestamp, new Date()))
+                    .reduce((sum, t) => sum + getApprovedAmount(t), 0);
+            } else { // week
+                const today = new Date();
+                const dayOfWeek = today.getDay(); // Sunday - 0, Monday - 1, etc.
+                const startOfWeek = new Date(today);
+                startOfWeek.setDate(today.getDate() - dayOfWeek);
+                startOfWeek.setHours(0,0,0,0);
+
+                currentEarnings = state.transactions
+                    .filter(t => t.workerId === workerId && new Date(t.submissionTimestamp) >= startOfWeek)
+                    .reduce((sum, t) => sum + getApprovedAmount(t), 0);
+            }
+
+            const progressPercent = goalData.goal > 0 ? Math.min(100, (currentEarnings / goalData.goal) * 100) : 0;
+
+            return `
+                <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">My Goals</h3>
+                <div class="space-y-3">
+                    <div class="flex gap-2">
+                        <input type="number" id="goal-amount" class="input-field" placeholder="e.g., 300" value="${goalData.goal > 0 ? goalData.goal : ''}">
+                        <select id="goal-period" class="select-field">
+                            <option value="day" ${goalData.period === 'day' ? 'selected' : ''}>Per Day</option>
+                            <option value="week" ${goalData.period === 'week' ? 'selected' : ''}>Per Week</option>
+                        </select>
+                    </div>
+                    <button data-action="set-goal" class="btn btn-primary w-full">Set Goal</button>
+                    ${goalData.goal > 0 ? `
+                    <div class="pt-2">
+                        <div class="flex justify-between text-sm font-medium" style="color: var(--text-secondary);">
+                            <span>Progress</span>
+                            <span>$${currentEarnings.toFixed(2)} / $${goalData.goal.toFixed(2)}</span>
+                        </div>
+                        <div class="w-full progress-bar-bg mt-1">
+                            <div class="progress-bar-fg" style="width: ${progressPercent}%;"></div>
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderAdminShiftsContent() {
+            const activeShift = state.shifts.find(s => s.id === state.activeShiftId);
+            return `
+                <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Shift Management</h3>
+                <div class="card mb-6">
+                    ${activeShift ? `
+                        <p style="color: var(--text-secondary);">Current shift started at: ${new Date(activeShift.startTime).toLocaleString()}</p>
+                        <button data-action="admin-end-shift" class="btn btn-primary w-full mt-4">End Current Shift</button>
+                    ` : `
+                        <p style="color: var(--text-muted);">No active shift.</p>
+                        <button data-action="admin-start-shift" class="btn w-full mt-4" style="background-color: var(--brand-green); color: white;">Start New Shift</button>
+                    `}
+                </div>
+                <h4 class="font-semibold mb-2">Past Shifts</h4>
+                <div class="space-y-2 scrollable-list" style="max-height: 40vh;">
+                    ${state.shifts.filter(s => !s.isActive).map(s => `
+                        <div class="p-3 rounded-lg" style="background-color: var(--bg-tertiary);">
+                            <p class="font-semibold" style="color: var(--text-primary);">Ended: ${new Date(s.endTime).toLocaleString()}</p>
+                            <p class="text-sm" style="color: var(--text-muted);">Duration: ${((new Date(s.endTime) - new Date(s.startTime)) / 3600000).toFixed(2)} hours</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderAdminPayoutsContent() {
+            return `
+                 <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Payout Management</h3>
+                 <div class="card">
+                    <h4 class="font-semibold mb-2">Generate Payout Report</h4>
+                    <p class="text-sm text-muted mb-4">Select a date to generate a payout report for that day.</p>
+                    <input type="date" id="payout-date-picker" class="input-field mb-4" value="${new Date().toISOString().split('T')[0]}">
+                    <button data-action="admin-generate-payout" class="btn btn-primary w-full">Generate Report</button>
+                    <div id="payout-report-container" class="mt-6"></div>
+                 </div>
+            `;
+        }
+
+        function renderAdminAnalyticsContent() {
+            return `
+                <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Analytics Dashboard</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="card">
+                        <h4 class="font-semibold mb-2">Total Revenue (Last 7 Days)</h4>
+                        <canvas id="revenue-chart"></canvas>
+                    </div>
+                    <div class="card">
+                        <h4 class="font-semibold mb-2">Top Performing Services</h4>
+                        <canvas id="services-chart"></canvas>
+                    </div>
+                    <div class="card md:col-span-2">
+                        <h4 class="font-semibold mb-2">Worker Leaderboard (This Week)</h4>
+                        <div id="worker-leaderboard"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAnalyticsCharts() {
+            // Destroy existing charts to prevent duplicates
+            Object.values(state.charts).forEach(chart => chart.destroy());
+            state.charts = {};
+
+            const isLightMode = appWrapper.classList.contains('light-mode');
+            const textColor = isLightMode ? 'var(--text-primary)' : 'var(--text-secondary)';
+            const gridColor = isLightMode ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+
+            // --- Revenue Chart (Last 7 Days) ---
+            const revenueCtx = document.getElementById('revenue-chart')?.getContext('2d');
+            if (revenueCtx) {
+                const labels = [];
+                const data = [];
+                for (let i = 6; i >= 0; i--) {
+                    const d = new Date();
+                    d.setDate(d.getDate() - i);
+                    labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                    const dailyTotal = state.transactions
+                        .filter(tx => isSameDay(tx.submissionTimestamp, d))
+                        .reduce((sum, tx) => sum + getApprovedAmount(tx), 0);
+                    data.push(dailyTotal);
+                }
+                state.charts.revenue = new Chart(revenueCtx, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Total Approved Revenue',
+                            data,
+                            borderColor: 'var(--brand-pink)',
+                            backgroundColor: 'rgba(236, 72, 153, 0.2)',
+                            fill: true,
+                            tension: 0.3,
+                        }]
+                    },
+                    options: { scales: { y: { ticks: { color: textColor }, grid: { color: gridColor } }, x: { ticks: { color: textColor }, grid: { color: gridColor } } } }
+                });
+            }
+
+            // --- Top Services Chart ---
+            const servicesCtx = document.getElementById('services-chart')?.getContext('2d');
+            if (servicesCtx) {
+                const serviceCounts = state.transactions.reduce((acc, tx) => {
+                    if (tx.serviceId) {
+                        acc[tx.serviceId] = (acc[tx.serviceId] || 0) + 1;
+                    }
+                    return acc;
+                }, {});
+                const sortedServices = Object.entries(serviceCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                const serviceLabels = sortedServices.map(([id]) => state.services.find(s => s.id === id)?.name || 'Unknown');
+                const serviceData = sortedServices.map(([, count]) => count);
+                
+                state.charts.services = new Chart(servicesCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: serviceLabels,
+                        datasets: [{
+                            label: 'Service Count',
+                            data: serviceData,
+                            backgroundColor: ['var(--brand-pink)', 'var(--brand-blue)', 'var(--brand-green)', 'var(--brand-yellow)', 'var(--brand-red)'],
+                        }]
+                    },
+                    options: { plugins: { legend: { labels: { color: textColor } } } }
+                });
+            }
+
+            // --- Worker Leaderboard ---
+            const leaderboardContainer = document.getElementById('worker-leaderboard');
+            if (leaderboardContainer) {
+                 const today = new Date();
+                const dayOfWeek = today.getDay();
+                const startOfWeek = new Date(today);
+                startOfWeek.setDate(today.getDate() - dayOfWeek);
+                startOfWeek.setHours(0,0,0,0);
+
+                const weeklyTxs = state.transactions.filter(t => new Date(t.submissionTimestamp) >= startOfWeek);
+                
+                const workerTotals = {};
+                state.users.filter(isWorker).forEach(w => { workerTotals[w.id] = { name: w.name, total: 0 }; });
+                
+                weeklyTxs.forEach(tx => {
+                    if (workerTotals[tx.workerId]) {
+                        workerTotals[tx.workerId].total += getApprovedAmount(tx);
+                    }
+                });
+
+                const sortedWorkers = Object.values(workerTotals).sort((a,b) => b.total - a.total).slice(0, 5);
+
+                leaderboardContainer.innerHTML = sortedWorkers.map((w, i) => `
+                    <div class="flex justify-between items-center p-2 rounded ${i === 0 ? 'bg-yellow-500/20' : ''}">
+                        <span class="font-semibold">${i+1}. ${w.name}</span>
+                        <span class="font-bold" style="color: var(--brand-green);">$${w.total.toFixed(2)}</span>
+                    </div>
+                `).join('');
+            }
+        }
+        
         // --- Event Handlers & Actions ---
+        
+        async function handleSetGoal() {
+            const workerId = state.currentUser.id;
+            const amount = parseFloat(document.getElementById('goal-amount').value) || 0;
+            const period = document.getElementById('goal-period').value;
+
+            if (amount <= 0) {
+                const newGoals = { ...state.goals };
+                delete newGoals[workerId];
+                await db.collection('goals').doc(workerId).delete();
+            } else {
+                const goalData = { goal: amount, period };
+                await db.collection('goals').doc(workerId).set(goalData, { merge: true });
+            }
+        }
+
+        async function handleStartShift() {
+            if (state.activeShiftId) {
+                alert("A shift is already active.");
+                return;
+            }
+            const newShift = {
+                startTime: new Date().toISOString(),
+                endTime: null,
+                isActive: true,
+                managerId: state.currentUser.id,
+                submissionTimestamp: new Date().toISOString(),
+            };
+            const docRef = await db.collection('shifts').add(newShift);
+            alert(`Shift ${docRef.id} started.`);
+        }
+
+        async function handleEndShift() {
+            if (!state.activeShiftId) {
+                alert("No active shift to end.");
+                return;
+            }
+            if (confirm("Are you sure you want to end the current shift?")) {
+                const shiftRef = db.collection('shifts').doc(state.activeShiftId);
+                await shiftRef.update({
+                    isActive: false,
+                    endTime: new Date().toISOString(),
+                });
+                alert("Shift has been ended.");
+            }
+        }
+
+        function handleGeneratePayout() {
+            const datePicker = document.getElementById('payout-date-picker');
+            const selectedDate = new Date(datePicker.value + 'T00:00:00');
+            
+            const transactionsForDay = state.transactions.filter(tx => isSameDay(tx.submissionTimestamp, selectedDate));
+            const approvedTxs = transactionsForDay.filter(tx => tx.status === 'approved');
+
+            const report = {};
+            state.users.filter(isWorker).forEach(w => {
+                report[w.id] = { name: w.name, totalEarnings: 0, houseTake: 0, payout: 0, split: w.payoutSplit };
+            });
+
+            approvedTxs.forEach(tx => {
+                if (report[tx.workerId]) {
+                    const amount = getApprovedAmount(tx);
+                    report[tx.workerId].totalEarnings += amount;
+                }
+            });
+
+            let totalHouseTake = 0;
+            Object.values(report).forEach(workerReport => {
+                workerReport.houseTake = workerReport.totalEarnings * workerReport.split.house;
+                workerReport.payout = workerReport.totalEarnings * workerReport.split.worker;
+                totalHouseTake += workerReport.houseTake;
+            });
+            
+            const container = document.getElementById('payout-report-container');
+            container.innerHTML = `
+                <h4 class="font-semibold mb-2">Payout Report for ${formatDate(selectedDate)}</h4>
+                <div class="space-y-2">
+                    ${Object.values(report).map(r => `
+                        <div class="p-2 rounded-lg flex justify-between items-center" style="background-color: var(--bg-tertiary);">
+                            <span class="font-semibold">${r.name}</span>
+                            <span style="color: var(--brand-pink);">Payout: $${r.payout.toFixed(2)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="mt-4 pt-4 border-t" style="border-color: var(--border-color);">
+                    <p class="text-lg font-bold text-right">Total House Take: <span style="color: var(--brand-green);">$${totalHouseTake.toFixed(2)}</span></p>
+                </div>
+            `;
+        }
+
         function handleAction(e) {
             const target = e.target.closest('[data-action]');
             if (!target) return;
             
             const { action, id, view } = target.dataset;
-            switch(action) {
-                // Main App
-                case 'login': handleLogin(); break;
-                case 'logout': handleLogout(); break;
-                case 'select-date': state.selectedDate = new Date(target.dataset.date); render(); break;
-                case 'prev-month': state.selectedDate.setMonth(state.selectedDate.getMonth() - 1); render(); break;
-                case 'next-month': state.selectedDate.setMonth(state.selectedDate.getMonth() + 1); render(); break;
-                case 'add-transaction': handleAddTransaction(); break;
-                case 'log-activity': handleLogActivity(); break;
-                case 'verify': handleVerification(id); break;
-                case 'deny': handleDenyTransaction(id); break;
-                case 'worker-accept': handleWorkerAcceptance(id); break;
-                case 'toggle-theme': handleToggleTheme(); break;
-                case 'toggle-daily-payouts': state.dailyPayoutsExpanded = !state.dailyPayoutsExpanded; render(); break;
-                case 'toggle-all-time-payouts': state.allTimePayoutsExpanded = !state.allTimePayoutsExpanded; render(); break;
-                // Modals
-                case 'open-admin-modal': state.isModalOpen = true; state.modalType = 'admin'; render(); break;
-                case 'close-modal': state.isModalOpen = false; state.modalType = null; render(); break;
-                case 'set-admin-view': state.adminModalView = view; renderAdminModal(); break;
-                // Admin Actions
-                case 'admin-delete-worker': handleDelete('users', id, 'Worker'); break;
-                case 'admin-delete-service': handleDelete('services', id, 'Service'); break;
-                case 'admin-delete-activity': handleDelete('activities', id, 'Activity'); break;
-                case 'admin-delete-incentive': handleDelete('incentives', id, 'Incentive'); break;
-                case 'admin-edit-worker': 
-                    state.itemToEdit = { type: 'worker', id: id };
-                    state.isModalOpen = true; 
-                    state.modalType = 'edit';
-                    render();
-                    break;
-                case 'admin-edit-service':
-                    state.itemToEdit = { type: 'service', id: id };
-                    state.isModalOpen = true;
-                    state.modalType = 'edit';
-                    render();
-                    break;
-                case 'admin-update-worker': handleUpdateWorker(id); break;
-                case 'admin-update-service': handleUpdateService(id); break;
-                // Views
-                case 'admin-dashboard-view': state.view = 'adminDashboard'; render(); break;
-                case 'admin-incentive-tracker-view': state.view = 'adminIncentiveTracker'; render(); break;
-                case 'admin-worker-detail-view':
-                    state.selectedWorkerId = id;
-                    state.view = 'adminWorkerDetail';
-                    render();
-                    break;
+
+            const actions = {
+                'login': handleLogin,
+                'logout': handleLogout,
+                'select-date': () => { state.selectedDate = new Date(target.dataset.date); render(); },
+                'prev-month': () => { state.selectedDate.setMonth(state.selectedDate.getMonth() - 1); render(); },
+                'next-month': () => { state.selectedDate.setMonth(state.selectedDate.getMonth() + 1); render(); },
+                'add-transaction': handleAddTransaction,
+                'log-activity': handleLogActivity,
+                'worker-accept': () => handleWorkerAcceptance(id),
+                'set-goal': handleSetGoal,
+                'verify': () => handleVerification(id),
+                'deny': () => handleDenyTransaction(id),
+                'toggle-daily-payouts': () => { state.dailyPayoutsExpanded = !state.dailyPayoutsExpanded; render(); },
+                'toggle-all-time-payouts': () => { state.allTimePayoutsExpanded = !state.allTimePayoutsExpanded; render(); },
+                'admin-start-shift': handleStartShift,
+                'admin-end-shift': handleEndShift,
+                'admin-generate-payout': handleGeneratePayout,
+                'open-admin-modal': () => { state.isModalOpen = true; state.modalType = 'admin'; render(); },
+                'close-modal': () => { state.isModalOpen = false; state.modalType = null; render(); },
+                'set-admin-view': () => { state.adminModalView = view; renderAdminModal(); },
+                'admin-dashboard-view': () => { state.view = 'adminDashboard'; render(); },
+                'admin-incentive-tracker-view': () => { state.view = 'adminIncentiveTracker'; render(); },
+                'admin-worker-detail-view': () => { state.selectedWorkerId = id; state.view = 'adminWorkerDetail'; render(); },
+                'admin-delete-worker': () => handleDelete('users', id, 'Worker'),
+                'admin-delete-service': () => handleDelete('services', id, 'Service'),
+                'admin-delete-activity': () => handleDelete('activities', id, 'Activity'),
+                'admin-delete-incentive': () => handleDelete('incentives', id, 'Incentive'),
+                'admin-edit-worker': () => { state.itemToEdit = { type: 'worker', id }; state.isModalOpen = true; state.modalType = 'edit'; render(); },
+                'admin-edit-service': () => { state.itemToEdit = { type: 'service', id }; state.isModalOpen = true; state.modalType = 'edit'; render(); },
+                'admin-update-worker': () => handleUpdateWorker(id),
+                'admin-update-service': () => handleUpdateService(id),
+                'toggle-theme': handleToggleTheme,
+            };
+
+            if (actions[action]) {
+                actions[action]();
             }
         }
-        
-        // ... (All handle... functions are included here)
-        // ... I am showing the most critical ones that were refactored.
         
         async function handleLogin() {
             const selectedId = document.getElementById('user-select').value;
@@ -1190,12 +1493,46 @@
               submissionTimestamp: new Date().toISOString(),
               verificationTimestamp: null,
               serviceId: serviceId || null,
-              type: 'monetary'
+              type: 'monetary',
+              shiftId: state.activeShiftId,
             };
             await db.collection('transactions').add(newTransaction);
             amountInput.value = '';
             serviceSelect.value = '';
             document.getElementById('amount-label').textContent = 'Total Amount';
+        }
+
+        async function handleLogActivity() {
+            const activitySelect = document.getElementById('log-activity-type');
+            const activityId = activitySelect.value;
+            if (!activityId) {
+                alert("Please select an activity to log.");
+                return;
+            }
+            const activity = state.activities.find(a => a.id === activityId);
+            const valueInput = document.getElementById('log-activity-value');
+            const value = activity.metric === 'duration' ? (parseInt(valueInput.value) || 0) : 1;
+            if (activity.metric === 'duration' && value <= 0) {
+                alert("Please enter a valid duration.");
+                return;
+            }
+            const newActivityLog = {
+                workerId: state.currentUser.id,
+                workerName: state.currentUser.name,
+                transactionCode: `LOG-${state.currentUser.name.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
+                activityId: activityId,
+                activityName: activity.name,
+                activityValue: value,
+                status: 'approved',
+                submissionTimestamp: new Date().toISOString(),
+                type: 'activity',
+                shiftId: state.activeShiftId,
+            };
+            await db.collection('transactions').add(newActivityLog);
+            alert(`Activity "${activity.name}" logged successfully!`);
+            activitySelect.value = '';
+            valueInput.value = '';
+            document.getElementById('activity-value-container').classList.add('hidden');
         }
 
         async function handleVerification(txId) {
@@ -1210,6 +1547,150 @@
                 await txRef.update({ managerVerifiedAmount: managerAmount, status, verificationTimestamp: new Date().toISOString() });
             }
         }
+        
+        async function handleDenyTransaction(txId) {
+            await db.collection('transactions').doc(txId).update({ status: 'denied', verificationTimestamp: new Date().toISOString() });
+        }
+
+        async function handleWorkerAcceptance(txId) {
+            await db.collection('transactions').doc(txId).update({ status: 'approved' });
+        }
+
+        async function handleAddWorker() {
+            const form = document.getElementById('add-worker-form');
+            const name = form.querySelector('#new-worker-name').value;
+            const pin = form.querySelector('#new-worker-pin').value;
+            const split = form.querySelector('#new-worker-split').value;
+            const role = form.querySelector('#new-worker-role').value;
+            if (!name || !pin || !split || !role) { alert("All fields are required."); return; }
+            const newWorker = {
+                name, 
+                role,
+                pin,
+                payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
+            };
+            await db.collection('users').add(newWorker);
+            form.reset();
+        }
+
+        async function handleUpdateWorker(id) {
+            const form = document.getElementById('edit-worker-form');
+            const name = form.querySelector('#edit-worker-name').value;
+            const pin = form.querySelector('#edit-worker-pin').value;
+            const split = form.querySelector('#edit-worker-split').value;
+            const role = form.querySelector('#edit-worker-role').value;
+            if (!id || !name || !pin || !split || !role) { alert("All fields are required."); return; }
+            const workerRef = db.collection('users').doc(id);
+            await workerRef.update({
+                name, 
+                pin,
+                role,
+                payoutSplit: { worker: parseFloat(split) / 100, house: 1 - (parseFloat(split) / 100) }
+            });
+            state.isModalOpen = false;
+            render();
+        }
+
+        async function handleAddService() {
+            const form = document.getElementById('add-service-form');
+            const name = form.querySelector('#new-service-name').value;
+            const price = parseFloat(form.querySelector('#new-service-price').value);
+            const category = form.querySelector('#new-service-category').value;
+            if (!name || isNaN(price)) { alert("All fields are required."); return; }
+            await db.collection('services').add({ name, price, category });
+            form.reset();
+        }
+
+        async function handleUpdateService(id) {
+            const form = document.getElementById('edit-service-form');
+            const name = form.querySelector('#edit-service-name').value;
+            const price = parseFloat(form.querySelector('#edit-service-price').value);
+            const category = form.querySelector('#edit-service-category').value;
+             if (!name || isNaN(price)) { alert("All fields are required."); return; }
+            await db.collection('services').doc(id).update({ name, price, category });
+            state.isModalOpen = false;
+            render();
+        }
+
+        async function handleAddActivity() {
+            const form = document.getElementById('add-activity-form');
+            const name = form.querySelector('#new-activity-name').value;
+            const metric = form.querySelector('#new-activity-metric').value;
+            if (!name) { alert("Activity name is required."); return; }
+            await db.collection('activities').add({ name, metric });
+            form.reset();
+        }
+
+        async function handleAddIncentive() {
+            const form = document.getElementById('add-incentive-form');
+            const name = form.querySelector('#new-incentive-name').value;
+            const description = form.querySelector('#new-incentive-desc').value;
+            const startDate = form.querySelector('#new-incentive-start').value;
+            const endDate = form.querySelector('#new-incentive-end').value;
+            const type = form.querySelector('#new-incentive-type').value;
+            if (!name || !description || !startDate || !endDate || !type) {
+                alert("Please fill out all incentive fields.");
+                return;
+            }
+            let details = {};
+            let targetId = null; // For service_push
+            if (type === 'service_push') {
+                targetId = form.querySelector('#incentive-target-service')?.value;
+                details.goal = parseInt(form.querySelector('#incentive-service-goal')?.value);
+                details.reward = parseFloat(form.querySelector('#incentive-service-reward')?.value);
+                if (!targetId || isNaN(details.goal) || isNaN(details.reward)) {
+                    alert("Please fill out all fields for the service push incentive.");
+                    return;
+                }
+            } else if (type === 'top_earners_night' || type === 'top_earners_month') {
+                details.placements = parseInt(form.querySelector('#incentive-placements')?.value);
+                details.rewardMethod = form.querySelector('#incentive-reward-method')?.value;
+                details.rewardPercent = parseFloat(form.querySelector('#incentive-reward-percent')?.value) / 100;
+                details.shareProgress = form.querySelector('#incentive-share-progress')?.checked || false;
+                 if (isNaN(details.placements) || isNaN(details.rewardPercent)) {
+                    alert("Please fill out all fields for the top earners incentive.");
+                    return;
+                }
+            } else if (type === 'threshold_bonus') {
+                details.threshold = parseFloat(form.querySelector('#incentive-threshold')?.value);
+                details.reward = parseFloat(form.querySelector('#incentive-reward')?.value);
+                if (isNaN(details.threshold) || isNaN(details.reward)) {
+                    alert("Please fill out all fields for the threshold bonus incentive.");
+                    return;
+                }
+            } else if (type === 'custom') {
+                details.metric = form.querySelector('#custom-metric').value;
+                details.condition = form.querySelector('#custom-condition').value;
+                details.targetValue = parseFloat(form.querySelector('#custom-target-value').value);
+                details.rewardType = form.querySelector('#custom-reward-type').value;
+                details.rewardValue = parseFloat(form.querySelector('#custom-reward-value').value);
+                if (details.metric === 'service_count') {
+                    details.targetServiceId = form.querySelector('#custom-target-service').value;
+                } else if (details.metric === 'activity_count') {
+                    details.targetActivityId = form.querySelector('#custom-target-activity').value;
+                }
+                if (isNaN(details.targetValue) || isNaN(details.rewardValue)) {
+                    alert("Please fill out all fields for the custom incentive.");
+                    return;
+                }
+            }
+            const newIncentive = { name, description, startDate, endDate, type, targetId, details };
+            await db.collection('incentives').add(newIncentive);
+            form.reset();
+            renderIncentiveDetailsForm('service_push'); // Reset details form
+        }
+
+        async function handleDelete(collection, id, itemType) {
+            if (confirm(`Are you sure you want to delete this ${itemType}?`)) {
+                await db.collection(collection).doc(id).delete();
+            }
+        }
+
+        function handleToggleTheme() {
+            appWrapper.classList.toggle('light-mode');
+            localStorage.setItem('tipTallyTheme', appWrapper.classList.contains('light-mode') ? 'light' : 'dark');
+            render();
+        }
 
         // --- Initializer ---
         async function init() {
@@ -1218,11 +1699,15 @@
             
             try {
                 // Set up real-time listeners for all collections
-                const collections = ['users', 'transactions', 'services', 'activities', 'incentives'];
+                const collections = ['users', 'transactions', 'services', 'activities', 'incentives', 'shifts', 'goals'];
                 collections.forEach(col => {
                     let query = db.collection(col);
-                    // Add specific ordering if needed
-                    if (col === 'transactions') query = query.orderBy("submissionTimestamp", "desc");
+                    if (col === 'transactions') {
+                        query = query.orderBy("submissionTimestamp", "desc");
+                    }
+                    if (col === 'shifts') {
+                        query = db.collection(col).orderBy("startTime", "desc");
+                    }
                     
                     query.onSnapshot(snapshot => {
                         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
@@ -1232,9 +1717,20 @@
                             data.sort((a, b) => (roleOrder[a.role] ?? 99) - (roleOrder[b.role] ?? 99) || a.name.localeCompare(b.name));
                         }
                         
-                        state[col] = data;
+                        if (col === 'goals') {
+                            state.goals = data.reduce((acc, goal) => {
+                                acc[goal.id] = goal;
+                                return acc;
+                            }, {});
+                        } else {
+                            state[col] = data;
+                        }
 
-                        // Auto-login logic after users have loaded
+                        if (col === 'shifts') {
+                            const activeShift = data.find(s => s.isActive);
+                            state.activeShiftId = activeShift ? activeShift.id : null;
+                        }
+
                         if (col === 'users') {
                             const savedUserId = localStorage.getItem('tipTallyUserId');
                             if (savedUserId && !state.currentUser) {
@@ -1249,7 +1745,6 @@
                             }
                         }
                         
-                        // Re-render on any data change, but avoid re-rendering during login screen data load
                         if (state.view !== 'login' || col === 'users') {
                             render();
                         }
@@ -1264,7 +1759,6 @@
                 return;
             }
 
-            // --- Consolidated Event Listeners ---
             appWrapper.addEventListener('click', handleAction);
             
             appWrapper.addEventListener('submit', (e) => {
@@ -1294,7 +1788,7 @@
 
             appWrapper.addEventListener('change', (e) => {
                 const target = e.target;
-                if(target.id === 'new-incentive-type') {
+                 if(target.id === 'new-incentive-type') {
                     renderIncentiveDetailsForm(target.value);
                 }
                 if(target.id === 'custom-metric') {
