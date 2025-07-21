@@ -154,6 +154,7 @@
             font-weight: 500;
             cursor: pointer;
             transition: background-color 0.2s;
+            flex-shrink: 0; /* Prevent tabs from shrinking */
         }
         .admin-tab.active {
             background-color: var(--brand-pink);
@@ -210,11 +211,11 @@
             services: [],
             activities: [],
             incentives: [],
-            shifts: [], // NEW: For shift management
-            payouts: [], // NEW: For payout records
-            goals: {},   // NEW: For worker goals { workerId: { goal: 500, period: 'week' } }
+            shifts: [], 
+            payouts: [], 
+            goals: {},   
             currentUser: null,
-            activeShiftId: null, // NEW: ID of the currently active shift
+            activeShiftId: null, 
             view: 'login',
             adminModalView: 'workers',
             selectedDate: new Date(),
@@ -226,7 +227,10 @@
             modalType: null,
             dailyPayoutsExpanded: true,
             allTimePayoutsExpanded: false,
-            charts: {}, // To hold chart instances
+            charts: {},
+            // NEW: State for analytics date range
+            analyticsStartDate: new Date(new Date().setDate(new Date().getDate() - 6)), // Default to last 7 days
+            analyticsEndDate: new Date(),
         };
 
         // --- Firebase Initialization ---
@@ -421,6 +425,7 @@
                         <p class="font-bold" style="color: var(--text-primary);">ID: <span class="font-mono" style="color: var(--brand-pink);">${tx.transactionCode}</span></p>
                         <p class="text-sm" style="color: var(--text-muted);">${new Date(tx.submissionTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                         ${service ? `<p class="text-xs font-semibold" style="color: var(--brand-blue);">${service.name}</p>` : ''}
+                        ${tx.managerNote ? `<p class="text-xs mt-2 italic" style="color: var(--brand-yellow);">Manager Note: ${tx.managerNote}</p>` : ''}
                     </div>
                     <div class="text-left md:text-right">
                         <p class="text-lg font-bold" style="color: var(--text-primary);">You Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p>
@@ -616,8 +621,11 @@
                                         <div><p class="font-bold" style="color: var(--text-primary);">${tx.workerName} - <span class="font-mono" style="color: var(--brand-pink);">${tx.transactionCode}</span></p><p class="text-sm" style="color: var(--text-muted);">Submitted: $${tx.workerSubmittedAmount.toFixed(2)}</p></div>
                                         ${renderStatusBadge(tx.status)}
                                     </div>
-                                    <div class="flex gap-2">
-                                        <input type="number" data-id="${tx.id}" placeholder="Enter counted amount" class="input-field verification-amount flex-grow" step="0.01"/>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <input type="number" data-id="${tx.id}" placeholder="Enter counted amount" class="input-field verification-amount" step="0.01"/>
+                                        <input type="text" data-id="${tx.id}" placeholder="Optional note..." class="input-field verification-note"/>
+                                    </div>
+                                    <div class="flex gap-2 mt-2 justify-end">
                                         <button data-action="verify" data-id="${tx.id}" class="btn" style="background-color: var(--brand-green); color: white;">Verify</button>
                                         <button data-action="deny" data-id="${tx.id}" class="btn" style="background-color: var(--brand-red); color: white;">Deny</button>
                                     </div>
@@ -875,7 +883,7 @@
                     <h2 class="text-2xl font-bold" style="color: var(--text-primary);">Admin Tools</h2>
                     <button data-action="close-modal" class="text-2xl" style="color: var(--text-muted);">&times;</button>
                 </div>
-                <div class="flex space-x-2 border-b mb-6 overflow-x-auto pb-2" style="border-color: var(--border-color);">
+                <div class="flex space-x-2 border-b mb-6 overflow-x-auto pb-2 flex-wrap gap-2" style="border-color: var(--border-color);">
                     <button data-action="set-admin-view" data-view="workers" class="admin-tab ${state.adminModalView === 'workers' ? 'active' : ''}">Workers</button>
                     <button data-action="set-admin-view" data-view="services" class="admin-tab ${state.adminModalView === 'services' ? 'active' : ''}">Services</button>
                     <button data-action="set-admin-view" data-view="activities" class="admin-tab ${state.adminModalView === 'activities' ? 'active' : ''}">Activities</button>
@@ -886,7 +894,6 @@
                 </div>
                 <div id="admin-modal-dynamic-content">${content}</div>
             `;
-            // If analytics tab is active, render charts
             if (state.adminModalView === 'analytics') {
                 renderAnalyticsCharts();
             }
@@ -1197,11 +1204,29 @@
         }
 
         function renderAdminAnalyticsContent() {
+            const toISODateString = (date) => {
+                const pad = (num) => (num < 10 ? '0' : '') + num;
+                return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+            };
+
             return `
                 <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Analytics Dashboard</h3>
+                <div class="card mb-6">
+                    <h4 class="font-semibold mb-2">Select Date Range</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="analytics-start-date" class="text-xs font-medium" style="color: var(--text-secondary);">Start Date</label>
+                            <input type="date" id="analytics-start-date" class="input-field mt-1" value="${toISODateString(state.analyticsStartDate)}">
+                        </div>
+                        <div>
+                            <label for="analytics-end-date" class="text-xs font-medium" style="color: var(--text-secondary);">End Date</label>
+                            <input type="date" id="analytics-end-date" class="input-field mt-1" value="${toISODateString(state.analyticsEndDate)}">
+                        </div>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="card">
-                        <h4 class="font-semibold mb-2">Total Revenue (Last 7 Days)</h4>
+                        <h4 class="font-semibold mb-2">Total Revenue</h4>
                         <canvas id="revenue-chart"></canvas>
                     </div>
                     <div class="card">
@@ -1209,7 +1234,7 @@
                         <canvas id="services-chart"></canvas>
                     </div>
                     <div class="card md:col-span-2">
-                        <h4 class="font-semibold mb-2">Worker Leaderboard (This Week)</h4>
+                        <h4 class="font-semibold mb-2">Worker Leaderboard</h4>
                         <div id="worker-leaderboard"></div>
                     </div>
                 </div>
@@ -1217,36 +1242,47 @@
         }
 
         function renderAnalyticsCharts() {
-            // Destroy existing charts to prevent duplicates
             Object.values(state.charts).forEach(chart => chart.destroy());
             state.charts = {};
 
             const isLightMode = appWrapper.classList.contains('light-mode');
-            const textColor = isLightMode ? 'var(--text-primary)' : 'var(--text-secondary)';
+            const textColor = isLightMode ? '#111827' : '#d1d5db';
             const gridColor = isLightMode ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+            
+            const startDate = state.analyticsStartDate;
+            startDate.setHours(0,0,0,0);
+            const endDate = state.analyticsEndDate;
+            endDate.setHours(23,59,59,999);
 
-            // --- Revenue Chart (Last 7 Days) ---
+            const filteredTransactions = state.transactions.filter(tx => {
+                const txDate = new Date(tx.submissionTimestamp);
+                return txDate >= startDate && txDate <= endDate;
+            });
+
+            // --- Revenue Chart ---
             const revenueCtx = document.getElementById('revenue-chart')?.getContext('2d');
             if (revenueCtx) {
-                const labels = [];
-                const data = [];
-                for (let i = 6; i >= 0; i--) {
-                    const d = new Date();
-                    d.setDate(d.getDate() - i);
-                    labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-                    const dailyTotal = state.transactions
-                        .filter(tx => isSameDay(tx.submissionTimestamp, d))
-                        .reduce((sum, tx) => sum + getApprovedAmount(tx), 0);
-                    data.push(dailyTotal);
+                const dateMap = {};
+                let currentDate = new Date(startDate);
+                while(currentDate <= endDate) {
+                    dateMap[currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })] = 0;
+                    currentDate.setDate(currentDate.getDate() + 1);
                 }
+                filteredTransactions.forEach(tx => {
+                    const label = new Date(tx.submissionTimestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    if(dateMap.hasOwnProperty(label)) {
+                        dateMap[label] += getApprovedAmount(tx);
+                    }
+                });
+                
                 state.charts.revenue = new Chart(revenueCtx, {
                     type: 'line',
                     data: {
-                        labels,
+                        labels: Object.keys(dateMap),
                         datasets: [{
                             label: 'Total Approved Revenue',
-                            data,
-                            borderColor: 'var(--brand-pink)',
+                            data: Object.values(dateMap),
+                            borderColor: '#ec4899',
                             backgroundColor: 'rgba(236, 72, 153, 0.2)',
                             fill: true,
                             tension: 0.3,
@@ -1259,7 +1295,7 @@
             // --- Top Services Chart ---
             const servicesCtx = document.getElementById('services-chart')?.getContext('2d');
             if (servicesCtx) {
-                const serviceCounts = state.transactions.reduce((acc, tx) => {
+                const serviceCounts = filteredTransactions.reduce((acc, tx) => {
                     if (tx.serviceId) {
                         acc[tx.serviceId] = (acc[tx.serviceId] || 0) + 1;
                     }
@@ -1276,7 +1312,7 @@
                         datasets: [{
                             label: 'Service Count',
                             data: serviceData,
-                            backgroundColor: ['var(--brand-pink)', 'var(--brand-blue)', 'var(--brand-green)', 'var(--brand-yellow)', 'var(--brand-red)'],
+                            backgroundColor: ['#ec4899', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444'],
                         }]
                     },
                     options: { plugins: { legend: { labels: { color: textColor } } } }
@@ -1286,18 +1322,10 @@
             // --- Worker Leaderboard ---
             const leaderboardContainer = document.getElementById('worker-leaderboard');
             if (leaderboardContainer) {
-                 const today = new Date();
-                const dayOfWeek = today.getDay();
-                const startOfWeek = new Date(today);
-                startOfWeek.setDate(today.getDate() - dayOfWeek);
-                startOfWeek.setHours(0,0,0,0);
-
-                const weeklyTxs = state.transactions.filter(t => new Date(t.submissionTimestamp) >= startOfWeek);
-                
                 const workerTotals = {};
                 state.users.filter(isWorker).forEach(w => { workerTotals[w.id] = { name: w.name, total: 0 }; });
                 
-                weeklyTxs.forEach(tx => {
+                filteredTransactions.forEach(tx => {
                     if (workerTotals[tx.workerId]) {
                         workerTotals[tx.workerId].total += getApprovedAmount(tx);
                     }
@@ -1537,19 +1565,33 @@
 
         async function handleVerification(txId) {
             const amountInput = document.querySelector(`input.verification-amount[data-id="${txId}"]`);
+            const noteInput = document.querySelector(`input.verification-note[data-id="${txId}"]`);
             const managerAmount = parseFloat(amountInput.value);
+            const managerNote = noteInput.value.trim();
+
             if (isNaN(managerAmount)) { alert('Please enter a valid number.'); return; }
             const txRef = db.collection('transactions').doc(txId);
             const txDoc = await txRef.get();
             if (txDoc.exists) {
                 const tx = txDoc.data();
                 const status = managerAmount === tx.workerSubmittedAmount ? 'approved' : 'disputed';
-                await txRef.update({ managerVerifiedAmount: managerAmount, status, verificationTimestamp: new Date().toISOString() });
+                await txRef.update({ 
+                    managerVerifiedAmount: managerAmount, 
+                    status, 
+                    verificationTimestamp: new Date().toISOString(),
+                    managerNote: managerNote || null, // Add the note
+                });
             }
         }
         
         async function handleDenyTransaction(txId) {
-            await db.collection('transactions').doc(txId).update({ status: 'denied', verificationTimestamp: new Date().toISOString() });
+            const noteInput = document.querySelector(`input.verification-note[data-id="${txId}"]`);
+            const managerNote = noteInput.value.trim();
+            await db.collection('transactions').doc(txId).update({ 
+                status: 'denied', 
+                verificationTimestamp: new Date().toISOString(),
+                managerNote: managerNote || 'Denied without specific reason.',
+            });
         }
 
         async function handleWorkerAcceptance(txId) {
@@ -1788,6 +1830,12 @@
 
             appWrapper.addEventListener('change', (e) => {
                 const target = e.target;
+                if (target.id === 'analytics-start-date' || target.id === 'analytics-end-date') {
+                    state.analyticsStartDate = new Date(document.getElementById('analytics-start-date').value);
+                    state.analyticsEndDate = new Date(document.getElementById('analytics-end-date').value);
+                    renderAnalyticsCharts();
+                    return;
+                }
                  if(target.id === 'new-incentive-type') {
                     renderIncentiveDetailsForm(target.value);
                 }
