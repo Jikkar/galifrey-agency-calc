@@ -178,6 +178,17 @@
             border-radius: 9999px;
             transition: width 0.5s ease-in-out;
         }
+        /* Period Selector Button */
+        .period-btn {
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        .period-btn.active {
+            background-color: var(--brand-pink);
+            color: white;
+            border-color: var(--brand-pink);
+        }
     </style>
 </head>
 <body>
@@ -220,6 +231,7 @@
             adminModalView: 'workers',
             selectedDate: new Date(),
             selectedWorkerId: null,
+            selectedPeriod: 'Day',
             itemToEdit: null,
             loginError: '',
             selectedLoginUser: '',
@@ -278,6 +290,7 @@
                 case 'adminDashboard': currentViewHtml = renderMainAppView(renderAdminDashboard()); break;
                 case 'adminWorkerDetail': currentViewHtml = renderMainAppView(renderAdminWorkerDetail()); break;
                 case 'adminIncentiveTracker': currentViewHtml = renderMainAppView(renderAdminIncentiveTracker()); break;
+                case 'historicalDataView': currentViewHtml = renderMainAppView(renderHistoricalDataView()); break;
             }
             appContainer.innerHTML = currentViewHtml;
 
@@ -407,6 +420,7 @@
                         <div class="card">
                             <h3 style="color: var(--text-muted);" class="text-sm">Your Total Take (All Time)</h3>
                             <p class="text-4xl font-bold" style="color: var(--brand-green);">$${allTimeTake.toFixed(2)}</p>
+                            <button data-action="view-history" data-id="${state.currentUser.id}" class="btn btn-primary w-full mt-4 text-sm">View My History</button>
                         </div>
                         <div class="card">${renderGoalSettingCard()}</div>
                         <div class="card">${renderIncentivesPanel()}</div>
@@ -657,30 +671,41 @@
         function renderAdminWorkerDetail() {
             const worker = state.users.find(u => u.id === state.selectedWorkerId);
             if (!worker) return `<p>Worker not found.</p>`;
-            const dailyTransactions = state.transactions.filter(t => t.workerId === worker.id && isSameDay(t.submissionTimestamp, state.selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp));
-            const allTimeTransactions = state.transactions.filter(t => t.workerId === worker.id);
-            const dailyApprovedTotal = dailyTransactions.reduce((sum, t) => sum + getApprovedAmount(t), 0);
-            const allTimeApprovedTotal = allTimeTransactions.reduce((sum, t) => sum + getApprovedAmount(t), 0);
-            const { payoutSplit } = worker;
+            
+            const totals = calculateWorkerTotals(worker.id, state.selectedPeriod);
+
             return `
                 <div>
-                    <div class="flex justify-between items-center mb-6">
+                    <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
                         <button data-action="admin-dashboard-view" class="hover:underline" style="color: var(--brand-pink);">&larr; Back to Dashboard</button>
-                        <button data-action="admin-edit-worker" data-id="${worker.id}" class="btn text-sm" style="background-color: var(--brand-yellow); color: white;">Edit Worker</button>
-                    </div>
-                    <h2 class="text-3xl font-bold mb-2" style="color: var(--text-primary);">${worker.name}'s Summary</h2>
-                    <div class="mb-8 p-4 card mt-4">
-                        <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">All-Time Totals</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div class="card" style="background-color: var(--bg-tertiary);"><h3 class="text-sm" style="color: var(--text-muted);">Total Approved</h3><p class="text-3xl font-bold" style="color: var(--brand-green);">$${allTimeApprovedTotal.toFixed(2)}</p></div>
-                            <div class="card" style="background-color: var(--bg-tertiary);"><h3 class="text-sm" style="color: var(--text-muted);">Total Payout (${Math.round(payoutSplit.worker * 100)}%)</h3><p class="text-3xl font-bold" style="color: var(--brand-pink);">$${(allTimeApprovedTotal * payoutSplit.worker).toFixed(2)}</p></div>
-                            <div class="card" style="background-color: var(--bg-tertiary);"><h3 class="text-sm" style="color: var(--text-muted);">Total House Take (${Math.round(payoutSplit.house * 100)}%)</h3><p class="text-3xl font-bold" style="color: var(--brand-blue);">$${(allTimeApprovedTotal * payoutSplit.house).toFixed(2)}</p></div>
+                        <div class="flex gap-2">
+                           <button data-action="view-history" data-id="${worker.id}" class="btn text-sm" style="background-color: var(--brand-blue); color: white;">View Full History</button>
+                           <button data-action="admin-edit-worker" data-id="${worker.id}" class="btn text-sm" style="background-color: var(--brand-yellow); color: white;">Edit Worker</button>
                         </div>
                     </div>
-                    <p class="text-lg font-bold mb-4" style="color: var(--brand-pink);">${formatDate(state.selectedDate)}</p>
+                    <h2 class="text-3xl font-bold mb-2" style="color: var(--text-primary);">${worker.name}'s Summary</h2>
+                    
+                    <div class="my-4">
+                        <div class="flex flex-wrap gap-2" role="group">
+                            ${['Day', 'Week', 'Month', 'YTD', 'All Time'].map(period => `
+                                <button data-action="set-period" data-period="${period}" class="btn text-sm period-btn ${state.selectedPeriod === period ? 'active' : ''}">${period}</button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="mb-8 p-4 card mt-4">
+                        <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Totals for: ${state.selectedPeriod}</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="card" style="background-color: var(--bg-tertiary);"><h3 class="text-sm" style="color: var(--text-muted);">Total Approved</h3><p class="text-3xl font-bold" style="color: var(--brand-green);">$${totals.totalApproved.toFixed(2)}</p></div>
+                            <div class="card" style="background-color: var(--bg-tertiary);"><h3 class="text-sm" style="color: var(--text-muted);">Total Payout (${Math.round(worker.payoutSplit.worker * 100)}%)</h3><p class="text-3xl font-bold" style="color: var(--brand-pink);">$${totals.workerTake.toFixed(2)}</p></div>
+                            <div class="card" style="background-color: var(--bg-tertiary);"><h3 class="text-sm" style="color: var(--text-muted);">Total House Take (${Math.round(worker.payoutSplit.house * 100)}%)</h3><p class="text-3xl font-bold" style="color: var(--brand-blue);">$${totals.houseTake.toFixed(2)}</p></div>
+                        </div>
+                    </div>
+
+                    <p class="text-lg font-bold mb-4" style="color: var(--brand-pink);">Transactions for ${formatDate(state.selectedDate)}</p>
                     <h3 class="text-xl font-bold mb-4" style="color: var(--text-primary);">Transaction History (Day)</h3>
                     <div class="space-y-4">
-                        ${dailyTransactions.length > 0 ? dailyTransactions.map(tx => tx.type === 'activity' ? renderActivityLogItem(tx) : renderTransactionItem(tx)).join('') : `<p style="color: var(--text-muted);">No transactions on this day.</p>`}
+                        ${state.transactions.filter(t => t.workerId === worker.id && isSameDay(t.submissionTimestamp, state.selectedDate)).sort((a, b) => new Date(b.submissionTimestamp) - new Date(a.submissionTimestamp)).map(tx => tx.type === 'activity' ? renderActivityLogItem(tx) : renderTransactionItem(tx)).join('') || `<p style="color: var(--text-muted);">No transactions on this day.</p>`}
                     </div>
                 </div>
             `;
@@ -1436,7 +1461,7 @@
             const target = e.target.closest('[data-action]');
             if (!target) return;
             
-            const { action, id, view } = target.dataset;
+            const { action, id, view, period } = target.dataset;
 
             const actions = {
                 'login': handleLogin,
@@ -1468,6 +1493,9 @@
                 'admin-update-worker': () => handleUpdateWorker(id),
                 'admin-update-service': () => handleUpdateService(id),
                 'toggle-theme': handleToggleTheme,
+                'set-period': () => { state.selectedPeriod = period; render(); },
+                'view-history': () => { state.selectedWorkerId = id; state.view = 'historicalDataView'; render(); },
+                'back-to-worker-dashboard': () => { state.view = 'workerDashboard'; render(); },
             };
 
             if (actions[action]) {
