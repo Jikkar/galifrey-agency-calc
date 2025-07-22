@@ -1,640 +1,845 @@
-<meta>
- 
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- 
- <title>
-  Safety Sidekick
- </title>
- <script src="https://cdn.tailwindcss.com">
- </script>
- <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
- <!-- FullCalendar JS and CSS -->
- <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js">
- </script>
- <style>
-  body { font-family: 'Inter', sans-serif; }
-        .view { display: none; animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .modal-backdrop {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.6); z-index: 50;
-            justify-content: center; align-items: center; animation: fadeInBackdrop 0.3s;
-        }
-        @keyframes fadeInBackdrop { from { opacity: 0; } to { opacity: 1; } }
-        .modal-content { max-height: 90vh; animation: slideInUp 0.4s; }
-        @keyframes slideInUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .app-content { display: none; }
-        .app-content.active { display: block; }
-        nav a.active { background-color: #374151; /* bg-gray-700 */ }
-        /* FullCalendar Customizations */
-        :root {
-            --fc-border-color: #e5e7eb;
-            --fc-daygrid-event-dot-width: 8px;
-            --fc-list-event-dot-width: 10px;
-            --fc-list-event-hover-bg-color: #f3f4f6;
-        }
-        .fc .fc-toolbar-title { font-size: 1.5em; font-weight: 600; }
-        .fc .fc-button-primary { background-color: #4f46e5; border-color: #4f46e5; }
-        .fc .fc-button-primary:hover { background-color: #4338ca; }
-        .fc .fc-daygrid-day.fc-day-today { background-color: #eef2ff; }
-        .fc-event { cursor: pointer; }
- </style>
- <!-- Main Application Container -->
- <div id="app" class="h-screen w-screen flex flex-col">
-  <!-- Loading Spinner -->
-  <div id="loading-view" class="view flex items-center justify-center h-full">
-   <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
-    </circle>
-    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-    </path>
-   </svg>
-  </div>
-  <!-- Error View -->
-  <div id="error-view" class="view">
-  </div>
-  <!-- Auth Views -->
-  <div id="admin-setup-view" class="view">
-  </div>
-  <div id="login-view" class="view">
-  </div>
-  <!-- Main App View -->
-  <div id="main-app-view" class="view h-full w-full flex">
-   <!-- Sidebar Navigation -->
-   <nav class="bg-gray-800 text-white w-64 p-4 space-y-6 flex-shrink-0 flex flex-col">
-    <div>
-     <h2 class="text-2xl font-bold text-white">
-      Safety Sidekick
-     </h2>
+import React, { useState, useEffect, useCallback } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, onSnapshot, doc, setDoc, getDoc, where, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { Dna, Calendar, FileText, AlertTriangle, Users, Book, Leaf, HardHat, ListChecks, Settings, Plus, X, Search, ChevronDown, CheckCircle, Clock, AlertCircle as AlertCircleIcon, MoreVertical, ArrowLeft, Edit, Trash2 } from 'lucide-react';
+
+// --- Firebase Configuration ---
+// Per platform instructions, using the environment-provided config.
+// The user-provided config is used as a fallback.
+const userProvidedConfig = {
+    apiKey: "AIzaSyA_iRaOVHrnqOS3K4haYdGEHWs1pQqsiF4",
+    authDomain: "safetysidekick-9252d.firebaseapp.com",
+    projectId: "safetysidekick-9252d",
+    storageBucket: "safetysidekick-9252d.firebasestorage.app",
+    messagingSenderId: "976365120737",
+    appId: "1:976365120737:web:8d6d675acd6c4d5c389ba0",
+    measurementId: "G-XNZ8V8VVQK"
+};
+
+const firebaseConfig = typeof __firebase_config !== 'undefined' 
+    ? JSON.parse(__firebase_config) 
+    : userProvidedConfig;
+
+
+// --- Firebase Initialization ---
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// --- Main Navigation Items ---
+const navItems = [
+    { name: 'Dashboard', icon: Calendar, page: 'dashboard' },
+    { name: 'Incidents & Events', icon: FileText, page: 'incidents' },
+    { name: 'Hazards & Risks', icon: AlertTriangle, page: 'hazards' },
+    { name: 'Training & People', icon: Users, page: 'training' },
+    { name: 'Documents & Records', icon: Book, page: 'documents' },
+    { name: 'Environmental', icon: Leaf, page: 'environmental' },
+    { name: 'Contractors', icon: HardHat, page: 'contractors' },
+    { name: 'Tasks & Scheduling', icon: ListChecks, page: 'tasks' },
+    { name: 'Admin Settings', icon: Settings, page: 'admin' },
+];
+
+// --- Helper Components ---
+
+const Modal = ({ children, isOpen, onClose, title, size = '4xl' }) => {
+    if (!isOpen) return null;
+    const sizeClasses = {
+        'md': 'max-w-md',
+        'lg': 'max-w-lg',
+        'xl': 'max-w-xl',
+        '2xl': 'max-w-2xl',
+        '4xl': 'max-w-4xl',
+    }
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-start pt-10">
+            <div className={`bg-gray-800 rounded-lg shadow-2xl w-full ${sizeClasses[size]} max-h-[90vh] flex flex-col text-white`}>
+                <div className="flex justify-between items-center p-4 border-b border-gray-700">
+                    <h2 className="text-xl font-bold">{title}</h2>
+                    <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-700">
+                        <X size={24} />
+                    </button>
+                </div>
+                <div className="p-6 overflow-y-auto">
+                    {children}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const FormInput = ({ label, type = 'text', value, onChange, name, required = false, children }) => (
+    <div className="mb-4">
+        <label htmlFor={name} className="block text-sm font-medium text-gray-300 mb-1">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
+        {type === 'textarea' ? (
+            <textarea id={name} name={name} value={value || ''} onChange={onChange} rows="4" className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+        ) : (
+            <input type={type} id={name} name={name} value={value || ''} onChange={onChange} required={required} className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500" />
+        )}
+        {children}
     </div>
-    <ul class="space-y-2 flex-1">
-     <li>
-      <a href="#" class="flex items-center p-2 rounded-md hover:bg-gray-700 transition-colors" data-view="dashboard-view">
-       📅 Dashboard
-      </a>
-     </li>
-     <li>
-      <a href="#" class="flex items-center p-2 rounded-md hover:bg-gray-700 transition-colors" data-view="incidents-view">
-       📄 Incidents &amp; Events
-      </a>
-     </li>
-     <li>
-      <a href="#" class="flex items-center p-2 rounded-md hover:bg-gray-700 transition-colors" data-view="tasks-view">
-       🗂️ Tasks &amp; Scheduling
-      </a>
-     </li>
-     <li id="admin-nav-link" class="hidden">
-      <a href="#" class="flex items-center p-2 rounded-md hover:bg-gray-700 transition-colors" data-view="admin-settings-view">
-       ⚙️ Admin Settings
-      </a>
-     </li>
-    </ul>
-    <div class="flex-shrink-0 border-t border-gray-700 pt-4">
-     <p id="user-display-name" class="text-sm font-medium text-white">
-     </p>
-     <p id="user-display-email" class="text-xs text-gray-400">
-     </p>
-     <button id="logout-button" class="mt-2 text-sm text-indigo-400 hover:text-indigo-300 w-full text-left">
-      Logout
-     </button>
+);
+
+const FormSelect = ({ label, value, onChange, name, required = false, options }) => (
+    <div className="mb-4">
+        <label htmlFor={name} className="block text-sm font-medium text-gray-300 mb-1">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
+        <select id={name} name={name} value={value || ''} onChange={onChange} required={required} className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500">
+            <option value="">Select...</option>
+            {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+        </select>
     </div>
-   </nav>
-   <!-- Main Content Area -->
-   <main class="flex-1 p-6 overflow-y-auto bg-gray-50">
-    <!-- Dashboard Content -->
-    <div id="dashboard-view" class="app-content">
-     <h1 class="text-3xl font-bold text-gray-900 mb-4">
-      Compliance Calendar
-     </h1>
-     <div id="calendar" class="bg-white p-4 rounded-lg shadow">
-     </div>
-    </div>
-    <!-- Incidents Content -->
-    <div id="incidents-view" class="app-content">
-    </div>
-    <!-- Tasks Content -->
-    <div id="tasks-view" class="app-content">
-    </div>
-    <!-- Admin Settings Content -->
-    <div id="admin-settings-view" class="app-content">
-    </div>
-   </main>
-  </div>
- </div>
- <!-- Modals Container -->
- <div id="modal-container">
- </div>
- <!-- Firebase SDK -->
- <script type="module">
-  // Firebase Imports
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, collection, getDocs, addDoc, serverTimestamp, onSnapshot, query, orderBy, where, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore.js";
-        // Firebase Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyA_iRaOVHrnqOS3K4haYdGEHWs1pQqsiF4",
-            authDomain: "safetysidekick-9252d.firebaseapp.com",
-            projectId: "safetysidekick-9252d",
-            storageBucket: "safetysidekick-9252d.firebasestorage.app",
-            messagingSenderId: "976365120737",
-            appId: "1:976365120737:web:8d6d675acd6c4d5c389ba0"
-        };
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        // --- Global State & Listeners ---
-        let currentUser = null;
-        let currentUserData = {};
-        let allUsers = [];
-        let calendar;
-        let unsubscribe = {};
-        // --- Core App Logic ---
-        const App = {
-            // Initialization
-            init() {
-                this.showView('loading-view');
-                this.handleAuthChanges();
-                this.attachNavListeners();
-                document.getElementById('logout-button').addEventListener('click', () => signOut(auth));
-            },
-            // Authentication Handler
-            handleAuthChanges() {
-                onAuthStateChanged(auth, async (user) => {
-                    try {
-                        this.cleanupListeners();
-                        if (user) {
-                            const userDoc = await getDoc(doc(db, "users", user.uid));
-                            if (userDoc.exists()) {
-                                currentUser = user;
-                                currentUserData = { id: user.uid, ...userDoc.data() };
-                                await this.loadMainApp();
-                            } else {
-                                // This handles the race condition where auth exists but doc doesn't.
-                                // It could be a new user signing up. We log them out to ensure a clean state.
-                                // The user can then log in normally.
-                                console.warn("User exists in Auth but not in Firestore. Logging out for safety.");
-                                await signOut(auth);
-                            }
-                        } else {
-                            currentUser = null;
-                            currentUserData = {};
-                            const usersCollection = collection(db, "users");
-                            const userSnapshot = await getDocs(usersCollection);
-                            const usersExist = userSnapshot.size > 0;
-                            this.showView(usersExist ? 'login-view' : 'admin-setup-view');
-                        }
-                    } catch (error) {
-                        console.error("Critical Auth/Firestore error:", error);
-                        // Show a dedicated error screen instead of hanging.
-                        this.showView('error-view', { message: `Could not connect to the database. Please check your Firebase setup and security rules. <br><br><b>Common Fix:</b> In the Firebase Console -> Firestore Database -> Rules, ensure unauthenticated users can check if the 'users' collection is empty. <br><br><b>Error:</b> ${error.message}` });
-                    }
-                });
-            },
-            // Load Main Application after Login
-            async loadMainApp() {
-                this.renderAppShell();
-                this.showView('main-app-view');
-                this.showAppContent('dashboard-view');
-                this.attachRealtimeListeners();
-            },
-            // Attach Real-time Data Listeners
-            attachRealtimeListeners() {
-                // Listen for tasks for the calendar
-                const tasksQuery = query(collection(db, "tasks"));
-                unsubscribe.tasks = onSnapshot(tasksQuery, (snapshot) => {
-                    const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    this.renderCalendar(tasks);
-                    this.renderTasksView(tasks); // Also update the tasks list view
-                });
-                // Listen for incidents
-                const incidentsQuery = query(collection(db, "incidents"), orderBy("dateReported", "desc"));
-                unsubscribe.incidents = onSnapshot(incidentsQuery, (snapshot) => {
-                    const incidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    this.renderIncidentsView(incidents);
-                });
-                // Listen for all users if admin
-                if (currentUserData.role === 'Platform Admin') {
-                    const usersQuery = query(collection(db, "users"), orderBy("email"));
-                    unsubscribe.users = onSnapshot(usersQuery, (snapshot) => {
-                        allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        this.renderAdminView(allUsers);
-                    });
-                }
-            },
-            // Cleanup Listeners on Logout
-            cleanupListeners() {
-                Object.values(unsubscribe).forEach(unsub => unsub && unsub());
-                unsubscribe = {};
-            },
-            // --- View & Component Rendering ---
-            showView(viewId, data = {}) {
-                document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
-                const view = document.getElementById(viewId);
-                if (view) {
-                    if (this.templates[viewId]) {
-                        view.innerHTML = this.templates[viewId](data);
-                        this.attachFormListeners(viewId);
-                    }
-                    view.style.display = 'flex';
-                }
-            },
-            showAppContent(viewId) {
-                document.querySelectorAll('.app-content').forEach(v => v.classList.remove('active'));
-                document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
-                const content = document.getElementById(viewId);
-                const link = document.querySelector(`nav a[data-view="${viewId}"]`);
-                if (content) content.classList.add('active');
-                if (link) link.classList.add('active');
-            },
-            renderAppShell() {
-                document.getElementById('user-display-name').textContent = currentUserData.displayName || 'No Name';
-                document.getElementById('user-display-email').textContent = currentUser.email;
-                document.getElementById('admin-nav-link').style.display = currentUserData.role === 'Platform Admin' ? 'block' : 'none';
-            },
-            renderCalendar(tasks = []) {
-                const calendarEl = document.getElementById('calendar');
-                if (!calendarEl) return;
-                const events = tasks.map(task => ({
-                    id: task.id,
-                    title: task.title,
-                    start: task.dueDate?.toDate(),
-                    allDay: true,
-                    backgroundColor: this.utils.getPriorityColor(task.priority),
-                    borderColor: this.utils.getPriorityColor(task.priority),
-                    extendedProps: task
-                }));
-                if (calendar) {
-                    calendar.removeAllEvents();
-                    calendar.addEventSource(events);
-                } else {
-                    calendar = new FullCalendar.Calendar(calendarEl, {
-                        initialView: 'dayGridMonth',
-                        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' },
-                        events: events,
-                        eventClick: (info) => {
-                            this.renderModal('taskDetail', info.event.extendedProps);
-                        }
-                    });
-                    calendar.render();
-                }
-            },
-            renderIncidentsView(incidents = []) {
-                const view = document.getElementById('incidents-view');
-                if (!view) return;
-                view.innerHTML = this.templates.incidentsView(incidents);
-                view.querySelector('#new-incident-btn')?.addEventListener('click', () => this.renderModal('incidentForm'));
-            },
-            renderTasksView(tasks = []) {
-                const view = document.getElementById('tasks-view');
-                if (!view) return;
-                view.innerHTML = this.templates.tasksView(tasks, allUsers);
-                view.querySelector('#new-task-btn')?.addEventListener('click', () => this.renderModal('taskForm', {}, allUsers));
-            },
-            renderAdminView(users = []) {
-                const view = document.getElementById('admin-settings-view');
-                if (!view) return;
-                view.innerHTML = this.templates.adminView(users);
-                this.attachFormListeners('admin-settings-view');
-            },
-            renderModal(type, data = {}, users = []) {
-                const container = document.getElementById('modal-container');
-                container.innerHTML = this.templates.modals[type](data, users);
-                container.querySelector('.modal-backdrop').style.display = 'flex';
-                this.attachModalListeners(type, data);
-            },
-            closeModal() {
-                document.getElementById('modal-container').innerHTML = '';
-            },
-            // --- Event & Form Listeners ---
-            attachNavListeners() {
-                document.querySelectorAll('nav a[data-view]').forEach(link => {
-                    link.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        this.showAppContent(e.currentTarget.getAttribute('data-view'));
-                    });
-                });
-            },
-            attachFormListeners(viewId) {
-                const view = document.getElementById(viewId);
-                if (!view) return;
-                const formHandlers = {
-                    'admin-setup-view': this.handleAdminSetup,
-                    'login-view': this.handleLogin,
-                    'admin-settings-view': this.handleInviteUser
-                };
-                const handler = formHandlers[viewId];
-                if (handler) {
-                    const form = view.querySelector('form');
-                    form?.addEventListener('submit', (e) => handler.call(this, e));
-                }
-            },
-            attachModalListeners(type, data) {
-                const modal = document.querySelector('.modal-backdrop');
-                modal?.querySelector('.close-modal-btn')?.addEventListener('click', () => this.closeModal());
-                modal?.addEventListener('click', (e) => {
-                    if (e.target === modal) this.closeModal();
-                });
-                const form = modal?.querySelector('form');
-                if (form) {
-                    form.addEventListener('submit', async (e) => {
-                        e.preventDefault();
-                        const formData = new FormData(form);
-                        const payload = Object.fromEntries(formData.entries());
-                        try {
-                            if (type === 'incidentForm') await this.handleCreateIncident(payload);
-                            if (type === 'taskForm') await this.handleCreateTask(payload);
-                            if (type === 'taskDetail') await this.handleUpdateTask(data.id, payload);
-                            this.closeModal();
-                        } catch (error) {
-                            console.error("Modal form error:", error);
-                            form.querySelector('.form-error').textContent = error.message;
-                            form.querySelector('.form-error').style.display = 'block';
-                        }
-                    });
-                }
-            },
-            // --- Action Handlers (Firebase logic) ---
-            async handleAdminSetup(e) {
-                e.preventDefault();
-                const form = e.target;
-                const name = form.elements['name'].value;
-                const email = form.elements['email'].value;
-                const password = form.elements['password'].value;
-                const errorDiv = form.querySelector('.form-error');
-                try {
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                    await setDoc(doc(db, "users", userCredential.user.uid), {
-                        displayName: name, email, role: "Platform Admin", createdAt: serverTimestamp()
-                    });
-                    await this.seedDemoData(userCredential.user.uid);
-                } catch (error) {
-                    errorDiv.textContent = error.message;
-                    errorDiv.style.display = 'block';
-                }
-            },
-            async handleLogin(e) {
-                e.preventDefault();
-                const form = e.target;
-                const email = form.elements['email'].value;
-                const password = form.elements['password'].value;
-                const errorDiv = form.querySelector('.form-error');
-                try {
-                    await signInWithEmailAndPassword(auth, email, password);
-                } catch (error) {
-                    errorDiv.textContent = "Invalid credentials. Please try again.";
-                    errorDiv.style.display = 'block';
-                }
-            },
-            async handleInviteUser(e) {
-                e.preventDefault();
-                const form = e.target;
-                const email = form.elements['invite-email'].value;
-                const role = form.elements['invite-role'].value;
-                const errorDiv = form.querySelector('.form-error');
-                const successDiv = form.querySelector('.form-success');
-                try {
-                    // This creates a user doc, they will need to be told to sign up
-                    await addDoc(collection(db, "users"), {
-                        email, role, displayName: "Invited User", status: "invited", createdAt: serverTimestamp()
-                    });
-                    successDiv.textContent = `User profile for ${email} created. They can now sign up.`;
-                    successDiv.style.display = 'block';
-                    form.reset();
-                } catch (error) {
-                    errorDiv.textContent = error.message;
-                    errorDiv.style.display = 'block';
-                }
-            },
-            async handleCreateIncident(payload) {
-                await addDoc(collection(db, "incidents"), {
-                    ...payload,
-                    riskCategory: payload.riskCategory.charAt(0),
-                    reportedBy: currentUser.uid,
-                    reportedByEmail: currentUser.email,
-                    dateReported: serverTimestamp(),
-                    status: "New"
-                });
-            },
-            async handleCreateTask(payload) {
-                await addDoc(collection(db, "tasks"), {
-                    ...payload,
-                    dueDate: new Date(payload.dueDate),
-                    createdBy: currentUser.uid,
-                    createdAt: serverTimestamp(),
-                    status: "Not Started"
-                });
-            },
-            async handleUpdateTask(taskId, payload) {
-                const taskRef = doc(db, "tasks", taskId);
-                await updateDoc(taskRef, {
-                    status: payload.status
-                });
-            },
-            // --- Demo Data Seeding ---
-            async seedDemoData(adminId) {
-                const batch = writeBatch(db);
-                // Demo Users
-                const demoUsers = [
-                    { uid: 'demo-supervisor-1', displayName: 'Jane Supervisor', email: 'supervisor@example.com', role: 'Supervisor' },
-                    { uid: 'demo-employee-1', displayName: 'John Employee', email: 'employee@example.com', role: 'Employee' }
-                ];
-                demoUsers.forEach(user => {
-                    const ref = doc(db, "users", user.uid);
-                    batch.set(ref, { ...user, createdAt: serverTimestamp() });
-                });
-                // Demo Incidents
-                const demoIncidents = [
-                    { type: 'Near Miss', description: 'Forklift almost hit a pallet rack due to a blind corner.', riskCategory: 'C', status: 'New', reportedBy: 'demo-employee-1', reportedByEmail: 'employee@example.com' },
-                    { type: 'Injury/Illness', description: 'Employee reported back pain after lifting heavy boxes.', riskCategory: 'D', status: 'In Progress', reportedBy: 'demo-supervisor-1', reportedByEmail: 'supervisor@example.com' }
-                ];
-                demoIncidents.forEach(incident => {
-                    const ref = doc(collection(db, "incidents"));
-                    batch.set(ref, { ...incident, dateReported: serverTimestamp() });
-                });
-                // Demo Tasks
-                const today = new Date();
-                const demoTasks = [
-                    { title: 'Install convex mirror at warehouse corner', priority: 'High', status: 'Not Started', assignedTo: 'demo-supervisor-1', dueDate: new Date(new Date().setDate(today.getDate() + 3)) },
-                    { title: 'Review manual lifting procedures with warehouse team', priority: 'Medium', status: 'In Progress', assignedTo: adminId, dueDate: new Date(new Date().setDate(today.getDate() + 7)) },
-                    { title: 'Complete monthly fire extinguisher checks', priority: 'Low', status: 'Completed', assignedTo: 'demo-supervisor-1', dueDate: new Date(new Date().setDate(today.getDate() - 10)) }
-                ];
-                demoTasks.forEach(task => {
-                    const ref = doc(collection(db, "tasks"));
-                    batch.set(ref, { ...task, createdAt: serverTimestamp() });
-                });
-                await batch.commit();
-            },
-            // --- HTML Templates ---
-            templates: {
-                'error-view': (data) => `
-                    <div class="w-full max-w-2xl p-8 space-y-6 bg-white rounded-xl shadow-xl text-center">
-                        <h1 class="text-3xl font-bold text-red-600">Application Error</h1>
-                        <p class="text-gray-600">There was a problem loading Safety Sidekick.</p>
-                        <div class="mt-4 p-4 bg-red-50 border-l-4 border-red-400 text-red-700 text-left">
-                           <p>${data.message}</p>
-                        </div>
-                    </div>`,
-                'admin-setup-view': () => `
-                    <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-xl">
-                        <div class="text-center"><h1 class="text-3xl font-bold text-gray-800">Welcome</h1><p class="text-gray-500">Create the first admin account to begin.</p></div>
-                        <div class="form-error hidden p-3 text-sm text-red-700 bg-red-100 rounded-lg"></div>
-                        <form class="space-y-4">
-                            <div><label for="name" class="text-sm font-medium text-gray-700">Full Name</label><input id="name" name="name" type="text" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></div>
-                            <div><label for="email" class="text-sm font-medium text-gray-700">Email</label><input id="email" name="email" type="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></div>
-                            <div><label for="password" class="text-sm font-medium text-gray-700">Password</label><input id="password" name="password" type="password" required minlength="6" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></div>
-                            <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Create Admin Account</button>
-                        </form>
-                    </div>`,
-                'login-view': () => `
-                    <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-xl">
-                        <div class="text-center"><h1 class="text-3xl font-bold text-gray-800">Sign In</h1><p class="text-gray-500">Welcome back to Safety Sidekick</p></div>
-                        <div class="form-error hidden p-3 text-sm text-red-700 bg-red-100 rounded-lg"></div>
-                        <form class="space-y-4">
-                            <div><label for="email" class="text-sm font-medium text-gray-700">Email</label><input id="email" name="email" type="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></div>
-                            <div><label for="password" class="text-sm font-medium text-gray-700">Password</label><input id="password" name="password" type="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></div>
-                            <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">Sign In</button>
-                        </form>
-                    </div>`,
-                incidentsView: (incidents) => `
-                    <div class="flex justify-between items-center mb-4">
-                        <h1 class="text-3xl font-bold text-gray-900">Incidents & Events</h1>
-                        <button id="new-incident-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 shadow-sm">Report New Incident</button>
+);
+
+const DropdownButton = ({ onSelect }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const options = [
+        { key: 'Injury/Illness', label: 'Injury / Illness' },
+        { key: 'Near Miss', label: 'Near Miss' },
+        { key: 'Event', label: 'Event (Spill, Damage, etc.)' },
+        { key: 'Violation', label: 'Violation' },
+    ];
+
+    return (
+        <div className="relative">
+            <button onClick={() => setIsOpen(!isOpen)} className="flex items-center bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded">
+                <Plus size={20} className="mr-2" />
+                New Incident
+                <ChevronDown size={20} className="ml-2" />
+            </button>
+            {isOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
+                    <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                        {options.map(option => (
+                            <a href="#" key={option.key} onClick={(e) => {
+                                e.preventDefault();
+                                onSelect(option.key);
+                                setIsOpen(false);
+                            }} className="block px-4 py-2 text-sm text-gray-100 hover:bg-gray-600" role="menuitem">
+                                {option.label}
+                            </a>
+                        ))}
                     </div>
-                    <div class="space-y-4">
-                        ${incidents.length > 0 ? incidents.map(incident => `
-                            <div class="bg-white p-4 rounded-lg shadow border-l-4 ${App.utils.getRiskBorderColor(incident.riskCategory)}">
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <p class="font-bold text-lg text-gray-800">${incident.type}</p>
-                                        <p class="text-sm text-gray-500">Reported by ${incident.reportedByEmail} on ${incident.dateReported?.toDate().toLocaleString() || 'N/A'}</p>
-                                    </div>
-                                    <span class="px-3 py-1 text-xs font-semibold rounded-full ${App.utils.getStatusPillColor(incident.status)}">${incident.status}</span>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+// --- Main Application Components ---
+
+const Sidebar = ({ currentPage, setCurrentPage }) => (
+    <aside className="w-64 bg-gray-900 text-white flex flex-col p-4 shrink-0">
+        <div className="flex items-center mb-8">
+            <Dna size={32} className="text-blue-400" />
+            <h1 className="text-2xl font-bold ml-2">Safety Sidekick</h1>
+        </div>
+        <nav className="flex-grow">
+            <ul>
+                {navItems.map(item => (
+                    <li key={item.name} className="mb-2">
+                        <a
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); setCurrentPage(item.page); }}
+                            className={`flex items-center p-2 rounded-md transition-colors ${currentPage === item.page ? 'bg-blue-500 text-white' : 'hover:bg-gray-700'}`}
+                        >
+                            <item.icon size={20} className="mr-3" />
+                            <span>{item.name}</span>
+                        </a>
+                    </li>
+                ))}
+            </ul>
+        </nav>
+        <div className="mt-auto">
+            <div className="flex items-center p-2 bg-gray-800 rounded-md">
+                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center font-bold">
+                    U
+                </div>
+                <div className="ml-3">
+                    <p className="font-semibold">User</p>
+                    <p className="text-xs text-gray-400">Platform Admin</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+);
+
+const Dashboard = () => {
+    const calendarTasks = {
+        '2025-07-22': [{ title: 'Weekly Fire Extinguisher Check', time: '09:00', status: 'Due' }],
+        '2025-07-24': [{ title: 'Forklift Operator Training', time: '13:00', status: 'Upcoming' }],
+        '2025-07-21': [{ title: 'Monthly Safety Committee Meeting', time: '10:00', status: 'Overdue' }],
+    };
+    const kpis = [
+        { label: 'Total Incidents (YTD)', value: 12, trend: 'up' },
+        { label: 'Open Corrective Actions', value: 8, trend: 'down' },
+        { label: 'Inspections Completed', value: '92%', trend: 'up' },
+        { label: 'Training Compliance', value: '88%', trend: 'down' },
+    ];
+    return (
+        <div>
+            <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-gray-800 p-6 rounded-lg">
+                    <h2 className="text-xl font-bold mb-4">Compliance Calendar - July 2025</h2>
+                    <div className="grid grid-cols-7 gap-2 text-center text-xs text-gray-400 mb-2">
+                        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1">
+                        {Array.from({ length: 35 }, (_, i) => {
+                             const day = i - 3; // Start calendar on Sunday
+                             const dateStr = `2025-07-${String(day).padStart(2, '0')}`;
+                             const tasks = calendarTasks[dateStr] || [];
+                             const isCurrentMonth = day > 0 && day <= 31;
+
+                            return (
+                                <div key={i} className={`p-2 rounded h-24 flex flex-col ${isCurrentMonth ? 'bg-gray-900/50' : 'bg-gray-800/20 text-gray-600'}`}>
+                                    {isCurrentMonth && <span className="font-bold">{day}</span>}
+                                    {isCurrentMonth && tasks.map(task => (
+                                        <div key={task.title} className={`text-xs p-1 mt-1 rounded ${task.status === 'Overdue' ? 'bg-red-500/50' : 'bg-blue-500/50'}`}>
+                                            {task.title}
+                                        </div>
+                                    ))}
                                 </div>
-                                <p class="mt-2 text-gray-700">${incident.description}</p>
-                            </div>
-                        `).join('') : '<p class="text-gray-500 text-center py-8">No incidents found.</p>'}
-                    </div>`,
-                tasksView: (tasks, users) => `
-                    <div class="flex justify-between items-center mb-4">
-                        <h1 class="text-3xl font-bold text-gray-900">Tasks & Scheduling</h1>
-                        <button id="new-task-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 shadow-sm">Create New Task</button>
+                            )
+                        })}
                     </div>
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full divide-y divide-gray-200">
-                           <thead class="bg-gray-50"><tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Task</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                           </tr></thead>
-                           <tbody class="bg-white divide-y divide-gray-200">
-                                ${tasks.length > 0 ? tasks.map(task => {
-                                    const assignedUser = users.find(u => u.id === task.assignedTo);
-                                    return `
-                                    <tr>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${task.title}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${assignedUser?.displayName || 'N/A'}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${task.dueDate?.toDate().toLocaleDateString() || 'N/A'}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full" style="background-color:${App.utils.getPriorityColor(task.priority)}; color: white;">${task.priority}</span></td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${App.utils.getStatusPillColor(task.status)}">${task.status}</span></td>
-                                    </tr>
-                                `}).join('') : '<tr><td colspan="5" class="text-center py-4">No tasks found.</td></tr>'}
-                           </tbody>
-                        </table>
-                    </div>`,
-                adminView: (users) => `
-                    <h1 class="text-3xl font-bold text-gray-900">Admin Settings</h1>
-                    <div class="mt-6 bg-white p-6 rounded-lg shadow">
-                        <h2 class="text-xl font-semibold mb-4">Invite New User</h2>
-                        <div class="form-success hidden p-3 mb-4 text-sm text-green-700 bg-green-100 rounded-lg"></div>
-                        <div class="form-error hidden p-3 mb-4 text-sm text-red-700 bg-red-100 rounded-lg"></div>
-                        <form class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                            <div>
-                                <label for="invite-email" class="block text-sm font-medium text-gray-700">Email</label>
-                                <input type="email" name="invite-email" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div className="bg-gray-800 p-6 rounded-lg">
+                    <h2 className="text-xl font-bold mb-4">Performance Dashboard</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                        {kpis.map(kpi => (
+                            <div key={kpi.label} className="bg-gray-700 p-4 rounded-md">
+                                <p className="text-sm text-gray-400">{kpi.label}</p>
+                                <p className="text-2xl font-bold">{kpi.value}</p>
                             </div>
-                            <div>
-                                <label for="invite-role" class="block text-sm font-medium text-gray-700">Role</label>
-                                <select name="invite-role" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                                    <option>Employee</option><option>Supervisor</option><option>Safety Team</option><option>Platform Admin</option>
-                                </select>
-                            </div>
-                            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 shadow-sm w-full">Create User Profile</button>
-                        </form>
+                        ))}
                     </div>
-                    <div class="mt-8">
-                        <h2 class="text-xl font-semibold mb-4">Manage Users</h2>
-                        <div class="bg-white rounded-lg shadow overflow-hidden">
-                            <table class="min-w-full divide-y divide-gray-200">
-                               <thead class="bg-gray-50"><tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                               </tr></thead>
-                               <tbody class="bg-white divide-y divide-gray-200">
-                                   ${users.map(user => `
-                                       <tr>
-                                           <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${user.displayName || 'N/A'}</td>
-                                           <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.email}</td>
-                                           <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.role}</td>
-                                       </tr>
-                                   `).join('')}
-                               </tbody>
-                            </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- INCIDENTS & EVENTS MODULE ---
+
+// Form for new incidents
+const NewIncidentForm = ({ isOpen, onClose, onSave, userId, incidentType }) => {
+    const [formData, setFormData] = useState({});
+
+    useEffect(() => {
+        // Reset form when type changes or modal opens
+        setFormData({
+            type: incidentType,
+            reporterId: userId,
+            status: 'New',
+            caseStatus: 'Open (First Aid)',
+            createdAt: serverTimestamp(),
+            isOshaRecordable: false,
+            // Section statuses for detail view tracking
+            sections: {
+                initialReport: true, // This form is the initial report
+                employeeInfo: false,
+                incidentInfo: false,
+                rootCauseAnalysis: false,
+                correctiveActionPlan: false,
+                recordkeeping: false,
+                // etc.
+            }
+        });
+    }, [isOpen, incidentType, userId]);
+
+    const handleChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            await onSave(formData);
+            onClose();
+        } catch (error) {
+            console.error("Error saving incident:", error);
+        }
+    };
+
+    const renderFormFields = () => {
+        switch (incidentType) {
+            case 'Injury/Illness':
+                return (
+                    <>
+                        <FormInput label="Employee Name" name="employeeName" value={formData.employeeName} onChange={handleChange} required />
+                        <FormInput label="Job Title" name="jobTitle" value={formData.jobTitle} onChange={handleChange} />
+                        <FormInput label="Date of Incident" name="dateOfIncident" type="date" value={formData.dateOfIncident} onChange={handleChange} required />
+                        <FormInput label="Time of Incident" name="timeOfIncident" type="time" value={formData.timeOfIncident} onChange={handleChange} required />
+                        <FormInput label="Location" name="location" value={formData.location} onChange={handleChange} required />
+                        <FormInput label="Incident Description" name="incidentDescription" type="textarea" value={formData.incidentDescription} onChange={handleChange} required />
+                        <FormSelect label="How serious was it?" name="severity" value={formData.severity} onChange={handleChange} required options={[{value: '1', label: 'Minor'}, {value: '2', label: 'Moderate'}, {value: '3', label: 'Serious'}, {value: '4', label: 'Critical'}]}/>
+                        <FormSelect label="How likely is this to happen again?" name="likelihood" value={formData.likelihood} onChange={handleChange} required options={[{value: '1', label: 'Rare'}, {value: '2', label: 'Occasional'}, {value: '3', label: 'Likely'}, {value: '4', label: 'Frequent'}]}/>
+                        <div className="flex items-center gap-2 mb-4">
+                            <input type="checkbox" id="isOshaRecordable" name="isOshaRecordable" checked={formData.isOshaRecordable} onChange={handleChange} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <label htmlFor="isOshaRecordable" className="text-sm text-gray-300">Flag as OSHA Recordable</label>
                         </div>
-                    </div>`,
-                modals: {
-                    incidentForm: () => `
-                        <div class="modal-backdrop">
-                            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 space-y-4 modal-content overflow-y-auto">
-                                <div class="flex justify-between items-center"><h2 class="text-2xl font-bold">Report Incident</h2><button class="close-modal-btn text-gray-500 hover:text-gray-800 text-3xl font-bold">&times;</button></div>
-                                <div class="form-error hidden p-3 text-sm text-red-700 bg-red-100 rounded-lg"></div>
-                                <form class="space-y-4">
-                                    <div><label for="type" class="block text-sm font-medium text-gray-700">Type</label><select name="type" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"><option>Injury/Illness</option><option>Near Miss</option><option>Property Damage</option><option>Environmental Event</option></select></div>
-                                    <div><label for="description" class="block text-sm font-medium text-gray-700">Description</label><textarea name="description" rows="4" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></textarea></div>
-                                    <div><label for="riskCategory" class="block text-sm font-medium text-gray-700">Risk</label><select name="riskCategory" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"><option>D (Low)</option><option>C (Medium)</option><option>B (High)</option><option>A (Critical)</option></select></div>
-                                    <div class="flex justify-end space-x-3 pt-4"><button type="button" class="close-modal-btn px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button><button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Submit</button></div>
-                                </form>
+                    </>
+                );
+            case 'Near Miss':
+                 return (
+                    <>
+                        <FormInput label="Date of Near Miss" name="dateOfIncident" type="date" value={formData.dateOfIncident} onChange={handleChange} required />
+                        <FormInput label="Location" name="location" value={formData.location} onChange={handleChange} required />
+                        <FormInput label="Describe the Near Miss" name="incidentDescription" type="textarea" value={formData.incidentDescription} onChange={handleChange} required />
+                        <FormInput label="Potential Outcome if it had not been a near miss" name="potentialOutcome" type="textarea" value={formData.potentialOutcome} onChange={handleChange} />
+                    </>
+                );
+            default:
+                return (
+                    <>
+                        <FormInput label="Date of Event" name="dateOfIncident" type="date" value={formData.dateOfIncident} onChange={handleChange} required />
+                        <FormInput label="Location" name="location" value={formData.location} onChange={handleChange} required />
+                        <FormInput label="Describe the Event/Violation" name="incidentDescription" type="textarea" value={formData.incidentDescription} onChange={handleChange} required />
+                    </>
+                );
+        }
+    }
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`New ${incidentType} Report`} size="2xl">
+            <form onSubmit={handleSubmit}>
+                {renderFormFields()}
+                <div className="mt-6 flex justify-end">
+                    <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded mr-2">
+                        Cancel
+                    </button>
+                    <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded">
+                        Submit Report
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+// Detail view for a single incident
+const IncidentDetailView = ({ incident, onBack }) => {
+    const getCategory = (severity, likelihood) => {
+        const sev = parseInt(severity, 10);
+        const like = parseInt(likelihood, 10);
+        if (isNaN(sev) || isNaN(like)) return { label: 'N/A', color: 'bg-gray-500' };
+        const risk = sev * like;
+        if (risk >= 13) return { label: 'A', color: 'bg-red-700' };
+        if (risk >= 8) return { label: 'B', color: 'bg-orange-600' };
+        if (risk >= 4) return { label: 'C', color: 'bg-yellow-500' };
+        return { label: 'D', color: 'bg-green-600' };
+    };
+    
+    const category = getCategory(incident.severity, incident.likelihood);
+    const reportedDate = incident.createdAt?.toDate ? incident.createdAt.toDate().toLocaleDateString() : 'N/A';
+    
+    const navSections = {
+        'Injury/Illness': [
+            { name: 'Initial Incident Report Form', status: 'complete' },
+            { name: 'Employee Information', status: 'incomplete' },
+            { name: 'Incident Information', status: 'incomplete' },
+            { name: 'Root Cause Analysis', status: 'incomplete' },
+            { name: 'Corrective Action Plan', status: 'incomplete' },
+            { name: 'Recordkeeping', status: 'in-progress' },
+            { name: 'Employee Care Tracker', status: 'incomplete' },
+            { name: 'Case Documentation', status: 'in-progress' },
+            { name: 'Review', status: 'incomplete' },
+        ],
+        'Near Miss': [
+            { name: 'Initial Incident Report Form', status: 'complete' },
+            { name: 'Incident Information', status: 'incomplete' },
+            { name: 'Root Cause Analysis', status: 'incomplete' },
+            { name: 'Corrective Action Plan', status: 'incomplete' },
+            { name: 'Review', status: 'incomplete' },
+        ],
+        'Event': [
+            { name: 'Initial Incident Report Form', status: 'complete' },
+            { name: 'Involved Parties Information', status: 'incomplete' },
+            { name: 'Incident Information', status: 'incomplete' },
+            { name: 'Root Cause Analysis', status: 'incomplete' },
+            { name: 'Corrective Action Plan', status: 'incomplete' },
+            { name: 'Review', status: 'incomplete' },
+        ],
+        'Violation': [
+            { name: 'Initial Incident Report Form', status: 'complete' },
+            { name: 'Employee Information', status: 'incomplete' },
+            { name: 'Incident Information', status: 'incomplete' },
+            { name: 'Root Cause Analysis', status: 'incomplete' },
+            { name: 'Corrective Action Plan', status: 'incomplete' },
+            { name: 'Review', status: 'incomplete' },
+        ],
+    };
+    
+    const getStatusIcon = (status) => {
+        switch(status) {
+            case 'complete': return <CheckCircle size={16} className="text-green-500" />;
+            case 'in-progress': return <Clock size={16} className="text-yellow-500" />;
+            case 'incomplete': return <AlertCircleIcon size={16} className="text-red-500" />;
+            default: return null;
+        }
+    }
+
+    return (
+        <div>
+            <button onClick={onBack} className="flex items-center text-blue-400 hover:text-blue-300 mb-4">
+                <ArrowLeft size={20} className="mr-2" />
+                Back to All Incidents
+            </button>
+            <div className="flex gap-6">
+                {/* Left Nav */}
+                <div className="w-1/4 bg-gray-800 p-4 rounded-lg">
+                    <div className="border-b border-gray-700 pb-4 mb-4">
+                        <h2 className="text-lg font-bold">{incident.type} Report</h2>
+                        <p className="text-sm text-gray-400">ID: {incident.id.substring(0, 8)}...</p>
+                        <span className={`mt-2 inline-block px-3 py-1 text-sm font-bold rounded-full text-white ${category.color}`}>
+                            Category: {category.label}
+                        </span>
+                    </div>
+                    <nav>
+                        <ul>
+                            {(navSections[incident.type] || []).map(section => (
+                                <li key={section.name} className="mb-2">
+                                    <a href="#" className="flex justify-between items-center p-2 rounded-md hover:bg-gray-700">
+                                        <span>{section.name}</span>
+                                        {getStatusIcon(section.status)}
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </nav>
+                </div>
+                {/* Right Content */}
+                <div className="w-3/4 bg-gray-800 p-6 rounded-lg">
+                    <h3 className="text-xl font-bold mb-4">Initial Incident Report Form</h3>
+                    <div className="space-y-4">
+                        <div><strong className="text-gray-400 w-40 inline-block">Date of Incident:</strong> {incident.dateOfIncident}</div>
+                        {incident.timeOfIncident && <div><strong className="text-gray-400 w-40 inline-block">Time of Incident:</strong> {incident.timeOfIncident}</div>}
+                        {incident.employeeName && <div><strong className="text-gray-400 w-40 inline-block">Employee Name:</strong> {incident.employeeName}</div>}
+                        <div><strong className="text-gray-400 w-40 inline-block">Location:</strong> {incident.location}</div>
+                        <div>
+                            <strong className="text-gray-400 block mb-1">Description:</strong>
+                            <p className="bg-gray-900/50 p-3 rounded-md">{incident.incidentDescription}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Main Incidents Tab Content
+const IncidentsTab = ({ userId, onSelectIncident }) => {
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [modalIncidentType, setModalIncidentType] = useState('');
+    const [incidents, setIncidents] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!userId) return;
+        setLoading(true);
+        const q = query(collection(db, 'incidents'));
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const incidentsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            incidentsData.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+            setIncidents(incidentsData);
+            setLoading(false);
+        }, (error) => {
+            console.error("Error fetching incidents: ", error);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, [userId]);
+
+    const handleNewIncidentSelect = (type) => {
+        setModalIncidentType(type);
+        setIsModalOpen(true);
+    };
+
+    const saveIncident = async (incidentData) => {
+        try {
+            await addDoc(collection(db, 'incidents'), incidentData);
+        } catch (e) {
+            console.error("Error adding document: ", e);
+            throw e;
+        }
+    };
+    
+    const getCategory = (severity, likelihood) => {
+        const sev = parseInt(severity, 10);
+        const like = parseInt(likelihood, 10);
+        if (isNaN(sev) || isNaN(like)) return { label: 'N/A', color: 'bg-gray-500' };
+        const risk = sev * like;
+        if (risk >= 13) return { label: 'A', color: 'bg-red-700' };
+        if (risk >= 8) return { label: 'B', color: 'bg-orange-600' };
+        if (risk >= 4) return { label: 'C', color: 'bg-yellow-500' };
+        return { label: 'D', color: 'bg-green-600' };
+    };
+
+    const IncidentCard = ({ incident }) => {
+        const category = getCategory(incident.severity, incident.likelihood);
+        const reportedDate = incident.createdAt?.toDate ? incident.createdAt.toDate().toLocaleDateString() : 'N/A';
+        return (
+            <div onClick={() => onSelectIncident(incident)} className="bg-gray-800 p-4 rounded-lg border border-gray-700 flex flex-col justify-between hover:border-blue-500 cursor-pointer transition-all">
+                <div>
+                    <div className="flex justify-between items-start mb-2">
+                        <span className="font-bold text-lg">{incident.type}</span>
+                        <div className="flex items-center gap-2">
+                            <span className={`px-3 py-1 text-sm font-bold rounded-full text-white ${category.color}`}>
+                                Category: {category.label}
+                            </span>
+                            <span className="text-sm text-gray-400">Reported: {reportedDate}</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4 mb-3 text-sm">
+                        <span>Report Status: <span className="font-semibold text-blue-400">{incident.status}</span></span>
+                        <span>Case Status: <span className="font-semibold text-yellow-400">{incident.caseStatus || 'N/A'}</span></span>
+                    </div>
+                    <p className="text-gray-300 text-sm mb-4">
+                        {incident.incidentDescription.substring(0, 150)}{incident.incidentDescription.length > 150 && '...'}
+                    </p>
+                </div>
+                <div className="flex justify-between items-center mt-auto pt-2 border-t border-gray-700/50">
+                    <div className="flex gap-2">
+                        {incident.isOshaRecordable && <span className="bg-red-500/80 text-white text-xs font-bold px-2 py-1 rounded">OSHA Recordable</span>}
+                    </div>
+                    <button className="p-1 hover:bg-gray-700 rounded-full"><MoreVertical size={20}/></button>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div>
+            <NewIncidentForm isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={saveIncident} userId={userId} incidentType={modalIncidentType} />
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center bg-gray-800 border border-gray-700 rounded-md px-2">
+                    <Search size={20} className="text-gray-400" />
+                    <input type="text" placeholder="Search incidents..." className="bg-transparent p-2 focus:outline-none w-64" />
+                </div>
+                <DropdownButton onSelect={handleNewIncidentSelect} />
+            </div>
+            {loading ? <p>Loading incidents...</p> : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {incidents.map(incident => <IncidentCard key={incident.id} incident={incident} />)}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// OSHA Log Tab Content
+const OshaLogTab = ({ userId, onSelectIncident }) => {
+    const [subTab, setSubTab] = useState('Recorded Incidents');
+    const [incidents, setIncidents] = useState([]);
+    const [hours, setHours] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [year, setYear] = useState(new Date().getFullYear());
+    const [hoursEntry, setHoursEntry] = useState({ month: '', hours: '' });
+    
+    useEffect(() => {
+        if (!userId) return;
+        setLoading(true);
+        // Fetch OSHA Recordable Incidents
+        const incidentsQuery = query(collection(db, 'incidents'), where('isOshaRecordable', '==', true));
+        const unsubIncidents = onSnapshot(incidentsQuery, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setIncidents(data);
+            setLoading(false);
+        });
+
+        // Fetch Hours Worked
+        const hoursQuery = query(collection(db, 'hoursWorked'));
+        const unsubHours = onSnapshot(hoursQuery, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            data.sort((a,b) => a.month.localeCompare(b.month));
+            setHours(data);
+        });
+
+        return () => {
+            unsubIncidents();
+            unsubHours();
+        };
+    }, [userId]);
+
+    const handleSaveHours = async (e) => {
+        e.preventDefault();
+        if (!hoursEntry.month || !hoursEntry.hours) return;
+        try {
+            await addDoc(collection(db, 'hoursWorked'), {
+                month: hoursEntry.month,
+                hours: parseFloat(hoursEntry.hours),
+                year: parseInt(hoursEntry.month.split('-')[0], 10),
+                submittedBy: userId,
+                submittedAt: serverTimestamp(),
+            });
+            setHoursEntry({ month: '', hours: '' });
+        } catch (error) {
+            console.error("Error saving hours:", error);
+        }
+    };
+    
+    return (
+        <div className="flex gap-4">
+            <div className="w-1/5">
+                <nav className="flex flex-col gap-2">
+                    {['Recorded Incidents', 'Hours Worked', 'OSHA Forms'].map(tabName => (
+                        <button key={tabName} onClick={() => setSubTab(tabName)} className={`p-3 rounded-md text-left font-semibold ${subTab === tabName ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                            {tabName}
+                        </button>
+                    ))}
+                </nav>
+            </div>
+            <div className="w-4/5 bg-gray-800 p-4 rounded-lg">
+                {subTab === 'Recorded Incidents' && (
+                    <div>
+                        <h3 className="text-xl font-bold mb-4">OSHA Recordable Incidents ({year})</h3>
+                        {loading ? <p>Loading...</p> : (
+                            <div className="space-y-3">
+                                {incidents.filter(inc => inc.dateOfIncident?.startsWith(year)).map((inc, index) => (
+                                    <div key={inc.id} className="bg-gray-700 p-3 rounded-md">
+                                        <p className="font-bold">{String(index + 1).padStart(2, '0')} | {inc.id.substring(0,8)}... | {inc.dateOfIncident}</p>
+                                        <p className="text-sm">Type: {inc.type}</p>
+                                        <div className="mt-2">
+                                            <button onClick={() => onSelectIncident(inc)} className="text-blue-400 text-sm hover:underline">Open Incident Report</button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                        </div>`,
-                    taskForm: (data, users) => `
-                        <div class="modal-backdrop">
-                            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 space-y-4 modal-content overflow-y-auto">
-                                <div class="flex justify-between items-center"><h2 class="text-2xl font-bold">Create Task</h2><button class="close-modal-btn text-gray-500 hover:text-gray-800 text-3xl font-bold">&times;</button></div>
-                                <div class="form-error hidden p-3 text-sm text-red-700 bg-red-100 rounded-lg"></div>
-                                <form class="space-y-4">
-                                    <div><label for="title" class="block text-sm font-medium text-gray-700">Title</label><input type="text" name="title" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></div>
-                                    <div><label for="assignedTo" class="block text-sm font-medium text-gray-700">Assign To</label><select name="assignedTo" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">${users.map(u => `<option value="${u.id}">${u.displayName}</option>`).join('')}</select></div>
-                                    <div><label for="dueDate" class="block text-sm font-medium text-gray-700">Due Date</label><input type="date" name="dueDate" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></div>
-                                    <div><label for="priority" class="block text-sm font-medium text-gray-700">Priority</label><select name="priority" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></div>
-                                    <div class="flex justify-end space-x-3 pt-4"><button type="button" class="close-modal-btn px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button><button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Create</button></div>
-                                </form>
+                        )}
+                    </div>
+                )}
+                {subTab === 'Hours Worked' && (
+                    <div>
+                        <h3 className="text-xl font-bold mb-4">Hours Worked ({year})</h3>
+                        <form onSubmit={handleSaveHours} className="flex gap-2 mb-4 p-2 bg-gray-900/50 rounded-md">
+                            <input type="month" value={hoursEntry.month} onChange={e => setHoursEntry({...hoursEntry, month: e.target.value})} className="bg-gray-700 p-2 rounded-md" required />
+                            <input type="number" placeholder="Total hours" value={hoursEntry.hours} onChange={e => setHoursEntry({...hoursEntry, hours: e.target.value})} className="bg-gray-700 p-2 rounded-md" required />
+                            <button type="submit" className="bg-blue-600 p-2 rounded-md font-semibold">Submit</button>
+                        </form>
+                        <div className="space-y-2">
+                            {hours.filter(h => h.year === year).map(h => (
+                                <div key={h.id} className="bg-gray-700 p-3 rounded-md flex justify-between items-center">
+                                    <p><span className="font-bold">{h.month}</span>: {h.hours.toLocaleString()} hours</p>
+                                    <span className="text-xs text-gray-400">Submitted: {h.submittedAt?.toDate().toLocaleDateString()}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {subTab === 'OSHA Forms' && (
+                    <div>
+                        <h3 className="text-xl font-bold mb-4">Generate OSHA Forms ({year})</h3>
+                        <p className="text-gray-400 mb-4">This section will allow generation of PDF and CSV exports for official OSHA submissions.</p>
+                        <div className="space-y-3">
+                            <button className="w-full bg-gray-700 hover:bg-gray-600 p-3 rounded-md text-left">Generate OSHA 300 Log - PDF</button>
+                            <button className="w-full bg-gray-700 hover:bg-gray-600 p-3 rounded-md text-left">Generate OSHA 300A Summary - PDF</button>
+                             <button className="w-full bg-gray-700 hover:bg-gray-600 p-3 rounded-md text-left">Generate OSHA 300/301 Case Data - .csv</button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// Regulatory Interactions Tab Content
+const RegulatoryInteractionsTab = ({ userId }) => {
+    const [interactions, setInteractions] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [formData, setFormData] = useState({});
+
+    useEffect(() => {
+        if (!userId) return;
+        setLoading(true);
+        const q = query(collection(db, 'regulatoryInteractions'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setInteractions(data);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, [userId]);
+    
+    const handleSave = async (e) => {
+        e.preventDefault();
+        try {
+            await addDoc(collection(db, 'regulatoryInteractions'), { ...formData, createdAt: serverTimestamp(), createdBy: userId });
+            setIsModalOpen(false);
+            setFormData({});
+        } catch (error) {
+            console.error("Error saving interaction:", error);
+        }
+    };
+
+    const handleChange = (e) => setFormData({...formData, [e.target.name]: e.target.value});
+
+    return (
+        <div>
+             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="New Regulatory Interaction" size="2xl">
+                <form onSubmit={handleSave}>
+                    <FormSelect label="Interaction Type" name="type" value={formData.type} onChange={handleChange} required options={[
+                        {value: 'Agency Inspection', label: 'Agency Inspection'},
+                        {value: 'Environmental Release Notification', label: 'Environmental Release Notification'},
+                        {value: 'Agency Request/Inquiry', label: 'Agency Request/Inquiry'},
+                        {value: 'Other', label: 'Other'},
+                    ]} />
+                    <FormInput label="Agency Name" name="agency" value={formData.agency} onChange={handleChange} required />
+                    <FormInput label="Date of Interaction" name="date" type="date" value={formData.date} onChange={handleChange} required />
+                    <FormInput label="Summary" name="summary" type="textarea" value={formData.summary} onChange={handleChange} required />
+                    <div className="mt-6 flex justify-end">
+                        <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded">Save Interaction</button>
+                    </div>
+                </form>
+            </Modal>
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold">All Interactions</h3>
+                <button onClick={() => setIsModalOpen(true)} className="flex items-center bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded">
+                    <Plus size={20} className="mr-2" />
+                    New Interaction
+                </button>
+            </div>
+            {loading ? <p>Loading...</p> : (
+                <div className="space-y-3">
+                    {interactions.map(item => (
+                        <div key={item.id} className="bg-gray-800 p-4 rounded-lg">
+                            <div className="flex justify-between">
+                                <p className="font-bold">{item.type} with {item.agency}</p>
+                                <p className="text-sm text-gray-400">{item.date}</p>
                             </div>
-                        </div>`,
-                    taskDetail: (task) => `
-                        <div class="modal-backdrop">
-                            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 space-y-4 modal-content overflow-y-auto">
-                                <div class="flex justify-between items-center"><h2 class="text-2xl font-bold">${task.title}</h2><button class="close-modal-btn text-gray-500 hover:text-gray-800 text-3xl font-bold">&times;</button></div>
-                                <div class="form-error hidden p-3 text-sm text-red-700 bg-red-100 rounded-lg"></div>
-                                <form class="space-y-4">
-                                    <p><span class="font-semibold">Priority:</span> <span class="px-2 py-1 text-xs rounded-full" style="background-color:${App.utils.getPriorityColor(task.priority)}; color: white;">${task.priority}</span></p>
-                                    <p><span class="font-semibold">Due:</span> ${task.dueDate?.toDate().toLocaleDateString()}</p>
-                                    <div><label for="status" class="block text-sm font-medium text-gray-700">Update Status</label><select name="status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"><option ${task.status === 'Not Started' ? 'selected' : ''}>Not Started</option><option ${task.status === 'In Progress' ? 'selected' : ''}>In Progress</option><option ${task.status === 'Completed' ? 'selected' : ''}>Completed</option></select></div>
-                                    <div class="flex justify-end space-x-3 pt-4"><button type="button" class="close-modal-btn px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Close</button><button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Update Status</button></div>
-                                </form>
-                            </div>
-                        </div>`
+                            <p className="text-sm mt-2">{item.summary}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Main container for the Incidents & Events module
+const IncidentsAndEvents = ({ userId }) => {
+    const [activeTab, setActiveTab] = useState('Incidents');
+    const [selectedIncident, setSelectedIncident] = useState(null);
+
+    const renderContent = () => {
+        if (selectedIncident) {
+            return <IncidentDetailView incident={selectedIncident} onBack={() => setSelectedIncident(null)} />;
+        }
+
+        switch (activeTab) {
+            case 'Incidents':
+                return <IncidentsTab userId={userId} onSelectIncident={setSelectedIncident} />;
+            case 'OSHA Log':
+                return <OshaLogTab userId={userId} onSelectIncident={setSelectedIncident} />;
+            case 'Regulatory Interactions':
+                return <RegulatoryInteractionsTab userId={userId} />;
+            default:
+                return null;
+        }
+    };
+
+    return (
+        <div>
+            <h1 className="text-3xl font-bold mb-4">Incidents & Events</h1>
+            {!selectedIncident && (
+                <div className="flex border-b border-gray-700 mb-6">
+                    {['Incidents', 'OSHA Log', 'Regulatory Interactions'].map(tab => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`py-2 px-4 text-lg font-semibold ${activeTab === tab ? 'border-b-2 border-blue-500 text-white' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            {tab}
+                        </button>
+                    ))}
+                </div>
+            )}
+            {renderContent()}
+        </div>
+    );
+};
+
+const PlaceholderPage = ({ title }) => (
+    <div>
+        <h1 className="text-3xl font-bold mb-6">{title}</h1>
+        <div className="bg-gray-800 p-10 rounded-lg text-center">
+            <p className="text-xl text-gray-400">This module is under construction.</p>
+            <p className="mt-2">Functionality for {title} will be implemented here based on the provided documentation.</p>
+        </div>
+    </div>
+);
+
+
+// --- Main App Component ---
+export default function App() {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState('dashboard');
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+            setLoading(false);
+        });
+
+        const performSignIn = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
                 }
-            },
-            // --- Utility Functions ---
-            utils: {
-                getRiskBorderColor: (risk) => ({ 'A': 'border-red-500', 'B': 'border-orange-500', 'C': 'border-yellow-500', 'D': 'border-green-500' }[risk] || 'border-gray-400'),
-                getStatusPillColor: (status) => ({ 'New': 'bg-blue-100 text-blue-800', 'In Progress': 'bg-yellow-100 text-yellow-800', 'Completed': 'bg-green-100 text-green-800' }[status] || 'bg-gray-100 text-gray-800'),
-                getPriorityColor: (priority) => ({ 'Critical': '#ef4444', 'High': '#f97316', 'Medium': '#f59e0b', 'Low': '#22c55e' }[priority] || '#6b7280')
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                setLoading(false);
             }
         };
-        // Start the application
-        App.init();
- </script>
+
+        performSignIn();
+
+        return () => unsubscribe();
+    }, []);
+
+    const renderPage = () => {
+        switch (currentPage) {
+            case 'dashboard':
+                return <Dashboard />;
+            case 'incidents':
+                return <IncidentsAndEvents userId={user?.uid} />;
+            case 'hazards':
+                return <PlaceholderPage title="Hazards & Risks" />;
+            case 'training':
+                return <PlaceholderPage title="Training & People" />;
+            case 'documents':
+                return <PlaceholderPage title="Documents & Records" />;
+            case 'environmental':
+                return <PlaceholderPage title="Environmental" />;
+            case 'contractors':
+                return <PlaceholderPage title="Contractors" />;
+            case 'tasks':
+                return <PlaceholderPage title="Tasks & Scheduling" />;
+            case 'admin':
+                return <PlaceholderPage title="Admin Settings" />;
+            default:
+                return <Dashboard />;
+        }
+    };
+
+    if (loading) {
+        return <div className="bg-gray-900 text-white h-screen flex items-center justify-center text-xl">Loading Safety Sidekick...</div>;
+    }
+
+    return (
+        <div className="flex h-screen bg-gray-900 text-white font-sans">
+            <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+            <main className="flex-1 p-8 overflow-y-auto bg-gray-800/50">
+                <div className="max-w-7xl mx-auto">
+                    {renderPage()}
+                </div>
+            </main>
+        </div>
+    );
+}
