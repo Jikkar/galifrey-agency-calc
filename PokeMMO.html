@@ -6,6 +6,8 @@
     <title>PokeMMO Player Team Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Added Chart.js for leaderboards -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module">
         // Firebase App (the core)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -37,6 +39,7 @@
         let unsubscribeListeners = [];
         const usernameCache = {};
         const SUPERADMIN_UID = "G9MP7oe0cTQsu92SEXB6wqy1nQs1";
+        let leaderboardChart = null; // To hold the chart instance
 
         // --- DOM Elements ---
         let authContainer, appContainer, teamSpaceIdDisplay, teamSpaceIdInput, changeTeamSpaceBtn, createTeamSpaceBtn, mainContent, loadingOverlay, userProfileDisplay, logoutBtn, genericModal, genericModalTitle, genericModalContent, genericModalCloseBtn, officialTeamSpaceContainer, confirmationModal;
@@ -655,19 +658,16 @@
                         <div id="personal-tasks-container" class="space-y-4"></div>`;
                     
                     document.getElementById('add-personal-task-btn').onclick = () => showNewPersonalTaskModal();
-
-                    // --- FIX START: Removed orderBy to prevent index error ---
+                    
                     q = query(collection(db, `users/${currentUserId}/tasks`), where("completed", "==", false));
                     const unsub = onSnapshot(q, async (snapshot) => {
                         const taskContainer = document.getElementById('personal-tasks-container'); if (!taskContainer) return;
                         
-                        // Sort the results on the client-side
                         const docs = snapshot.docs.sort((a, b) => (b.data().createdAt?.toDate() || 0) - (a.data().createdAt?.toDate() || 0));
 
                         taskContainer.innerHTML = docs.length === 0
                             ? '<p class="text-gray-500 text-center mt-8">No personal tasks.</p>' 
                             : (await Promise.all(docs.map(renderPersonalTaskCard))).join('');
-                        // --- FIX END ---
                         attachPersonalTaskCardListeners();
                     });
                     unsubscribeListeners.push(unsub);
@@ -758,27 +758,65 @@
             };
         }
 
-        // --- FIX START: Added missing function ---
+        // --- MODIFICATION START: New Personal Task Modal ---
         function showNewPersonalTaskModal() {
             const formHtml = `
                 <form id="add-personal-task-form-modal" class="space-y-4">
-                    <input type="text" name="text" placeholder="What do you need to do?" class="w-full p-2 border rounded-lg" required>
-                    <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded-lg font-bold hover:bg-blue-600">Add Personal Task</button>
+                    <input type="text" name="text" placeholder="Task Title (e.g., Daily EV Training)" class="w-full p-2 border rounded-lg" required>
+                    <textarea name="details" placeholder="Details (optional)..." class="w-full p-2 border rounded-lg h-24"></textarea>
+                    
+                    <div id="personal-goal-fields" class="space-y-2">
+                        <label class="font-semibold text-gray-700">Items to Track (Optional)</label>
+                        <div id="personal-goal-items-container">
+                             <div class="flex gap-2 items-center">
+                                <input type="text" name="goalItemName" placeholder="Item Name (e.g., Garchomp EVs)" class="flex-grow p-2 border rounded-lg">
+                                <input type="number" name="goalItemTarget" placeholder="Target" class="w-28 p-2 border rounded-lg">
+                            </div>
+                        </div>
+                        <button type="button" id="add-personal-goal-item-btn" class="text-sm text-blue-600 hover:underline">+ Add another item</button>
+                    </div>
+                    
+                    <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded-lg font-bold hover:bg-blue-600">Create Personal Task</button>
                 </form>`;
             
             showGenericModal('New Personal Task', formHtml, async (e) => {
                 const form = e.target;
-                if (form.text.value) {
-                    const taskData = {
-                        text: form.text.value,
-                        completed: false,
-                        createdAt: serverTimestamp(),
-                    };
-                    await addDoc(collection(db, `users/${currentUserId}/tasks`), taskData);
-                }
+                const taskData = {
+                    text: form.text.value,
+                    details: form.details.value,
+                    completed: false,
+                    createdBy: currentUserId,
+                    createdAt: serverTimestamp(),
+                    goalItems: []
+                };
+
+                const itemNames = form.querySelectorAll('input[name="goalItemName"]');
+                const itemTargets = form.querySelectorAll('input[name="goalItemTarget"]');
+                itemNames.forEach((nameInput, index) => {
+                    if (nameInput.value) {
+                        taskData.goalItems.push({
+                            name: nameInput.value,
+                            target: Number(itemTargets[index].value) || 0,
+                            progress: 0
+                        });
+                    }
+                });
+
+                await addDoc(collection(db, `users/${currentUserId}/tasks`), taskData);
             }, 'md');
+
+            const modalForm = document.getElementById('add-personal-task-form-modal');
+            modalForm.querySelector('#add-personal-goal-item-btn').onclick = () => {
+                const container = modalForm.querySelector('#personal-goal-items-container');
+                const newItemHtml = `
+                    <div class="flex gap-2 items-center mt-2">
+                        <input type="text" name="goalItemName" placeholder="Item Name" class="flex-grow p-2 border rounded-lg">
+                        <input type="number" name="goalItemTarget" placeholder="Target" class="w-28 p-2 border rounded-lg">
+                    </div>`;
+                container.insertAdjacentHTML('beforeend', newItemHtml);
+            };
         }
-        // --- FIX END ---
+        // --- MODIFICATION END ---
 
         async function renderTaskCard(doc) {
             const task = doc.data();
@@ -893,28 +931,115 @@
             `;
         }
 
+        // --- MODIFICATION START: New Personal Task Card ---
         async function renderPersonalTaskCard(doc) {
             const task = doc.data();
             const taskId = doc.id;
-            return `
-                <div class="bg-white p-4 rounded-lg shadow flex items-center justify-between">
-                    <p class="text-gray-800">${task.text}</p>
-                    <div class="flex items-center gap-2">
-                        <button data-task-id="${taskId}" class="personal-task-complete-btn text-green-500 hover:text-green-700">✓ Complete</button>
-                        <button data-task-id="${taskId}" class="personal-task-delete-btn text-red-500 hover:text-red-700 font-bold">&times;</button>
+            
+            let contentHtml = '';
+            if (task.goalItems && task.goalItems.length > 0) {
+                contentHtml += `<div class="mt-4 space-y-3">`;
+                task.goalItems.forEach((item) => {
+                    const progressPercent = item.target > 0 ? Math.min(100, (item.progress / item.target) * 100) : 0;
+                    contentHtml += `
+                        <div>
+                            <div class="flex justify-between text-sm font-semibold text-gray-600 mb-1">
+                                <span>${item.name}</span>
+                                <span>${item.progress.toLocaleString()} / ${item.target.toLocaleString()}</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-4">
+                                <div class="bg-blue-500 h-4 rounded-full text-white text-xs flex items-center justify-center" style="width: ${progressPercent}%">
+                                    ${progressPercent.toFixed(0)}%
+                                </div>
+                            </div>
+                        </div>`;
+                });
+                contentHtml += `
+                    <div class="mt-4 flex gap-2 border-t pt-4">
+                        <input type="number" data-task-id="${taskId}" class="personal-contribution-input flex-grow p-2 border rounded-lg" placeholder="Amount...">
+                        <select data-task-id="${taskId}" class="personal-item-select p-2 border rounded-lg">
+                            ${(task.goalItems || []).map(item => `<option value="${item.name}">${item.name}</option>`).join('')}
+                        </select>
+                        <button data-task-id="${taskId}" class="add-personal-contribution-btn bg-gray-600 text-white px-4 rounded-lg">Log</button>
                     </div>
                 </div>`;
+            }
+
+            return `
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="text-xl font-bold">${task.text}</h3>
+                        </div>
+                        <div class="flex items-center gap-2">
+                             <button data-task-id="${taskId}" class="personal-task-complete-btn text-green-500 hover:text-green-700 text-sm">✓ Complete</button>
+                             <button data-task-id="${taskId}" class="personal-task-delete-btn text-red-500 hover:text-red-700 font-bold">&times;</button>
+                        </div>
+                    </div>
+                    ${task.details ? `<p class="text-gray-700 mt-2 p-2 bg-gray-50 rounded">${task.details}</p>` : ''}
+                    ${contentHtml}
+                </div>`;
         }
+        // --- MODIFICATION END ---
+        
+        // --- FIX START: Created missing function ---
+        function attachPersonalTaskCardListeners() {
+            document.querySelectorAll('.personal-task-complete-btn').forEach(btn => {
+                btn.onclick = async (e) => {
+                    const taskId = e.target.dataset.taskId;
+                    const taskRef = doc(db, `users/${currentUserId}/tasks`, taskId);
+                    await updateDoc(taskRef, { completed: true });
+                };
+            });
+
+            document.querySelectorAll('.personal-task-delete-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    const taskId = e.target.dataset.taskId;
+                    const taskRef = doc(db, `users/${currentUserId}/tasks`, taskId);
+                    showModal('Delete this personal task?', () => deleteDoc(taskRef));
+                };
+            });
+
+            document.querySelectorAll('.add-personal-contribution-btn').forEach(btn => btn.onclick = async e => {
+                const taskId = e.target.dataset.taskId;
+                const input = document.querySelector(`.personal-contribution-input[data-task-id="${taskId}"]`);
+                const select = document.querySelector(`.personal-item-select[data-task-id="${taskId}"]`);
+                const value = Number(input.value);
+                const itemName = select.value;
+
+                if (value > 0 && itemName) {
+                    const taskRef = doc(db, `users/${currentUserId}/tasks`, taskId);
+                    try {
+                        await runTransaction(db, async (transaction) => {
+                            const taskDoc = await transaction.get(taskRef);
+                            if (!taskDoc.exists()) return;
+
+                            const taskData = taskDoc.data();
+                            const newGoalItems = [...taskData.goalItems];
+                            const itemIndex = newGoalItems.findIndex(item => item.name === itemName);
+                            
+                            if (itemIndex > -1) {
+                                newGoalItems[itemIndex].progress += value;
+                                transaction.update(taskRef, { goalItems: newGoalItems });
+                            }
+                        });
+                        input.value = '';
+                    } catch (error) {
+                        console.error("Failed to log personal progress:", error);
+                        alert("Could not log progress.");
+                    }
+                }
+            });
+        }
+        // --- FIX END ---
         
         function attachTaskCardListeners() {
+            // Shared Task Listeners
             document.querySelectorAll('.task-complete-btn').forEach(el => el.onclick = async e => {
                 if (checkPermission('canManageTasks')) {
                     try {
                         await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, e.target.dataset.taskId), { completed: true });
-                    } catch (error) {
-                        console.error("Error completing task:", error);
-                        alert("Could not complete task.");
-                    }
+                    } catch (error) { console.error("Error completing task:", error); alert("Could not complete task."); }
                 }
             });
 
@@ -968,12 +1093,8 @@
                         transaction.update(taskRef, { goalItems: newGoalItems });
                         transaction.update(contribRef, { status: 'verified' });
                     });
-                } catch (error) {
-                    console.error("Verification failed:", error);
-                    alert("Could not verify contribution.");
-                } finally {
-                    showLoading(false);
-                }
+                } catch (error) { console.error("Verification failed:", error); alert("Could not verify contribution."); } 
+                finally { showLoading(false); }
             });
 
             document.querySelectorAll('.view-breakdown-btn').forEach(btn => btn.onclick = async e => {
@@ -1002,15 +1123,8 @@
                 if (userIds.length > 0) {
                     breakdownHtml += `<h4 class="font-bold">Top Contributors</h4>`;
                     const userNames = await Promise.all(userIds.map(getUsername));
-                    const sortedContributors = userIds.map((id, index) => ({
-                        id,
-                        name: userNames[index],
-                        totals: userTotals[id]
-                    })).sort((a, b) => {
-                        const totalA = Object.values(a.totals).reduce((s, v) => s + v, 0);
-                        const totalB = Object.values(b.totals).reduce((s, v) => s + v, 0);
-                        return totalB - totalA;
-                    });
+                    const sortedContributors = userIds.map((id, index) => ({ id, name: userNames[index], totals: userTotals[id] }))
+                        .sort((a, b) => Object.values(b.totals).reduce((s, v) => s + v, 0) - Object.values(a.totals).reduce((s, v) => s + v, 0));
 
                     sortedContributors.forEach(user => {
                         breakdownHtml += `<div class="p-2 bg-gray-100 rounded"><strong>${user.name}</strong>: ${Object.entries(user.totals).map(([name, val]) => `${val.toLocaleString()} ${name}`).join(', ')}</div>`;
@@ -1021,26 +1135,11 @@
                 breakdownHtml += `</div>`;
                 showGenericModal(`Breakdown for: ${task.text}`, breakdownHtml, null, 'md');
             });
+
+            // Personal Task Listeners (now handled by its own function)
+            attachPersonalTaskCardListeners();
         }
         
-        function attachPersonalTaskCardListeners() {
-            document.querySelectorAll('.personal-task-complete-btn').forEach(btn => {
-                btn.onclick = async (e) => {
-                    const taskId = e.target.dataset.taskId;
-                    const taskRef = doc(db, `users/${currentUserId}/tasks`, taskId);
-                    await updateDoc(taskRef, { completed: true });
-                };
-            });
-
-            document.querySelectorAll('.personal-task-delete-btn').forEach(btn => {
-                btn.onclick = (e) => {
-                    const taskId = e.target.dataset.taskId;
-                    const taskRef = doc(db, `users/${currentUserId}/tasks`, taskId);
-                    showModal('Delete this personal task?', () => deleteDoc(taskRef));
-                };
-            });
-        }
-
         const modalMessage = document.getElementById('confirmation-modal-message');
         const modalConfirmBtn = document.getElementById('confirmation-modal-confirm-btn');
         const modalCancelBtn = document.getElementById('confirmation-modal-cancel-btn');
@@ -1058,62 +1157,291 @@
             modalConfirmBtn.onclick = null;
         }
         
+        // --- MODIFICATION START: Expanded and Fixed Leaderboard ---
         async function renderLeaderboard(container) {
-            container.innerHTML = `<div class="bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-bold mb-4 text-gray-800">Contribution Leaderboard</h3><div id="leaderboard-content">Loading...</div></div>`;
-            const leaderboardContent = document.getElementById('leaderboard-content');
+            container.innerHTML = `
+                <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
+                     <div class="relative">
+                        <input type="text" id="leaderboard-search" placeholder="Search for a player..." class="pl-8 pr-4 py-2 border border-gray-300 rounded-full text-sm w-64">
+                        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+                    <div class="flex rounded-md bg-gray-200 p-1" id="leaderboard-period-selector">
+                        <button data-period="day" class="px-3 py-1 text-sm font-semibold rounded-md">Day</button>
+                        <button data-period="week" class="px-3 py-1 text-sm font-semibold rounded-md">Week</button>
+                        <button data-period="month" class="px-3 py-1 text-sm font-semibold rounded-md">Month</button>
+                        <button data-period="all" class="px-3 py-1 text-sm font-semibold rounded-md bg-white text-gray-800">All Time</button>
+                    </div>
+                </div>
+                <div id="leaderboard-content" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow xl:col-span-2">
+                        <h3 class="text-xl font-bold mb-4 text-gray-800">Team Contribution Breakdown</h3>
+                        <div class="relative h-80">
+                            <canvas id="leaderboard-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-gray-800">Community Inventory</h3>
+                            <button class="text-sm text-blue-600 hover:underline" data-leaderboard-type="inventory">See More</button>
+                        </div>
+                        <div id="leaderboard-inventory" class="space-y-2 max-h-64 overflow-y-auto pr-2">Loading...</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-gray-800">Overall Top Contributors</h3>
+                            <button class="text-sm text-blue-600 hover:underline" data-leaderboard-type="overall">See More</button>
+                        </div>
+                        <div id="leaderboard-overall" class="space-y-2">Loading...</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                         <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-gray-800">Most PokeYen Contributed</h3>
+                            <button class="text-sm text-blue-600 hover:underline" data-leaderboard-type="pokeyen">See More</button>
+                        </div>
+                        <div id="leaderboard-pokeyen" class="space-y-2">Loading...</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-xl font-bold mb-4 text-gray-800">Rising Stars</h3>
+                        <div id="leaderboard-rising">Loading...</div>
+                    </div>
+                </div>`;
 
-            try {
-                const tasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`));
-                const tasksSnapshot = await getDocs(tasksQuery);
+            const getPokeyenTitle = (rank) => {
+                const titles = [
+                    "Poké Tycoon",      // Rank 1
+                    "GTL Baron",        // Rank 2
+                    "Item Magnate",     // Rank 3
+                    "Berry Boss",       // Rank 4
+                    "Charm Collector"   // Rank 5
+                ];
+                return titles[rank] || "";
+            };
 
-                const userScores = {};
-
-                const contributionPromises = tasksSnapshot.docs.map(taskDoc => {
-                    const contribsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified"));
-                    return getDocs(contribsQuery);
+            const processLeaderboardData = async (period = 'all') => {
+                document.querySelectorAll('#leaderboard-period-selector button').forEach(b => {
+                    b.classList.toggle('bg-white', b.dataset.period === period);
+                    b.classList.toggle('text-gray-800', b.dataset.period === period);
                 });
+                
+                const containers = {
+                    overall: document.getElementById('leaderboard-overall'),
+                    pokeyen: document.getElementById('leaderboard-pokeyen'),
+                    inventory: document.getElementById('leaderboard-inventory'),
+                    rising: document.getElementById('leaderboard-rising')
+                };
 
-                const allContributionsSnapshots = await Promise.all(contributionPromises);
+                Object.values(containers).forEach(c => { if(c) c.innerHTML = 'Loading...'; });
 
-                allContributionsSnapshots.forEach(contribsSnapshot => {
-                    contribsSnapshot.forEach(contribDoc => {
-                        const contributorId = contribDoc.data().userId;
-                        userScores[contributorId] = (userScores[contributorId] || 0) + 1;
+                showLoading(true);
+                try {
+                    let startDate = null;
+                    const now = new Date();
+                    if (period === 'day') {
+                        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    } else if (period === 'week') {
+                        startDate = new Date();
+                        startDate.setDate(startDate.getDate() - 7);
+                    } else if (period === 'month') {
+                        startDate = new Date();
+                        startDate.setMonth(startDate.getMonth() - 1);
+                    }
+
+                    const tasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`));
+                    const tasksSnapshot = await getDocs(tasksQuery);
+
+                    let allContributions = [];
+                    const contributionPromises = tasksSnapshot.docs.map(taskDoc => {
+                        const contribsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified"));
+                        return getDocs(contribsQuery);
                     });
-                });
+                    
+                    const allContributionsSnapshots = await Promise.all(contributionPromises);
+                    
+                    let filteredContributions = [];
+                    allContributionsSnapshots.forEach(snapshot => {
+                        snapshot.forEach(doc => {
+                            const data = doc.data();
+                            if (startDate) {
+                                if (data.timestamp && data.timestamp.toDate() >= startDate) {
+                                    filteredContributions.push(data);
+                                }
+                            } else {
+                                filteredContributions.push(data);
+                            }
+                        });
+                    });
+                    
+                    // --- Full Data for Modals ---
+                    const fullData = {};
 
-                if (Object.keys(userScores).length === 0) {
-                    leaderboardContent.innerHTML = '<p class="text-gray-500">No verified contributions yet.</p>';
-                    return;
+                    // Process Overall
+                    const overallScores = filteredContributions.reduce((acc, c) => { acc[c.userId] = (acc[c.userId] || 0) + 1; return acc; }, {});
+                    fullData.overall = Object.entries(overallScores).sort((a, b) => b[1] - a[1]);
+                    containers.overall.innerHTML = (await Promise.all(fullData.overall.slice(0, 5).map(async ([userId, score], index) => {
+                        const username = await getUsername(userId);
+                        return `<div data-user-id="${userId}" data-user-name="${username.toLowerCase()}" class="leaderboard-item flex justify-between items-center p-2 rounded-md transition-all ${index === 0 ? 'bg-yellow-100' : ''}"><span class="font-semibold">${index+1}. ${username}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>`
+                    }))).join('') || '<p class="text-gray-500">No data.</p>';
+
+                    // Process PokeYen
+                    const pokeyenScores = filteredContributions.reduce((acc, c) => {
+                        const yen = c.items?.PokeYen || 0;
+                        if (yen > 0) { acc[c.userId] = (acc[c.userId] || 0) + yen; }
+                        return acc;
+                    }, {});
+                    fullData.pokeyen = Object.entries(pokeyenScores).sort((a, b) => b[1] - a[1]);
+                    containers.pokeyen.innerHTML = (await Promise.all(fullData.pokeyen.slice(0, 5).map(async ([userId, score], index) => {
+                        const username = await getUsername(userId);
+                        const title = getPokeyenTitle(index);
+                        const titleColor = ['text-yellow-500', 'text-gray-400', 'text-orange-400', 'text-green-500', 'text-blue-500'][index] || 'text-gray-500';
+                        return `<div data-user-id="${userId}" data-user-name="${username.toLowerCase()}" class="leaderboard-item flex justify-between items-center p-2 rounded-md transition-all"><span class="font-semibold">${index+1}. ${username} - <em class="font-bold ${titleColor}">${title}</em></span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>`
+                    }))).join('') || '<p class="text-gray-500">No PokeYen data.</p>';
+
+                    // Process Community Inventory
+                    const inventory = filteredContributions.reduce((acc, c) => {
+                        Object.entries(c.items || {}).forEach(([item, qty]) => { acc[item] = (acc[item] || 0) + qty; });
+                        return acc;
+                    }, {});
+                    fullData.inventory = Object.entries(inventory).sort((a, b) => b[1] - a[1]);
+                    containers.inventory.innerHTML = fullData.inventory.slice(0, 10).map(([item, qty]) => `<div class="flex justify-between text-sm p-1"><span class="text-gray-600">${item}</span><span class="font-semibold">${qty.toLocaleString()}</span></div>`).join('') || '<p class="text-gray-500">No items contributed.</p>';
+                    
+                    // Process Rising Stars
+                    containers.rising.innerHTML = '<p class="text-gray-500">Feature under development.</p>';
+                    
+                    // Render Chart
+                    renderLeaderboardCharts(inventory);
+
+                    // Attach "See More" listeners
+                    document.querySelectorAll('[data-leaderboard-type]').forEach(btn => {
+                        btn.onclick = () => showLeaderboardDetailModal(btn.dataset.leaderboardType, fullData);
+                    });
+
+                } catch (error) {
+                    console.error("Error building leaderboard:", error);
+                    const contentContainer = document.getElementById('leaderboard-content');
+                    if (contentContainer) {
+                       contentContainer.innerHTML = '<p class="text-red-500 col-span-full">Could not load leaderboard data. This may be due to a missing database index.</p>';
+                    }
+                } finally {
+                    showLoading(false);
                 }
+            };
+            
+            document.getElementById('leaderboard-period-selector').onclick = (e) => {
+                if(e.target.tagName === 'BUTTON') {
+                    processLeaderboardData(e.target.dataset.period);
+                }
+            };
 
-                const userIds = Object.keys(userScores);
-                const usernames = await Promise.all(userIds.map(getUsername));
+            document.getElementById('leaderboard-search').oninput = (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                document.querySelectorAll('.leaderboard-item').forEach(item => {
+                    const userName = item.dataset.userName;
+                    if (searchTerm && userName.includes(searchTerm)) {
+                        item.classList.add('bg-yellow-200', 'ring-2', 'ring-yellow-500');
+                    } else {
+                        item.classList.remove('bg-yellow-200', 'ring-2', 'ring-yellow-500');
+                    }
+                });
+            };
 
-                const sortedUsers = userIds.map((id, index) => ({
-                    id,
-                    name: usernames[index],
-                    score: userScores[id]
-                })).sort((a, b) => b.score - a.score);
-
-                leaderboardContent.innerHTML = `
-                    <div class="space-y-3">
-                        ${sortedUsers.map((user, index) => `
-                            <div class="flex items-center justify-between p-3 rounded-lg ${index === 0 ? 'bg-yellow-100' : 'bg-gray-50'}">
-                                <div class="flex items-center">
-                                    <span class="font-bold text-lg w-8">${index + 1}</span>
-                                    <span class="font-semibold text-gray-800">${user.name}</span>
-                                </div>
-                                <span class="font-bold text-teal-600">${user.score.toLocaleString()} contributions</span>
-                            </div>
-                        `).join('')}
-                    </div>`;
-
-            } catch (error) {
-                console.error("Error building leaderboard:", error);
-                leaderboardContent.innerHTML = '<p class="text-red-500">Could not load leaderboard data.</p>';
-            }
+            processLeaderboardData('all');
         }
+
+        function renderLeaderboardCharts(inventoryData) {
+            const ctx = document.getElementById('leaderboard-chart')?.getContext('2d');
+            if (!ctx) return;
+            if (leaderboardChart) {
+                leaderboardChart.destroy();
+            }
+
+            const otherCategoryThreshold = 0.03; // Items making up less than 3% of total go into "Other"
+            const totalItems = Object.values(inventoryData).reduce((sum, val) => sum + val, 0);
+            
+            const chartData = { labels: [], data: [] };
+            let otherValue = 0;
+
+            Object.entries(inventoryData).forEach(([item, qty]) => {
+                if ((qty / totalItems) < otherCategoryThreshold) {
+                    otherValue += qty;
+                } else {
+                    chartData.labels.push(item);
+                    chartData.data.push(qty);
+                }
+            });
+
+            if (otherValue > 0) {
+                chartData.labels.push('Other Items');
+                chartData.data.push(otherValue);
+            }
+
+            leaderboardChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        label: 'Contribution Count',
+                        data: chartData.data,
+                        backgroundColor: [
+                            '#10B981', '#3B82F6', '#EC4899', '#F59E0B', '#8B5CF6',
+                            '#6366F1', '#D946EF', '#0EA5E9', '#F43F5E', '#6B7280'
+                        ],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        }
+                    }
+                }
+            });
+        }
+
+        async function showLeaderboardDetailModal(type, fullData) {
+            let title = '';
+            let data = [];
+            let formatter = async (item, index) => '';
+
+            if (type === 'overall') {
+                title = 'Overall Top Contributors (All)';
+                data = fullData.overall;
+                formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>`;
+            } else if (type === 'pokeyen') {
+                title = 'Most PokeYen Contributed (All)';
+                data = fullData.pokeyen;
+                formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>`;
+            } else if (type === 'inventory') {
+                title = 'Community Inventory (All)';
+                data = fullData.inventory;
+                formatter = async ([item, qty], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${item.toLowerCase()}"><span class="font-semibold">${item}</span><span class="font-bold">${qty.toLocaleString()}</span></div>`;
+            }
+            
+            const listHtml = (await Promise.all(data.map(formatter))).join('');
+
+            const modalContent = `
+                <div class="relative mb-4">
+                    <input type="text" id="leaderboard-modal-search" placeholder="Search..." class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-full text-sm">
+                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </div>
+                <div class="space-y-1 max-h-[50vh] overflow-y-auto pr-2" id="leaderboard-modal-list">
+                    ${listHtml}
+                </div>
+            `;
+            
+            showGenericModal(title, modalContent, null, '2xl');
+
+            document.getElementById('leaderboard-modal-search').oninput = (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                document.querySelectorAll('.leaderboard-modal-item').forEach(item => {
+                    const name = item.dataset.userName;
+                    item.style.display = name.includes(searchTerm) ? 'flex' : 'none';
+                });
+            };
+        }
+        // --- MODIFICATION END ---
         
         function renderBreedingProjects() { 
             mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Breeding Projects</h2><p class="text-gray-500">Feature coming soon.</p>`; 
@@ -1499,3 +1827,4 @@
     </div>
 </body>
 </html>
+
