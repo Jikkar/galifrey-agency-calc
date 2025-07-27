@@ -214,12 +214,25 @@
             };
             await renderList(query(collection(db, `team_spaces/${currentTeamSpaceId}/breeding`), orderBy("createdAt", "desc")), 'dashboard-breeding', async (data) => `<p>${data.targetPokemon} <span class="text-xs text-gray-400">by ${await getUsername(data.createdBy)}</span></p>`);
             await renderList(query(collection(db, `team_spaces/${currentTeamSpaceId}/hunts`), orderBy("createdAt", "desc")), 'dashboard-hunts', async (data) => `<div class="flex justify-between"><span>${data.target} <span class="text-xs text-gray-400">by ${await getUsername(data.createdBy)}</span></span><span class="font-mono font-bold">${(data.count || 0).toLocaleString()}</span></div>`);
+            
             const teamSpaceUnsub = onSnapshot(doc(db, "team_spaces", currentTeamSpaceId), async (teamSpaceSnap) => {
                 const membersContainer = document.getElementById('dashboard-members');
                 if (!membersContainer || !teamSpaceSnap.exists()) return;
                 const memberIds = teamSpaceSnap.data().members || [];
                 const memberNames = await Promise.all(memberIds.map(id => getUsername(id)));
-                membersContainer.innerHTML = memberNames.map(name => `<p class="text-gray-700">${name}</p>`).join('');
+                
+                let membersHtml = memberNames.slice(0, 5).map(name => `<p class="text-gray-700">${name}</p>`).join('');
+                if (memberNames.length > 5) {
+                    membersHtml += `<button id="see-all-members-btn" class="text-sm text-teal-600 hover:underline mt-2">See all ${memberNames.length} members...</button>`;
+                }
+                membersContainer.innerHTML = membersHtml;
+
+                if (memberNames.length > 5) {
+                    document.getElementById('see-all-members-btn').onclick = () => {
+                        const allMembersHtml = `<div class="grid grid-cols-2 md:grid-cols-3 gap-4">${memberNames.map(name => `<p class="p-2 bg-gray-100 rounded">${name}</p>`).join('')}</div>`;
+                        showGenericModal('All Team Members', allMembersHtml, null, '4xl');
+                    };
+                }
             });
             unsubscribeListeners.push(teamSpaceUnsub);
         }
@@ -453,6 +466,16 @@
                 const { teamId, vote } = e.currentTarget.dataset;
                 const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
                 
+                // Superadmin multi-vote logic
+                if (currentUserRole === 'Superadmin') {
+                    if (vote === 'up') {
+                        await updateDoc(teamRef, { upvotes: arrayUnion(currentUserId + Math.random()) });
+                    } else {
+                        await updateDoc(teamRef, { downvotes: arrayUnion(currentUserId + Math.random()) });
+                    }
+                    return;
+                }
+
                 await runTransaction(db, async (transaction) => {
                     const teamDoc = await transaction.get(teamRef);
                     if (!teamDoc.exists()) return;
@@ -510,13 +533,11 @@
                         document.getElementById('add-task-btn').onclick = () => showNewTaskModal();
                     }
 
-                    // BUG FIX: Removed orderBy to avoid needing a composite index. Sorting is now done client-side.
                     q = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", isCompleted));
                     const unsub = onSnapshot(q, async (snapshot) => {
                         const taskContainer = document.getElementById('shared-tasks-container');
                         if (!taskContainer) return;
                         
-                        // Client-side sorting
                         const docs = snapshot.docs.sort((a, b) => (b.data().createdAt?.toDate() || 0) - (a.data().createdAt?.toDate() || 0));
 
                         taskContainer.innerHTML = docs.length === 0
@@ -673,33 +694,43 @@
             }
 
             // Contribution Log
-            const contributionsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskId}/contributions`), orderBy('timestamp', 'desc'));
-            const contributionsSnapshot = await getDocs(contributionsQuery);
-            const contributions = contributionsSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
-            
             let logHtml = `<div class="mt-4 border-t pt-4">
                 <h4 class="font-semibold mb-2">Contribution Log</h4>
-                <div class="space-y-2 max-h-48 overflow-y-auto pr-2">`;
-            if (contributions.length === 0) {
-                logHtml += `<p class="text-sm text-gray-500">No contributions yet.</p>`;
-            } else {
-                logHtml += (await Promise.all(contributions.map(async c => {
-                    const contributorName = await getUsername(c.userId);
-                    const contributionTime = c.timestamp ? new Timestamp(c.timestamp.seconds, c.timestamp.nanoseconds).toDate().toLocaleString() : '...';
-                    const itemEntries = Object.entries(c.items).map(([key, val]) => `${val.toLocaleString()} ${key}`).join(', ');
-                    return `
-                        <div class="text-sm p-2 rounded ${c.status === 'verified' ? 'bg-green-50' : 'bg-yellow-50'}">
-                            <div class="flex justify-between items-center">
-                                <span><strong>${contributorName}</strong> logged ${itemEntries}</span>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs text-gray-500">${contributionTime}</span>
-                                    ${c.status === 'pending' && checkPermission('canVerifyContributions') ? `<button data-task-id="${taskId}" data-contrib-id="${c.id}" class="verify-contribution-btn text-xs bg-green-500 text-white px-2 py-1 rounded">Verify</button>` : `<span class="text-xs font-bold ${c.status === 'verified' ? 'text-green-600' : 'text-yellow-600'}">${c.status}</span>`}
+                <div id="log-${taskId}" class="space-y-2 max-h-48 overflow-y-auto pr-2">
+                    <p class="text-sm text-gray-500">Loading log...</p>
+                </div>
+            </div>`;
+            
+            // Real-time listener for contributions
+            const contributionsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskId}/contributions`), orderBy('timestamp', 'desc'));
+            const unsub = onSnapshot(contributionsQuery, async (snapshot) => {
+                const logContainer = document.getElementById(`log-${taskId}`);
+                if (!logContainer) return;
+
+                const contributions = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+                if (contributions.length === 0) {
+                    logContainer.innerHTML = `<p class="text-sm text-gray-500">No contributions yet.</p>`;
+                } else {
+                    logContainer.innerHTML = (await Promise.all(contributions.map(async c => {
+                        const contributorName = await getUsername(c.userId);
+                        const contributionTime = c.timestamp ? new Timestamp(c.timestamp.seconds, c.timestamp.nanoseconds).toDate().toLocaleString() : '...';
+                        const itemEntries = Object.entries(c.items).map(([key, val]) => `${val.toLocaleString()} ${key}`).join(', ');
+                        return `
+                            <div class="text-sm p-2 rounded ${c.status === 'verified' ? 'bg-green-50' : 'bg-yellow-50'}">
+                                <div class="flex justify-between items-center">
+                                    <span><strong>${contributorName}</strong> logged ${itemEntries}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs text-gray-500">${contributionTime}</span>
+                                        ${c.status === 'pending' && checkPermission('canVerifyContributions') ? `<button data-task-id="${taskId}" data-contrib-id="${c.id}" class="verify-contribution-btn text-xs bg-green-500 text-white px-2 py-1 rounded">Verify</button>` : `<span class="text-xs font-bold ${c.status === 'verified' ? 'text-green-600' : 'text-yellow-600'}">${c.status}</span>`}
+                                    </div>
                                 </div>
-                            </div>
-                        </div>`;
-                }))).join('');
-            }
-            logHtml += `</div></div>`;
+                            </div>`;
+                    }))).join('');
+                }
+                 // Re-attach listeners for newly rendered buttons
+                attachTaskCardListeners();
+            });
+            unsubscribeListeners.push(unsub);
 
 
             return `
@@ -965,11 +996,11 @@
                     newPermissions[role][action] = box.checked;
                 });
                 try {
-                    // FIX: Ensure the document exists before trying to update it.
                     const teamSpaceDoc = doc(db, "team_spaces", currentTeamSpaceId);
                     const docSnap = await getDoc(teamSpaceDoc);
                     if (docSnap.exists()) {
                         await updateDoc(teamSpaceDoc, { permissions: newPermissions });
+                        teamSpacePermissions = newPermissions; // FIX: Update local state immediately
                         alert("Permissions saved successfully!");
                     } else {
                         throw new Error("Team Space document does not exist.");
@@ -1226,4 +1257,3 @@
     </div>
 </body>
 </html>
-
