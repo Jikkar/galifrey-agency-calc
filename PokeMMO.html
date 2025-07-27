@@ -71,6 +71,9 @@
             genericModalTitle.textContent = title;
             genericModalContent.innerHTML = content;
             genericModal.classList.remove('hidden');
+            
+            genericModalCloseBtn.onclick = hideGenericModal;
+
             const form = genericModalContent.querySelector('form');
             if (form) {
                 form.onsubmit = (e) => {
@@ -201,9 +204,9 @@
                             
                             if (isFirstLoad) {
                                 isFirstLoad = false;
-                                resolve(); // Resolve promise on first successful load
+                                resolve(); 
                             } else {
-                                refreshCurrentView(); // Re-render on subsequent updates
+                                refreshCurrentView(); 
                             }
 
                         } else {
@@ -568,6 +571,7 @@
                         <button data-tab="shared" class="tasks-tab-btn py-2 px-4 font-semibold text-teal-600 border-b-2 border-teal-600">Active Tasks</button>
                         <button data-tab="completed" class="tasks-tab-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent">Completed</button>
                         <button data-tab="personal" class="tasks-tab-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent">My Tasks</button>
+                        <button data-tab="leaderboard" class="tasks-tab-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent">Leaderboard</button>
                     </nav>
                 </div>
                 <div id="tasks-content"></div>`;
@@ -601,27 +605,26 @@
                         attachTaskCardListeners();
                     });
                     unsubscribeListeners.push(unsub);
-                } else { // Personal tasks
+                } else if (tab === 'personal') {
                     container.innerHTML = `
                         <div class="bg-white p-6 rounded-lg shadow mb-6">
-                            <form id="add-personal-task-form" class="flex gap-4">
-                                <input type="text" name="taskText" placeholder="New personal task..." class="flex-grow p-2 border rounded-lg" required>
-                                <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">Add Task</button>
-                            </form>
+                             <button id="add-personal-task-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg">Create New Personal Task</button>
                         </div>
                         <div id="personal-tasks-container" class="space-y-4"></div>`;
-                    document.getElementById('add-personal-task-form').onsubmit = async e => { e.preventDefault(); const text = e.target.taskText.value; if(text) await addDoc(collection(db, `users/${currentUserId}/tasks`), { text, completed: false, createdAt: serverTimestamp() }); e.target.reset(); };
-                    q = query(collection(db, `users/${currentUserId}/tasks`), orderBy("createdAt", "desc"));
-                    const unsub = onSnapshot(q, (snapshot) => {
+                    
+                    document.getElementById('add-personal-task-btn').onclick = () => showNewPersonalTaskModal();
+
+                    q = query(collection(db, `users/${currentUserId}/tasks`), where("completed", "==", false), orderBy("createdAt", "desc"));
+                    const unsub = onSnapshot(q, async (snapshot) => {
                         const taskContainer = document.getElementById('personal-tasks-container'); if (!taskContainer) return;
-                        taskContainer.innerHTML = snapshot.empty ? '<p class="text-gray-500 text-center mt-8">No personal tasks.</p>' : snapshot.docs.map(doc => {
-                            const task = doc.data(); const taskId = doc.id;
-                            return `<div class="bg-white p-4 rounded-lg shadow flex items-center justify-between"><div class="flex items-center gap-4"><input type="checkbox" data-task-id="${taskId}" class="personal-task-checkbox h-6 w-6" ${task.completed ? 'checked' : ''}><p class="${task.completed ? 'line-through text-gray-400' : ''}">${task.text}</p></div><button data-task-id="${taskId}" class="delete-personal-task-btn text-xs text-red-500 hover:underline">Delete</button></div>`;
-                        }).join('');
-                        document.querySelectorAll('.personal-task-checkbox').forEach(el => el.onchange = async e => await updateDoc(doc(db, `users/${currentUserId}/tasks`, e.target.dataset.taskId), { completed: e.target.checked }));
-                        document.querySelectorAll('.delete-personal-task-btn').forEach(btn => btn.onclick = () => showModal('Delete this task?', () => deleteDoc(doc(db, `users/${currentUserId}/tasks`, btn.dataset.taskId))));
+                        taskContainer.innerHTML = snapshot.empty 
+                            ? '<p class="text-gray-500 text-center mt-8">No personal tasks.</p>' 
+                            : (await Promise.all(snapshot.docs.map(renderPersonalTaskCard))).join('');
+                        attachPersonalTaskCardListeners();
                     });
                     unsubscribeListeners.push(unsub);
+                } else if (tab === 'leaderboard') {
+                    renderLeaderboard(container);
                 }
             };
             document.querySelectorAll('.tasks-tab-btn').forEach(btn => btn.onclick = (e) => { document.querySelectorAll('.tasks-tab-btn').forEach(b => b.classList.remove('text-teal-600', 'border-teal-600')); e.target.classList.add('text-teal-600', 'border-teal-600'); renderTabContent(e.target.dataset.tab); });
@@ -641,7 +644,7 @@
                     <div id="goal-fields" class="hidden space-y-2">
                         <div id="goal-items-container">
                              <div class="flex gap-2 items-center">
-                                <input type="text" name="goalItemName" placeholder="Item Name (e.g., Ultra Balls)" class="flex-grow p-2 border rounded-lg">
+                                <input type="text" name="goalItemName" placeholder="Item Name (e.g., Ultra Balls, PokeYen)" class="flex-grow p-2 border rounded-lg">
                                 <input type="number" name="goalItemTarget" placeholder="Target" class="w-28 p-2 border rounded-lg">
                             </div>
                         </div>
@@ -697,7 +700,7 @@
                 const container = modalForm.querySelector('#goal-items-container');
                 const newItemHtml = `
                     <div class="flex gap-2 items-center mt-2">
-                        <input type="text" name="goalItemName" placeholder="Item Name" class="flex-grow p-2 border rounded-lg">
+                        <input type="text" name="goalItemName" placeholder="Item Name (e.g., Ultra Balls, PokeYen)" class="flex-grow p-2 border rounded-lg">
                         <input type="number" name="goalItemTarget" placeholder="Target" class="w-28 p-2 border rounded-lg">
                     </div>`;
                 container.insertAdjacentHTML('beforeend', newItemHtml);
@@ -739,13 +742,6 @@
                         <button data-task-id="${taskId}" class="add-contribution-btn bg-gray-600 text-white px-4 rounded-lg">Log</button>
                     </div>
                 </div>`;
-            } else { // Checklist
-                contentHtml = `
-                    <div class="mt-4 flex items-center gap-4">
-                        ${checkPermission('canManageTasks') ? `
-                        <button data-task-id="${taskId}" class="task-complete-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Mark as Complete</button>
-                        ` : `<p class="text-sm text-gray-500">Awaiting completion by Staff.</p>`}
-                    </div>`;
             }
 
             let logHtml = `<div class="mt-4 border-t pt-4">
@@ -801,6 +797,11 @@
                     ${task.reward ? `<p class="text-sm font-semibold text-yellow-600 mt-2">Reward: ${task.reward}</p>` : ''}
                     ${contentHtml}
                     ${task.type === 'goal' ? logHtml : ''}
+                    ${checkPermission('canManageTasks') ? `
+                        <div class="mt-4 pt-4 border-t flex justify-end">
+                            <button data-task-id="${taskId}" class="task-complete-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Mark as Complete</button>
+                        </div>
+                    ` : ''}
                 </div>`;
         }
         
@@ -1181,10 +1182,10 @@
                             authContainer.classList.add('hidden');
                             appContainer.classList.remove('hidden');
                             
-                            await setupTeamSpace(currentUserId); // Wait for permissions to load
+                            await setupTeamSpace(currentUserId);
                             
                             await renderOfficialTeamSpaceButton();
-                            switchView('dashboard'); // Then render the initial view
+                            switchView('dashboard');
 
                         } else { await signOut(auth); }
                     } else {
@@ -1340,3 +1341,4 @@
     </div>
 </body>
 </html>
+
