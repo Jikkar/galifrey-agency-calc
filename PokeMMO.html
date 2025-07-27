@@ -356,7 +356,8 @@
 
             if (score <= -15) {
                 return `
-                    <div class="bg-black p-6 rounded-lg shadow border-4 border-red-800 text-center">
+                    <div class="bg-black p-6 rounded-lg shadow border-4 border-red-800 text-center relative">
+                        ${checkPermission('canDeletePublicTeams') ? `<button data-team-id="${teamId}" data-is-public="${team.isPublic}" class="delete-pokemon-team-btn absolute top-2 right-2 text-white hover:text-red-400">Delete Team</button>` : ''}
                         <h3 class="text-2xl font-bold text-gray-400">[REDACTED BY ORDER OF STAFF]</h3>
                         <p class="text-gray-500 mt-4">This team build was deemed a public nuisance.</p>
                         <p class="text-gray-600 mt-2 text-sm">Original creator: ${creatorName}</p>
@@ -688,8 +689,9 @@
             } else { // Checklist
                 contentHtml = `
                     <div class="mt-4 flex items-center gap-4">
-                        <input type="checkbox" data-task-id="${taskId}" class="task-checkbox h-6 w-6" ${task.completed ? 'checked' : ''}>
-                        <label class="font-semibold ${task.completed ? 'line-through text-gray-400' : ''}">Mark as Complete</label>
+                        ${checkPermission('canManageTasks') ? `
+                        <button data-task-id="${taskId}" class="task-complete-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Mark as Complete</button>
+                        ` : `<p class="text-sm text-gray-500">Awaiting completion by Staff.</p>`}
                     </div>`;
             }
 
@@ -771,8 +773,10 @@
         }
         
         function attachTaskCardListeners() {
-            document.querySelectorAll('.task-checkbox').forEach(el => el.onchange = async e => {
-                await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, e.target.dataset.taskId), { completed: e.target.checked });
+            document.querySelectorAll('.task-complete-btn').forEach(el => el.onclick = async e => {
+                if (checkPermission('canManageTasks')) {
+                    await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, e.target.dataset.taskId), { completed: true });
+                }
             });
             if (checkPermission('canManageTasks')) {
                 document.querySelectorAll('.delete-task-btn').forEach(btn => btn.onclick = () => {
@@ -951,16 +955,15 @@
                 </div>`;
             
             // --- Admin Panel Logic ---
-            const teamSpaceRef = doc(db, "team_spaces", currentTeamSpaceId); 
-            const teamSpaceSnap = await getDoc(teamSpaceRef); 
-            const memberIds = teamSpaceSnap.exists() ? teamSpaceSnap.data().members || [] : [];
-            
-            const usersHtml = await Promise.all(memberIds.map(async (uid) => {
-                const userDoc = await getDoc(doc(db, "users", uid)); if (!userDoc.exists()) return ''; const { username, role } = userDoc.data();
-                if (uid === SUPERADMIN_UID) return `<div class="flex justify-between items-center"><p>${username} <span class="text-xs font-bold text-yellow-500">Superadmin</span></p></div>`;
-                return `<div class="flex justify-between items-center"><p>${username}</p><select data-uid="${uid}" class="role-selector p-1 border rounded"><option value="Member" ${role === 'Member' ? 'selected' : ''}>Member</option><option value="Staff" ${role === 'Staff' ? 'selected' : ''}>Staff</option><option value="Admin" ${role === 'Admin' ? 'selected' : ''}>Admin</option></select></div>`;
-            }));
-            document.getElementById('user-roles-container').innerHTML = usersHtml.join('');
+            const allUsersQuery = query(collection(db, "users"));
+            const allUsersSnapshot = await getDocs(allUsersQuery);
+            const allUsers = allUsersSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            const usersHtml = allUsers.map(user => {
+                if (user.id === SUPERADMIN_UID) return `<div class="flex justify-between items-center"><p>${user.username} <span class="text-xs font-bold text-yellow-500">Superadmin</span></p></div>`;
+                return `<div class="flex justify-between items-center"><p>${user.username}</p><select data-uid="${user.id}" class="role-selector p-1 border rounded"><option value="Member" ${user.role === 'Member' ? 'selected' : ''}>Member</option><option value="Staff" ${user.role === 'Staff' ? 'selected' : ''}>Staff</option><option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option></select></div>`;
+            }).join('');
+            document.getElementById('user-roles-container').innerHTML = usersHtml;
             document.querySelectorAll('.role-selector').forEach(sel => { sel.onchange = async (e) => await updateDoc(doc(db, "users", e.target.dataset.uid), { role: e.target.value }); });
             
             const permsContainer = document.getElementById('permissions-container');
@@ -1155,6 +1158,18 @@
         body { font-family: 'Inter', sans-serif; }
         .tasks-tab-btn.active, .teams-filter-btn.active { color: #0d9488; border-color: #0d9488; }
         .modal-dialog { transition: all 0.3s ease-out; }
+        /* FIX: Ensure sidebar fills the screen height */
+        #app-container > .flex {
+            min-height: 100vh;
+        }
+        aside {
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* Make sidebar full height */
+        }
+        .sidebar-bottom {
+            overflow-y: auto; /* Allow this part to scroll */
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -1230,7 +1245,7 @@
                     <button data-view="money-guide" class="nav-button w-full text-left font-semibold px-4 py-2 rounded-lg hover:bg-gray-100 transition">Money Guide</button>
                     <button data-view="admin-panel" id="admin-panel-btn" class="nav-button w-full text-left font-semibold px-4 py-2 rounded-lg hover:bg-gray-100 transition" style="display: none;">Admin Panel</button>
                 </nav>
-                <div class="p-4 border-t space-y-3">
+                <div class="sidebar-bottom p-4 border-t space-y-3">
                     <div id="user-profile-display" class="text-sm text-center text-gray-600 font-semibold"></div>
                     <button id="logout-btn" class="w-full text-sm text-red-500 hover:underline">Logout</button>
                     
