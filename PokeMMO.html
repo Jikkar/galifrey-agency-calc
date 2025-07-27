@@ -10,7 +10,7 @@
         // Firebase App (the core)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, deleteDoc, updateDoc, arrayRemove, arrayUnion, query, orderBy, writeBatch, serverTimestamp, increment, runTransaction, collectionGroup, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, deleteDoc, updateDoc, arrayRemove, arrayUnion, query, orderBy, writeBatch, serverTimestamp, increment, runTransaction, getDocs, Timestamp, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- Your web app's Firebase configuration ---
         const firebaseConfig = {
@@ -133,27 +133,27 @@
         async function setupTeamSpace(userId) {
             let teamSpaceId = localStorage.getItem('currentTeamSpaceId');
             
-            // --- NEW: Default to "ExCorp" for new users ---
             if (!teamSpaceId) {
                 teamSpaceId = "ExCorp";
                 localStorage.setItem('currentTeamSpaceId', teamSpaceId);
-                
-                const teamSpaceRef = doc(db, "team_spaces", teamSpaceId);
-                const teamSpaceSnap = await getDoc(teamSpaceRef);
+            }
+            
+            const teamSpaceRef = doc(db, "team_spaces", teamSpaceId);
+            const teamSpaceSnap = await getDoc(teamSpaceRef);
 
-                // If the default "ExCorp" space doesn't exist, create it.
-                if (!teamSpaceSnap.exists()) {
-                    await setDoc(teamSpaceRef, {
-                        owner: userId, // First user becomes owner
-                        name: "ExCorp Main Team",
-                        members: [userId],
-                        createdAt: serverTimestamp(),
-                        permissions: {
-                            Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true },
-                            Staff: { canManageTasks: true, canManageProjects: true, canMarkStaffPick: true },
-                            Member: {}
-                        }
-                    });
+            if (!teamSpaceSnap.exists()) {
+                await setDoc(teamSpaceRef, {
+                    owner: userId,
+                    name: teamSpaceId === "ExCorp" ? "ExCorp Main Team" : "New Team Space",
+                    members: [userId],
+                    createdAt: serverTimestamp(),
+                    permissions: {
+                        Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true },
+                        Staff: { canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false },
+                        Member: { canCreatePublicTeams: true, canVoteOnTeams: true }
+                    }
+                });
+                if (teamSpaceId === "ExCorp") {
                     await seedDefaultResources(teamSpaceId);
                 }
             }
@@ -162,24 +162,21 @@
             teamSpaceIdDisplay.textContent = currentTeamSpaceId;
             teamSpaceIdInput.value = currentTeamSpaceId;
             
-            const teamSpaceRef = doc(db, "team_spaces", currentTeamSpaceId);
-            const unsub = onSnapshot(teamSpaceRef, async (teamSpaceSnap) => {
-                if(teamSpaceSnap.exists()) {
-                    teamSpacePermissions = teamSpaceSnap.data().permissions || {};
-                    if(!teamSpaceSnap.data().members?.includes(userId)) {
+            const unsub = onSnapshot(teamSpaceRef, async (snap) => {
+                if(snap.exists()) {
+                    teamSpacePermissions = snap.data().permissions || {};
+                    if(!snap.data().members?.includes(userId)) {
                         await updateDoc(teamSpaceRef, { members: arrayUnion(userId) });
                     }
                 } else {
                     alert(`Team Space with ID "${currentTeamSpaceId}" not found. You can create a new one.`);
                     localStorage.removeItem('currentTeamSpaceId');
-                    // Don't reload, let them create a new one.
                 }
             });
             unsubscribeListeners.push(unsub);
             switchView('dashboard');
         }
 
-        // --- NEW: Render Official Team Space Button ---
         async function renderOfficialTeamSpaceButton() {
             const settingsRef = doc(db, "system_settings", "official_team_space");
             onSnapshot(settingsRef, (docSnap) => {
@@ -233,13 +230,14 @@
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-3xl font-bold text-gray-800">Pokémon Team Locker</h2>
                     <div class="flex gap-4">
-                        ${checkPermission('canManagePokemonTeams') ? `<button id="add-pokemon-team-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">New Pokémon Team</button>` : ''}
+                        <button id="add-pokemon-team-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">New Pokémon Team</button>
                     </div>
                 </div>
                 <div class="mb-4 border-b border-gray-200">
                     <nav class="flex space-x-4" id="teams-filter-nav">
                         <button data-filter="all" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600 active">All Teams</button>
                         <button data-filter="staff" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600">Staff Picks</button>
+                        <button data-filter="public" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600">Public Teams</button>
                         <button data-filter="personal" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600">My Teams</button>
                     </nav>
                 </div>
@@ -253,6 +251,7 @@
                 if (!container) return;
                 let teams = snapshot.docs;
                 if (currentFilter === 'staff') teams = teams.filter(t => t.data().isStaffPick);
+                else if (currentFilter === 'public') teams = teams.filter(t => t.data().isPublic);
                 else if (currentFilter === 'personal') teams = teams.filter(t => t.data().createdBy === currentUserId);
                 
                 if(teams.length === 0) {
@@ -272,43 +271,63 @@
                 document.querySelectorAll('.teams-filter-btn').forEach(b => b.classList.remove('active', 'text-teal-600', 'border-teal-600'));
                 e.target.classList.add('active', 'text-teal-600', 'border-teal-600');
                 currentFilter = e.target.dataset.filter;
-                onSnapshot(q, renderFilteredTeams); // Re-render on filter change
+                onSnapshot(q, renderFilteredTeams);
             });
 
-            if (checkPermission('canManagePokemonTeams')) {
-                document.getElementById('add-pokemon-team-btn').onclick = () => {
-                    showGenericModal('New Pokémon Team', `
-                        <form class="space-y-4">
-                            <input type="text" name="name" placeholder="Team Name" class="w-full p-2 border rounded-lg" required>
-                            <input type="text" name="purpose" placeholder="Purpose (e.g., Hoenn E4, Kanto Story)" class="w-full p-2 border rounded-lg">
-                            <button type="submit" class="w-full bg-teal-500 text-white p-3 rounded-lg font-bold hover:bg-teal-600">Create Team</button>
-                        </form>`, 
-                        async (e) => {
-                            if(e.target.name.value) {
-                                await addDoc(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), { 
-                                    name: e.target.name.value, 
-                                    purpose: e.target.purpose.value,
-                                    pokemon: [], 
-                                    notes: [], 
-                                    createdBy: currentUserId, 
-                                    createdAt: serverTimestamp(), 
-                                    isStaffPick: false 
-                                });
-                            }
+            document.getElementById('add-pokemon-team-btn').onclick = () => {
+                let formHtml = `
+                    <form class="space-y-4">
+                        <input type="text" name="name" placeholder="Team Name" class="w-full p-2 border rounded-lg" required>
+                        <input type="text" name="purpose" placeholder="Purpose (e.g., Hoenn E4, Kanto Story)" class="w-full p-2 border rounded-lg">`;
+                if(checkPermission('canCreatePublicTeams')) {
+                    formHtml += `<label class="flex items-center gap-2"><input type="checkbox" name="isPublic"> Make Public</label>`;
+                }
+                formHtml += `<button type="submit" class="w-full bg-teal-500 text-white p-3 rounded-lg font-bold hover:bg-teal-600">Create Team</button></form>`;
+                
+                showGenericModal('New Pokémon Team', formHtml, async (e) => {
+                    if(e.target.name.value) {
+                        await addDoc(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), { 
+                            name: e.target.name.value, 
+                            purpose: e.target.purpose.value,
+                            pokemon: [], 
+                            notes: [], 
+                            createdBy: currentUserId, 
+                            createdAt: serverTimestamp(), 
+                            isStaffPick: false,
+                            isPublic: checkPermission('canCreatePublicTeams') ? e.target.isPublic.checked : false,
+                            upvotes: [],
+                            downvotes: []
                         });
-                };
-            }
+                    }
+                });
+            };
         }
 
         async function renderPokemonTeamCard(doc) {
             const team = doc.data();
             const teamId = doc.id;
             const creatorName = await getUsername(team.createdBy);
+            const upvotes = team.upvotes?.length || 0;
+            const downvotes = team.downvotes?.length || 0;
+            const score = upvotes - downvotes;
+            const userVote = team.upvotes?.includes(currentUserId) ? 'up' : team.downvotes?.includes(currentUserId) ? 'down' : null;
+
+            // --- Tiered Border Logic ---
+            let borderClass = "border-gray-200";
+            if (score <= -15) { /* Redacted */ }
+            else if (score < 0) borderClass = "border-red-500 border-2";
+            else if (score >= 100) borderClass = "border-yellow-400 border-4 p-1 bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-500 shadow-2xl"; // Legendary
+            else if (score >= 75) borderClass = "border-purple-500 border-4 shadow-xl"; // Mythic
+            else if (score >= 60) borderClass = "border-indigo-500 border-2 shadow-lg"; // Epic
+            else if (score >= 40) borderClass = "border-blue-500 border-2 shadow-md"; // Rare
+            else if (score >= 25) borderClass = "border-green-500 border-2 shadow-md"; // Uncommon
+            else if (score >= 10) borderClass = "border-green-300 border-2"; // Common
+
             const pokemonHtml = (await Promise.all((team.pokemon || []).map(async (p, i) => {
                 const addedByName = await getUsername(p.addedBy);
                 return `
                     <div class="bg-gray-50 p-4 rounded-md border relative">
-                        ${checkPermission('canManagePokemonTeams') ? `<button data-team-id="${teamId}" data-pokemon-index="${i}" class="delete-pokemon-btn absolute top-2 right-2 text-red-400 hover:text-red-600 font-bold text-xl">&times;</button>`:''}
+                        ${(checkPermission('canManagePokemonTeams') || team.createdBy === currentUserId) ? `<button data-team-id="${teamId}" data-pokemon-index="${i}" class="delete-pokemon-btn absolute top-2 right-2 text-red-400 hover:text-red-600 font-bold text-xl">&times;</button>`:''}
                         <p class="font-bold text-lg">${p.species}</p>
                         <p class="text-sm"><strong>Nature:</strong> ${p.nature}</p>
                         <p class="text-sm"><strong>EVs:</strong> ${p.evs}</p>
@@ -322,8 +341,17 @@
                 return `<div class="text-sm bg-gray-100 p-2 rounded"><strong>${authorName}</strong>: ${note.text}</div>`;
             }))).join('');
 
+            if (score <= -15) {
+                return `
+                    <div class="bg-black p-6 rounded-lg shadow border-4 border-red-800 text-center">
+                        <h3 class="text-2xl font-bold text-gray-400">[REDACTED BY ORDER OF STAFF]</h3>
+                        <p class="text-gray-500 mt-4">This team build was deemed a public nuisance.</p>
+                        <p class="text-gray-600 mt-2 text-sm">Original creator: ${creatorName}</p>
+                    </div>`;
+            }
+
             return `
-                <div class="bg-white p-6 rounded-lg shadow">
+                <div class="bg-white p-5 rounded-lg shadow transition-all ${borderClass}">
                     <div class="flex justify-between items-start mb-4">
                         <div>
                             <h3 class="text-2xl font-bold">${team.name}</h3>
@@ -331,21 +359,29 @@
                             <p class="text-sm text-gray-500">Created by ${creatorName}</p>
                         </div>
                         <div class="flex items-center gap-4">
-                            ${checkPermission('canMarkStaffPick') ? `<label class="flex items-center gap-2 text-sm"><input type="checkbox" data-team-id="${teamId}" class="staff-pick-checkbox" ${team.isStaffPick ? 'checked' : ''}> Staff Pick</label>` : ''}
-                            ${checkPermission('canManagePokemonTeams') ? `<button data-team-id="${teamId}" class="delete-pokemon-team-btn text-red-500 hover:text-red-700">Delete Team</button>` : ''}
+                            ${checkPermission('canMarkStaffPick') && team.isPublic ? `<label class="flex items-center gap-2 text-sm"><input type="checkbox" data-team-id="${teamId}" class="staff-pick-checkbox" ${team.isStaffPick ? 'checked' : ''}> Staff Pick</label>` : ''}
+                            ${(team.createdBy === currentUserId || (team.isPublic && checkPermission('canDeletePublicTeams'))) ? `<button data-team-id="${teamId}" data-is-public="${team.isPublic}" class="delete-pokemon-team-btn text-red-500 hover:text-red-700">Delete Team</button>` : ''}
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                         ${pokemonHtml}
-                        ${(team.pokemon || []).length < 6 && checkPermission('canManagePokemonTeams') ? `<button data-team-id="${teamId}" class="add-pokemon-btn flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold p-3 rounded-md transition">+</button>` : ''}
+                        ${(team.pokemon || []).length < 6 && (checkPermission('canManagePokemonTeams') || team.createdBy === currentUserId) ? `<button data-team-id="${teamId}" class="add-pokemon-btn flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold p-3 rounded-md transition">+</button>` : ''}
                     </div>
-                    <div class="border-t pt-4">
-                        <h4 class="font-semibold mb-2">Notes</h4>
-                        <div class="space-y-2 max-h-40 overflow-y-auto mb-2 pr-2">${notesHtml}</div>
-                        <div class="flex gap-2">
-                            <input type="text" data-team-id="${teamId}" class="note-input flex-grow border rounded p-2" placeholder="Add a note...">
-                            <button data-team-id="${teamId}" class="add-note-btn bg-gray-600 text-white px-4 rounded-lg">Post</button>
+                    <div class="border-t pt-4 flex justify-between items-end">
+                        <div class="w-2/3">
+                            <h4 class="font-semibold mb-2">Notes</h4>
+                            <div class="space-y-2 max-h-40 overflow-y-auto mb-2 pr-2">${notesHtml}</div>
+                            <div class="flex gap-2">
+                                <input type="text" data-team-id="${teamId}" class="note-input flex-grow border rounded p-2" placeholder="Add a note...">
+                                <button data-team-id="${teamId}" class="add-note-btn bg-gray-600 text-white px-4 rounded-lg">Post</button>
+                            </div>
                         </div>
+                        ${checkPermission('canVoteOnTeams') ? `
+                        <div class="flex items-center gap-2">
+                            <button data-team-id="${teamId}" data-vote="up" class="vote-btn p-2 rounded-full ${userVote === 'up' ? 'bg-green-500 text-white' : 'bg-gray-200 hover:bg-green-200'}">▲</button>
+                            <span class="font-bold text-lg">${score}</span>
+                            <button data-team-id="${teamId}" data-vote="down" class="vote-btn p-2 rounded-full ${userVote === 'down' ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-red-200'}">▼</button>
+                        </div>` : ''}
                     </div>
                 </div>`;
         }
@@ -392,7 +428,16 @@
                 }
             });
 
-            document.querySelectorAll('.delete-pokemon-team-btn').forEach(btn => btn.onclick = e => showModal('Delete this entire Pokémon team?', () => deleteDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, e.target.dataset.teamId))));
+            document.querySelectorAll('.delete-pokemon-team-btn').forEach(btn => btn.onclick = e => {
+                const teamId = e.target.dataset.teamId;
+                const isPublic = e.target.dataset.isPublic === 'true';
+                const canDelete = (isPublic && checkPermission('canDeletePublicTeams')) || !isPublic;
+                if(canDelete) {
+                    showModal('Delete this entire Pokémon team?', () => deleteDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId)));
+                } else {
+                    alert("You don't have permission to delete this public team.");
+                }
+            });
             
             document.querySelectorAll('.delete-pokemon-btn').forEach(btn => btn.onclick = async e => {
                 const { teamId, pokemonIndex } = e.target.dataset;
@@ -403,6 +448,35 @@
             });
 
             document.querySelectorAll('.staff-pick-checkbox').forEach(box => box.onchange = async e => await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, e.target.dataset.teamId), { isStaffPick: e.target.checked }));
+
+            document.querySelectorAll('.vote-btn').forEach(btn => btn.onclick = async e => {
+                const { teamId, vote } = e.currentTarget.dataset;
+                const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
+                
+                await runTransaction(db, async (transaction) => {
+                    const teamDoc = await transaction.get(teamRef);
+                    if (!teamDoc.exists()) return;
+
+                    const data = teamDoc.data();
+                    const upvotes = data.upvotes || [];
+                    const downvotes = data.downvotes || [];
+                    
+                    const hasUpvoted = upvotes.includes(currentUserId);
+                    const hasDownvoted = downvotes.includes(currentUserId);
+
+                    let newUpvotes = [...upvotes];
+                    let newDownvotes = [...downvotes];
+
+                    if (vote === 'up') {
+                        if (hasUpvoted) { newUpvotes = newUpvotes.filter(id => id !== currentUserId); } 
+                        else { newUpvotes.push(currentUserId); newDownvotes = newDownvotes.filter(id => id !== currentUserId); }
+                    } else if (vote === 'down') {
+                        if (hasDownvoted) { newDownvotes = newDownvotes.filter(id => id !== currentUserId); } 
+                        else { newDownvotes.push(currentUserId); newUpvotes = newUpvotes.filter(id => id !== currentUserId); }
+                    }
+                    transaction.update(teamRef, { upvotes: newUpvotes, downvotes: newDownvotes });
+                });
+            });
         }
 
         // --- TASKS MODULE (REFINED) ---
@@ -413,7 +487,8 @@
                 </div>
                 <div class="mb-4 border-b border-gray-200">
                     <nav class="flex space-x-4" id="tasks-tab-nav">
-                        <button data-tab="shared" class="tasks-tab-btn py-2 px-4 font-semibold text-teal-600 border-b-2 border-teal-600">Shared Tasks</button>
+                        <button data-tab="shared" class="tasks-tab-btn py-2 px-4 font-semibold text-teal-600 border-b-2 border-teal-600">Active Tasks</button>
+                        <button data-tab="completed" class="tasks-tab-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent">Completed</button>
                         <button data-tab="personal" class="tasks-tab-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent">My Tasks</button>
                     </nav>
                 </div>
@@ -421,25 +496,32 @@
 
             const renderTabContent = (tab) => {
                 const container = document.getElementById('tasks-content');
-                if (tab === 'shared') {
+                let q;
+                if (tab === 'shared' || tab === 'completed') {
+                    const isCompleted = tab === 'completed';
                     container.innerHTML = `
-                        ${checkPermission('canManageTasks') ? `
+                        ${tab === 'shared' && checkPermission('canManageTasks') ? `
                         <div class="bg-white p-6 rounded-lg shadow mb-6">
                             <button id="add-task-btn" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-4 rounded-lg">Create New Shared Task</button>
                         </div>` : ''}
                         <div id="shared-tasks-container" class="space-y-4"></div>`;
                     
-                    if (checkPermission('canManageTasks')) {
+                    if (tab === 'shared' && checkPermission('canManageTasks')) {
                         document.getElementById('add-task-btn').onclick = () => showNewTaskModal();
                     }
 
-                    const q = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), orderBy("createdAt", "desc"));
+                    // BUG FIX: Removed orderBy to avoid needing a composite index. Sorting is now done client-side.
+                    q = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", isCompleted));
                     const unsub = onSnapshot(q, async (snapshot) => {
                         const taskContainer = document.getElementById('shared-tasks-container');
                         if (!taskContainer) return;
-                        taskContainer.innerHTML = snapshot.empty 
-                            ? '<p class="text-gray-500 text-center mt-8">No shared tasks.</p>' 
-                            : (await Promise.all(snapshot.docs.map(renderTaskCard))).join('');
+                        
+                        // Client-side sorting
+                        const docs = snapshot.docs.sort((a, b) => (b.data().createdAt?.toDate() || 0) - (a.data().createdAt?.toDate() || 0));
+
+                        taskContainer.innerHTML = docs.length === 0
+                            ? `<p class="text-gray-500 text-center mt-8">No ${isCompleted ? 'completed' : 'active'} tasks.</p>` 
+                            : (await Promise.all(docs.map(isCompleted ? renderCompletedTaskCard : renderTaskCard))).join('');
                         attachTaskCardListeners();
                     });
                     unsubscribeListeners.push(unsub);
@@ -453,7 +535,7 @@
                         </div>
                         <div id="personal-tasks-container" class="space-y-4"></div>`;
                     document.getElementById('add-personal-task-form').onsubmit = async e => { e.preventDefault(); const text = e.target.taskText.value; if(text) await addDoc(collection(db, `users/${currentUserId}/tasks`), { text, completed: false, createdAt: serverTimestamp() }); e.target.reset(); };
-                    const q = query(collection(db, `users/${currentUserId}/tasks`), orderBy("createdAt", "desc"));
+                    q = query(collection(db, `users/${currentUserId}/tasks`), orderBy("createdAt", "desc"));
                     const unsub = onSnapshot(q, (snapshot) => {
                         const taskContainer = document.getElementById('personal-tasks-container'); if (!taskContainer) return;
                         taskContainer.innerHTML = snapshot.empty ? '<p class="text-gray-500 text-center mt-8">No personal tasks.</p>' : snapshot.docs.map(doc => {
@@ -481,7 +563,21 @@
                         <option value="goal">Collaborative Goal</option>
                     </select>
                     <div id="goal-fields" class="hidden space-y-2">
-                        <input type="number" name="goalTarget" placeholder="Target Value (e.g., 10000)" class="w-full p-2 border rounded-lg">
+                        <div id="goal-items-container">
+                             <div class="flex gap-2 items-center">
+                                <input type="text" name="goalItemName" placeholder="Item Name (e.g., Ultra Balls)" class="flex-grow p-2 border rounded-lg">
+                                <input type="number" name="goalItemTarget" placeholder="Target" class="w-28 p-2 border rounded-lg">
+                            </div>
+                        </div>
+                        <button type="button" id="add-goal-item-btn" class="text-sm text-teal-600 hover:underline">+ Add another item</button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                         <input type="checkbox" name="isRecurring" id="isRecurring">
+                         <label for="isRecurring">Is this a recurring task?</label>
+                         <select name="recurrencePeriod" id="recurrencePeriod" class="p-1 border rounded-lg hidden">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                         </select>
                     </div>
                     <button type="submit" class="w-full bg-teal-500 text-white p-3 rounded-lg font-bold hover:bg-teal-600">Create Task</button>
                 </form>`;
@@ -496,18 +592,43 @@
                     completed: false,
                     createdBy: currentUserId,
                     createdAt: serverTimestamp(),
-                    contributors: {}
+                    isRecurring: form.isRecurring.checked,
+                    recurrencePeriod: form.isRecurring.checked ? form.recurrencePeriod.value : null,
+                    lastReset: form.isRecurring.checked ? serverTimestamp() : null,
                 };
                 if (taskData.type === 'goal') {
-                    taskData.goalTarget = Number(form.goalTarget.value) || 0;
-                    taskData.goalProgress = 0;
+                    taskData.goalItems = [];
+                    const itemNames = form.querySelectorAll('input[name="goalItemName"]');
+                    const itemTargets = form.querySelectorAll('input[name="goalItemTarget"]');
+                    itemNames.forEach((nameInput, index) => {
+                        if (nameInput.value) {
+                            taskData.goalItems.push({
+                                name: nameInput.value,
+                                target: Number(itemTargets[index].value) || 0,
+                                progress: 0
+                            });
+                        }
+                    });
                 }
                 await addDoc(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), taskData);
             }, 'md');
 
-            const typeSelect = document.getElementById('add-task-form-modal').querySelector('select[name="type"]');
-            typeSelect.onchange = () => {
-                document.getElementById('goal-fields').classList.toggle('hidden', typeSelect.value !== 'goal');
+            // Add event listeners for the modal form
+            const modalForm = document.getElementById('add-task-form-modal');
+            modalForm.querySelector('select[name="type"]').onchange = (e) => {
+                modalForm.querySelector('#goal-fields').classList.toggle('hidden', e.target.value !== 'goal');
+            };
+            modalForm.querySelector('#add-goal-item-btn').onclick = () => {
+                const container = modalForm.querySelector('#goal-items-container');
+                const newItemHtml = `
+                    <div class="flex gap-2 items-center mt-2">
+                        <input type="text" name="goalItemName" placeholder="Item Name" class="flex-grow p-2 border rounded-lg">
+                        <input type="number" name="goalItemTarget" placeholder="Target" class="w-28 p-2 border rounded-lg">
+                    </div>`;
+                container.insertAdjacentHTML('beforeend', newItemHtml);
+            };
+            modalForm.querySelector('#isRecurring').onchange = (e) => {
+                modalForm.querySelector('#recurrencePeriod').classList.toggle('hidden', !e.target.checked);
             };
         }
 
@@ -518,25 +639,31 @@
             
             let contentHtml = '';
             if (task.type === 'goal') {
-                const progress = (task.goalProgress || 0);
-                const target = (task.goalTarget || 1);
-                const progressPercent = Math.min(100, (progress / target) * 100);
-                contentHtml = `
-                    <div class="mt-4">
-                        <div class="flex justify-between text-sm font-semibold text-gray-600 mb-1">
-                            <span>Progress</span>
-                            <span>${progress.toLocaleString()} / ${target.toLocaleString()}</span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-4">
-                            <div class="bg-teal-500 h-4 rounded-full text-white text-xs flex items-center justify-center" style="width: ${progressPercent}%">
-                                ${progressPercent.toFixed(0)}%
+                contentHtml += `<div class="mt-4 space-y-3">`;
+                (task.goalItems || []).forEach((item, index) => {
+                    const progressPercent = Math.min(100, (item.progress / item.target) * 100);
+                    contentHtml += `
+                        <div>
+                            <div class="flex justify-between text-sm font-semibold text-gray-600 mb-1">
+                                <span>${item.name}</span>
+                                <span>${item.progress.toLocaleString()} / ${item.target.toLocaleString()}</span>
                             </div>
-                        </div>
-                        <div class="mt-4 flex gap-2">
-                            <input type="number" data-task-id="${taskId}" class="goal-contribution-input flex-grow p-2 border rounded-lg" placeholder="Add to progress...">
-                            <button data-task-id="${taskId}" class="add-contribution-btn bg-gray-600 text-white px-4 rounded-lg">Log</button>
-                        </div>
-                    </div>`;
+                            <div class="w-full bg-gray-200 rounded-full h-4">
+                                <div class="bg-teal-500 h-4 rounded-full text-white text-xs flex items-center justify-center" style="width: ${progressPercent}%">
+                                    ${progressPercent.toFixed(0)}%
+                                </div>
+                            </div>
+                        </div>`;
+                });
+                contentHtml += `
+                    <div class="mt-4 flex gap-2 border-t pt-4">
+                        <input type="number" data-task-id="${taskId}" class="goal-contribution-input flex-grow p-2 border rounded-lg" placeholder="Amount...">
+                        <select data-task-id="${taskId}" class="goal-item-select p-2 border rounded-lg">
+                            ${(task.goalItems || []).map(item => `<option value="${item.name}">${item.name}</option>`).join('')}
+                        </select>
+                        <button data-task-id="${taskId}" class="add-contribution-btn bg-gray-600 text-white px-4 rounded-lg">Log</button>
+                    </div>
+                </div>`;
             } else { // Checklist
                 contentHtml = `
                     <div class="mt-4 flex items-center gap-4">
@@ -545,6 +672,36 @@
                     </div>`;
             }
 
+            // Contribution Log
+            const contributionsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskId}/contributions`), orderBy('timestamp', 'desc'));
+            const contributionsSnapshot = await getDocs(contributionsQuery);
+            const contributions = contributionsSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
+            
+            let logHtml = `<div class="mt-4 border-t pt-4">
+                <h4 class="font-semibold mb-2">Contribution Log</h4>
+                <div class="space-y-2 max-h-48 overflow-y-auto pr-2">`;
+            if (contributions.length === 0) {
+                logHtml += `<p class="text-sm text-gray-500">No contributions yet.</p>`;
+            } else {
+                logHtml += (await Promise.all(contributions.map(async c => {
+                    const contributorName = await getUsername(c.userId);
+                    const contributionTime = c.timestamp ? new Timestamp(c.timestamp.seconds, c.timestamp.nanoseconds).toDate().toLocaleString() : '...';
+                    const itemEntries = Object.entries(c.items).map(([key, val]) => `${val.toLocaleString()} ${key}`).join(', ');
+                    return `
+                        <div class="text-sm p-2 rounded ${c.status === 'verified' ? 'bg-green-50' : 'bg-yellow-50'}">
+                            <div class="flex justify-between items-center">
+                                <span><strong>${contributorName}</strong> logged ${itemEntries}</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-gray-500">${contributionTime}</span>
+                                    ${c.status === 'pending' && checkPermission('canVerifyContributions') ? `<button data-task-id="${taskId}" data-contrib-id="${c.id}" class="verify-contribution-btn text-xs bg-green-500 text-white px-2 py-1 rounded">Verify</button>` : `<span class="text-xs font-bold ${c.status === 'verified' ? 'text-green-600' : 'text-yellow-600'}">${c.status}</span>`}
+                                </div>
+                            </div>
+                        </div>`;
+                }))).join('');
+            }
+            logHtml += `</div></div>`;
+
+
             return `
                 <div class="bg-white p-6 rounded-lg shadow">
                     <div class="flex justify-between items-start">
@@ -552,12 +709,34 @@
                             <h3 class="text-xl font-bold ${task.completed ? 'line-through text-gray-400' : ''}">${task.text}</h3>
                             <p class="text-sm text-gray-500">Added by ${creatorName}</p>
                         </div>
-                        ${checkPermission('canManageTasks') ? `<button data-task-id="${taskId}" class="delete-task-btn text-red-500 hover:text-red-700">&times;</button>` : ''}
+                        <div class="flex items-center gap-2">
+                             ${task.isRecurring ? `<span class="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded-full">${task.recurrencePeriod}</span>` : ''}
+                             ${checkPermission('canManageTasks') ? `<button data-task-id="${taskId}" class="delete-task-btn text-red-500 hover:text-red-700">&times;</button>` : ''}
+                        </div>
                     </div>
                     ${task.details ? `<p class="text-gray-700 mt-2 p-2 bg-gray-50 rounded">${task.details}</p>` : ''}
                     ${task.reward ? `<p class="text-sm font-semibold text-yellow-600 mt-2">Reward: ${task.reward}</p>` : ''}
                     ${contentHtml}
+                    ${task.type === 'goal' ? logHtml : ''}
                 </div>`;
+        }
+        
+        async function renderCompletedTaskCard(doc) {
+            const task = doc.data();
+            const taskId = doc.id;
+            const creatorName = await getUsername(task.createdBy);
+
+            return `
+                <div class="bg-gray-100 p-4 rounded-lg shadow-inner opacity-80">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-500 line-through">${task.text}</h3>
+                            <p class="text-xs text-gray-400">Completed Task (Created by ${creatorName})</p>
+                        </div>
+                        <button data-task-id="${taskId}" class="view-breakdown-btn bg-gray-300 text-gray-700 text-sm font-semibold py-1 px-3 rounded-lg hover:bg-gray-400">View Breakdown</button>
+                    </div>
+                </div>
+            `;
         }
         
         function attachTaskCardListeners() {
@@ -572,15 +751,100 @@
             document.querySelectorAll('.add-contribution-btn').forEach(btn => btn.onclick = async e => {
                 const taskId = e.target.dataset.taskId;
                 const input = document.querySelector(`.goal-contribution-input[data-task-id="${taskId}"]`);
+                const select = document.querySelector(`.goal-item-select[data-task-id="${taskId}"]`);
                 const value = Number(input.value);
-                if (value > 0) {
-                    const taskRef = doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, taskId);
-                    await updateDoc(taskRef, {
-                        goalProgress: increment(value),
-                        [`contributors.${currentUserId}`]: increment(value)
+                const itemName = select.value;
+
+                if (value > 0 && itemName) {
+                    await addDoc(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskId}/contributions`), {
+                        userId: currentUserId,
+                        timestamp: serverTimestamp(),
+                        items: { [itemName]: value },
+                        status: 'pending' // pending, verified
                     });
                     input.value = '';
                 }
+            });
+
+            document.querySelectorAll('.verify-contribution-btn').forEach(btn => btn.onclick = async e => {
+                const { taskId, contribId } = e.currentTarget.dataset;
+                showLoading(true);
+                try {
+                    const taskRef = doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, taskId);
+                    const contribRef = doc(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskId}/contributions`, contribId);
+
+                    await runTransaction(db, async (transaction) => {
+                        const taskDoc = await transaction.get(taskRef);
+                        const contribDoc = await transaction.get(contribRef);
+                        if (!taskDoc.exists() || !contribDoc.exists()) return;
+
+                        const taskData = taskDoc.data();
+                        const contribData = contribDoc.data();
+                        if (contribData.status === 'verified') return; // Already done
+
+                        const newGoalItems = [...taskData.goalItems];
+                        Object.entries(contribData.items).forEach(([name, value]) => {
+                            const itemIndex = newGoalItems.findIndex(item => item.name === name);
+                            if (itemIndex > -1) {
+                                newGoalItems[itemIndex].progress += value;
+                            }
+                        });
+
+                        transaction.update(taskRef, { goalItems: newGoalItems });
+                        transaction.update(contribRef, { status: 'verified' });
+                    });
+                } catch (error) {
+                    console.error("Verification failed:", error);
+                    alert("Could not verify contribution.");
+                } finally {
+                    showLoading(false);
+                }
+            });
+
+            document.querySelectorAll('.view-breakdown-btn').forEach(btn => btn.onclick = async e => {
+                const taskId = e.target.dataset.taskId;
+                const taskRef = doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, taskId);
+                const taskSnap = await getDoc(taskRef);
+                if (!taskSnap.exists()) return;
+                const task = taskSnap.data();
+
+                const contribsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskId}/contributions`));
+                const contribsSnap = await getDocs(contribsQuery);
+                
+                const userTotals = {};
+                contribsSnap.docs.forEach(d => {
+                    const c = d.data();
+                    if (c.status !== 'verified') return;
+                    if (!userTotals[c.userId]) userTotals[c.userId] = {};
+                    Object.entries(c.items).forEach(([name, value]) => {
+                        if (!userTotals[c.userId][name]) userTotals[c.userId][name] = 0;
+                        userTotals[c.userId][name] += value;
+                    });
+                });
+
+                let breakdownHtml = `<div class="space-y-4">`;
+                const userIds = Object.keys(userTotals);
+                if (userIds.length > 0) {
+                    breakdownHtml += `<h4 class="font-bold">Top Contributors</h4>`;
+                    const userNames = await Promise.all(userIds.map(getUsername));
+                    const sortedContributors = userIds.map((id, index) => ({
+                        id,
+                        name: userNames[index],
+                        totals: userTotals[id]
+                    })).sort((a, b) => {
+                        const totalA = Object.values(a.totals).reduce((s, v) => s + v, 0);
+                        const totalB = Object.values(b.totals).reduce((s, v) => s + v, 0);
+                        return totalB - totalA;
+                    });
+
+                    sortedContributors.forEach(user => {
+                        breakdownHtml += `<div class="p-2 bg-gray-100 rounded"><strong>${user.name}</strong>: ${Object.entries(user.totals).map(([name, val]) => `${val.toLocaleString()} ${name}`).join(', ')}</div>`;
+                    });
+                } else {
+                    breakdownHtml += `<p>No verified contributions for this task.</p>`;
+                }
+                breakdownHtml += `</div>`;
+                showGenericModal(`Breakdown for: ${task.text}`, breakdownHtml, null, 'md');
             });
         }
         
@@ -675,7 +939,11 @@
                 canManageProjects: "Manage Projects", 
                 canManageTasks: "Manage Shared Tasks", 
                 canEditResources: "Edit Resources", 
-                canMarkStaffPick: "Mark Staff Picks" 
+                canMarkStaffPick: "Mark Staff Picks",
+                canCreatePublicTeams: "Create Public Pokémon Teams",
+                canVoteOnTeams: "Upvote/Downvote Pokémon Teams",
+                canVerifyContributions: "Verify Task Contributions",
+                canDeletePublicTeams: "Delete Public Pokémon Teams"
             };
             permsContainer.innerHTML = rolesToManage.map(role => `
                 <div class="border p-4 rounded-lg">
@@ -697,10 +965,18 @@
                     newPermissions[role][action] = box.checked;
                 });
                 try {
-                    await updateDoc(doc(db, "team_spaces", currentTeamSpaceId), { permissions: newPermissions });
-                    alert("Permissions saved successfully!");
+                    // FIX: Ensure the document exists before trying to update it.
+                    const teamSpaceDoc = doc(db, "team_spaces", currentTeamSpaceId);
+                    const docSnap = await getDoc(teamSpaceDoc);
+                    if (docSnap.exists()) {
+                        await updateDoc(teamSpaceDoc, { permissions: newPermissions });
+                        alert("Permissions saved successfully!");
+                    } else {
+                        throw new Error("Team Space document does not exist.");
+                    }
                 } catch (error) {
                     alert("Error saving permissions: " + error.message);
+                    console.error("Permissions save error:", error);
                 } finally {
                     showLoading(false);
                 }
@@ -740,7 +1016,6 @@
                     throw new Error(`Team Space with ID "${newId}" already exists.`);
                 }
 
-                // Use a transaction to move the main document
                 await runTransaction(db, async (transaction) => {
                     const oldDocRef = doc(db, "team_spaces", oldId);
                     const oldDocSnap = await transaction.get(oldDocRef);
@@ -751,22 +1026,28 @@
                     transaction.delete(oldDocRef);
                 });
 
-                // Move subcollections
                 const subcollections = ['pokemon_teams', 'tasks', 'breeding', 'hunts', 'resources'];
                 for (const sub of subcollections) {
                     const oldSubCollectionRef = collection(db, `team_spaces/${oldId}/${sub}`);
                     const snapshot = await getDocs(oldSubCollectionRef);
-                    const batch = writeBatch(db);
-                    snapshot.docs.forEach(d => {
+                    for (const d of snapshot.docs) {
                         const oldDocRef = doc(db, `team_spaces/${oldId}/${sub}`, d.id);
                         const newDocRef = doc(db, `team_spaces/${newId}/${sub}`, d.id);
-                        batch.set(newDocRef, d.data());
-                        batch.delete(oldDocRef);
-                    });
-                    await batch.commit();
+                        await setDoc(newDocRef, d.data());
+                        
+                        const nestedSubs = ['contributions'];
+                        for (const nested of nestedSubs) {
+                            const oldNestedRef = collection(oldDocRef, nested);
+                            const nestedSnapshot = await getDocs(oldNestedRef);
+                            for (const nestedDoc of nestedSnapshot.docs) {
+                                await setDoc(doc(newDocRef, nested, nestedDoc.id), nestedDoc.data());
+                                await deleteDoc(doc(oldDocRef, nested, nestedDoc.id));
+                            }
+                        }
+                        await deleteDoc(oldDocRef);
+                    }
                 }
                 
-                // Update official team space if it was the one renamed
                 const officialTeamRef = doc(db, "system_settings", "official_team_space");
                 const officialTeamSnap = await getDoc(officialTeamRef);
                 if (officialTeamSnap.exists() && officialTeamSnap.data().id === oldId) {
@@ -806,7 +1087,7 @@
                         authContainer.classList.add('hidden');
                         appContainer.classList.remove('hidden');
                         await setupTeamSpace(currentUserId);
-                        await renderOfficialTeamSpaceButton(); // Render the button after login
+                        await renderOfficialTeamSpaceButton(); 
                     } else { await signOut(auth); }
                 } else {
                     authContainer.classList.remove('hidden');
@@ -945,3 +1226,4 @@
     </div>
 </body>
 </html>
+
