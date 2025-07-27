@@ -114,7 +114,18 @@
             const evRef = doc(db, `team_spaces/${teamSpaceId}/resources/evHotspots`);
             batch.set(pokedexRef, { entries: { "Garchomp": { name: "Garchomp", stats: "108/130/95/80/85/102", abilities: "Sand Veil, Rough Skin (HA)", builds: [{ name: "Swords Dance", nature: "Jolly", evs: "252 Atk / 4 SpD / 252 Spe", moves: "Swords Dance, Earthquake, Outrage"}] } }});
             batch.set(moneyRef, { entries: [ { id: "gym_reruns", name: 'Gym Rebattles', details: 'Most consistent endgame income.', potential: 'High (~400k/hr)' } ]});
-            batch.set(evRef, { entries: [ { id: "hp_marill", stat: 'HP', pokemon: 'Marill (x5)', location: 'Route 114, Hoenn (Surf)', yield: '10' } ]});
+             // --- MODIFICATION START: Seed EV Hotspots data ---
+            batch.set(evRef, { 
+                entries: [
+                    { id: "hp_marill", stat: 'HP', pokemon: 'Marill (x5)', location: 'Route 114, Hoenn (Surf)', yield: '10 HP' },
+                    { id: "atk_rhydon", stat: 'Attack', pokemon: 'Rhydon (x5)', location: 'Victory Road, Sinnoh', yield: '10 Attack' },
+                    { id: "def_pelipper", stat: 'Defense', pokemon: 'Pelipper (x5)', location: 'Undella Bay, Unova (Surf)', yield: '10 Defense' },
+                    { id: "spa_golduck", stat: 'Sp. Atk', pokemon: 'Golduck (x5)', location: 'Resort Area, Sinnoh (Surf)', yield: '10 Sp. Atk' },
+                    { id: "spd_tentacruel", stat: 'Sp. Def', pokemon: 'Tentacruel (x5)', location: 'Seven Island, Kanto (Surf)', yield: '10 Sp. Def' },
+                    { id: "spe_rapidash", stat: 'Speed', pokemon: 'Rapidash (x5)', location: 'Route 12, Unova (Grass)', yield: '10 Speed' }
+                ]
+            });
+            // --- MODIFICATION END ---
             await batch.commit();
         }
 
@@ -1634,9 +1645,180 @@
         function renderPokedex() {
              mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Pokédex & Builds</h2><p class="text-gray-500">Feature coming soon.</p>`; 
         }
+        
+        // --- MODIFICATION START: Implement EV Hotspots View ---
         function renderEvHotspots() {
-             mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">EV Hotspots</h2><p class="text-gray-500">Feature coming soon.</p>`; 
+            mainContent.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800">EV Training Hotspots</h2>
+                    ${checkPermission('canEditResources') ? `<button id="add-ev-hotspot-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">Add Hotspot</button>` : ''}
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow mb-6 flex items-center gap-4">
+                    <div class="relative flex-grow">
+                        <input type="text" id="ev-search" placeholder="Search by Pokémon or Location..." class="w-full pl-10 pr-4 py-2 border rounded-lg">
+                        <svg class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+                    <div class="flex rounded-md bg-gray-100 p-1" id="ev-stat-filter">
+                        <button data-stat="All" class="ev-filter-btn px-3 py-1 text-sm font-semibold rounded-md bg-teal-500 text-white">All</button>
+                        ${['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed'].map(stat => `<button data-stat="${stat}" class="ev-filter-btn px-3 py-1 text-sm font-semibold rounded-md">${stat}</button>`).join('')}
+                    </div>
+                </div>
+                <div class="overflow-x-auto bg-white rounded-lg shadow">
+                    <table class="w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3">Stat</th>
+                                <th scope="col" class="px-6 py-3">Pokémon Horde</th>
+                                <th scope="col" class="px-6 py-3">Location</th>
+                                <th scope="col" class="px-6 py-3">EV Yield</th>
+                                ${checkPermission('canEditResources') ? `<th scope="col" class="px-6 py-3"><span class="sr-only">Actions</span></th>` : ''}
+                            </tr>
+                        </thead>
+                        <tbody id="ev-hotspots-table-body">
+                            <!-- Rows will be rendered here -->
+                        </tbody>
+                    </table>
+                </div>`;
+
+            const unsub = onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    renderEvHotspotsTable(data.entries || []);
+                }
+            });
+            unsubscribeListeners.push(unsub);
+
+            if (checkPermission('canEditResources')) {
+                document.getElementById('add-ev-hotspot-btn').onclick = () => showEvHotspotForm();
+            }
+            
+            document.getElementById('ev-search').oninput = () => {
+                 onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => {
+                    if (docSnap.exists()) renderEvHotspotsTable(docSnap.data().entries || []);
+                });
+            };
+
+            document.getElementById('ev-stat-filter').onclick = (e) => {
+                if (e.target.matches('.ev-filter-btn')) {
+                    document.querySelectorAll('.ev-filter-btn').forEach(btn => {
+                        btn.classList.remove('bg-teal-500', 'text-white');
+                    });
+                    e.target.classList.add('bg-teal-500', 'text-white');
+                    onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => {
+                        if (docSnap.exists()) renderEvHotspotsTable(docSnap.data().entries || []);
+                    });
+                }
+            };
         }
+
+        function renderEvHotspotsTable(entries) {
+            const tbody = document.getElementById('ev-hotspots-table-body');
+            if (!tbody) return;
+
+            const searchTerm = document.getElementById('ev-search').value.toLowerCase();
+            const activeFilter = document.querySelector('.ev-filter-btn.bg-teal-500').dataset.stat;
+
+            const filteredEntries = entries.filter(entry => {
+                const matchesSearch = entry.pokemon.toLowerCase().includes(searchTerm) || entry.location.toLowerCase().includes(searchTerm);
+                const matchesFilter = activeFilter === 'All' || entry.stat === activeFilter;
+                return matchesSearch && matchesFilter;
+            });
+
+            if (filteredEntries.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-500">No EV hotspots found matching your criteria.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filteredEntries.map(entry => `
+                <tr class="bg-white border-b hover:bg-gray-50">
+                    <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">${entry.stat}</td>
+                    <td class="px-6 py-4">${entry.pokemon}</td>
+                    <td class="px-6 py-4">${entry.location}</td>
+                    <td class="px-6 py-4 font-bold text-teal-600">${entry.yield}</td>
+                    ${checkPermission('canEditResources') ? `
+                    <td class="px-6 py-4 text-right">
+                        <button data-action="edit-ev-hotspot" data-id="${entry.id}" class="font-medium text-blue-600 hover:underline mr-4">Edit</button>
+                        <button data-action="delete-ev-hotspot" data-id="${entry.id}" class="font-medium text-red-600 hover:underline">Delete</button>
+                    </td>` : ''}
+                </tr>
+            `).join('');
+
+            if (checkPermission('canEditResources')) {
+                document.querySelectorAll('[data-action="edit-ev-hotspot"]').forEach(btn => btn.onclick = (e) => {
+                    const entryId = e.target.dataset.id;
+                    const entry = entries.find(item => item.id === entryId);
+                    if (entry) showEvHotspotForm(entry);
+                });
+                document.querySelectorAll('[data-action="delete-ev-hotspot"]').forEach(btn => btn.onclick = (e) => {
+                    const entryId = e.target.dataset.id;
+                    showModal(`Are you sure you want to delete this hotspot?`, async () => {
+                         const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`);
+                         const docSnap = await getDoc(docRef);
+                         if (docSnap.exists()) {
+                            const updatedEntries = docSnap.data().entries.filter(item => item.id !== entryId);
+                            await updateDoc(docRef, { entries: updatedEntries });
+                         }
+                    });
+                });
+            }
+        }
+
+        function showEvHotspotForm(entry = {}) {
+            const isEditing = !!entry.id;
+            const formHtml = `
+                <form class="space-y-4">
+                    <input type="hidden" name="id" value="${entry.id || `ev-${Date.now()}`}">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Stat</label>
+                        <select name="stat" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm">
+                            ${['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed'].map(stat => `<option value="${stat}" ${entry.stat === stat ? 'selected' : ''}>${stat}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Pokémon Horde</label>
+                        <input type="text" name="pokemon" value="${entry.pokemon || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Marill (x5)">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Location</label>
+                        <input type="text" name="location" value="${entry.location || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Route 114, Hoenn (Surf)">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">EV Yield</label>
+                        <input type="text" name="yield" value="${entry.yield || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., 10 HP">
+                    </div>
+                    <div class="flex justify-end gap-4 pt-4">
+                         <button type="button" class="generic-modal-close-btn bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                         <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Add Hotspot'}</button>
+                    </div>
+                </form>
+            `;
+            showGenericModal(isEditing ? 'Edit EV Hotspot' : 'Add New EV Hotspot', formHtml, async (e) => {
+                const form = e.target;
+                const newEntry = {
+                    id: form.id.value,
+                    stat: form.stat.value,
+                    pokemon: form.pokemon.value,
+                    location: form.location.value,
+                    yield: form.yield.value
+                };
+
+                const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    let entries = docSnap.data().entries || [];
+                    if (isEditing) {
+                        entries = entries.map(item => item.id === newEntry.id ? newEntry : item);
+                    } else {
+                        entries.push(newEntry);
+                    }
+                    await updateDoc(docRef, { entries });
+                }
+                hideGenericModal();
+            }, 'md');
+            genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
+        }
+        // --- MODIFICATION END ---
+
         function renderMoneyGuide() {
              mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Money Guide</h2><p class="text-gray-500">Feature coming soon.</p>`; 
         }
