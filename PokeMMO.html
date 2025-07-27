@@ -330,26 +330,50 @@
                     </div>
                 </div>
                 <div class="mb-4 border-b border-gray-200">
-                    <nav class="flex space-x-4" id="teams-filter-nav">
-                        <button data-filter="all" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600 active">All Teams</button>
-                        <button data-filter="staff" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600">Staff Picks</button>
-                        <button data-filter="public" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600">Public Teams</button>
-                        <button data-filter="personal" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600">My Teams</button>
+                    <nav class="flex justify-between items-center" id="teams-filter-nav">
+                        <div class="flex space-x-4">
+                            <button data-filter="all" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600 active">All Teams</button>
+                            <button data-filter="staff" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600">Staff Picks</button>
+                            <button data-filter="public" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600">Public Teams</button>
+                            <button data-filter="personal" class="teams-filter-btn py-2 px-4 font-semibold text-gray-500 border-b-2 border-transparent hover:text-teal-600 hover:border-teal-600">My Teams</button>
+                        </div>
+                        <div id="public-sort-options" class="hidden">
+                            <span class="text-sm font-semibold mr-2">Sort by:</span>
+                            <button data-sort="votes" class="sort-btn bg-teal-500 text-white px-3 py-1 rounded-l-md text-sm">Top Voted</button>
+                            <button data-sort="latest" class="sort-btn bg-gray-200 text-gray-700 px-3 py-1 rounded-r-md text-sm">Latest</button>
+                        </div>
                     </nav>
                 </div>
                 <div id="pokemon-teams-container" class="space-y-6"></div>`;
 
             let currentFilter = 'all';
-            const q = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), orderBy("createdAt", "desc"));
+            let publicSortOrder = 'votes'; // 'votes' or 'latest'
+            const q = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`));
 
             const renderFilteredTeams = (snapshot) => {
                 const container = document.getElementById('pokemon-teams-container');
                 if (!container) return;
-                let teams = snapshot.docs;
-                if (currentFilter === 'staff') teams = teams.filter(t => t.data().isStaffPick);
-                else if (currentFilter === 'public') teams = teams.filter(t => t.data().isPublic);
-                else if (currentFilter === 'personal') teams = teams.filter(t => t.data().createdBy === currentUserId);
+                let teams = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 
+                if (currentFilter === 'staff') teams = teams.filter(t => t.isStaffPick);
+                else if (currentFilter === 'public') teams = teams.filter(t => t.isPublic);
+                else if (currentFilter === 'personal') teams = teams.filter(t => t.createdBy === currentUserId);
+                
+                // Apply sorting
+                if (currentFilter === 'public') {
+                    if (publicSortOrder === 'votes') {
+                        teams.sort((a, b) => {
+                            const scoreA = (a.upvotes?.length || 0) - (a.downvotes?.length || 0);
+                            const scoreB = (b.upvotes?.length || 0) - (b.downvotes?.length || 0);
+                            return scoreB - scoreA;
+                        });
+                    } else { // latest
+                        teams.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+                    }
+                } else {
+                    teams.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+                }
+
                 if(teams.length === 0) {
                     container.innerHTML = `<p class="text-gray-500 text-center mt-8">No Pokémon teams match the filter.</p>`;
                     return;
@@ -367,6 +391,18 @@
                 document.querySelectorAll('.teams-filter-btn').forEach(b => b.classList.remove('active', 'text-teal-600', 'border-teal-600'));
                 e.target.classList.add('active', 'text-teal-600', 'border-teal-600');
                 currentFilter = e.target.dataset.filter;
+                document.getElementById('public-sort-options').classList.toggle('hidden', currentFilter !== 'public');
+                onSnapshot(q, renderFilteredTeams);
+            });
+
+            document.querySelectorAll('.sort-btn').forEach(btn => btn.onclick = (e) => {
+                publicSortOrder = e.target.dataset.sort;
+                document.querySelectorAll('.sort-btn').forEach(b => {
+                    b.classList.toggle('bg-teal-500', b.dataset.sort === publicSortOrder);
+                    b.classList.toggle('text-white', b.dataset.sort === publicSortOrder);
+                    b.classList.toggle('bg-gray-200', b.dataset.sort !== publicSortOrder);
+                    b.classList.toggle('text-gray-700', b.dataset.sort !== publicSortOrder);
+                });
                 onSnapshot(q, renderFilteredTeams);
             });
 
@@ -386,7 +422,8 @@
                             name: e.target.name.value, 
                             purpose: e.target.purpose.value,
                             pokemon: [], 
-                            notes: [], 
+                            creatorNotes: "", // New field
+                            comments: [], // Renamed from 'notes'
                             createdBy: currentUserId, 
                             createdAt: serverTimestamp(), 
                             isStaffPick: false,
@@ -399,9 +436,8 @@
             };
         }
 
-        async function renderPokemonTeamCard(doc) {
-            const team = doc.data();
-            const teamId = doc.id;
+        async function renderPokemonTeamCard(team) {
+            const teamId = team.id;
             const creatorName = await getUsername(team.createdBy);
             const upvotes = team.upvotes?.length || 0;
             const downvotes = team.downvotes?.length || 0;
@@ -464,19 +500,20 @@
 
             }))).join('');
 
-            const notesHtml = (await Promise.all((team.notes || []).map(async (note, index) => {
-                const authorName = await getUsername(note.authorId);
-                const canDeleteNote = note.authorId === currentUserId || isStaffPlus;
-                const noteTimestamp = note.createdAt ? new Date(note.createdAt).toLocaleString() : '';
+            const commentsHtml = (await Promise.all((team.comments || []).map(async (comment, index) => {
+                const authorName = await getUsername(comment.authorId);
+                const canDeleteComment = comment.authorId === currentUserId || isStaffPlus;
+                const commentTimestamp = comment.createdAt ? new Date(comment.createdAt).toLocaleString() : '';
+                const isOp = comment.authorId === team.createdBy;
 
                 return `<div class="text-sm bg-gray-100 p-2 rounded group relative">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <strong>${authorName}</strong>: ${note.text}
+                                    <strong>${authorName} ${isOp ? '<span class="text-xs bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded-full">OP</span>' : ''}</strong>: ${comment.text}
                                 </div>
-                                ${canDeleteNote ? `<button data-team-id="${teamId}" data-note-index="${index}" class="delete-note-btn absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>` : ''}
+                                ${canDeleteComment ? `<button data-team-id="${teamId}" data-comment-index="${index}" class="delete-comment-btn absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>` : ''}
                             </div>
-                            <div class="text-xs text-gray-400 mt-1 text-right">${noteTimestamp}</div>
+                            <div class="text-xs text-gray-400 mt-1 text-right">${commentTimestamp}</div>
                         </div>`;
             }))).join('');
 
@@ -515,17 +552,24 @@
                         ${pokemonHtml}
                         ${(team.pokemon || []).length < 6 && canManageTeam ? `<button data-team-id="${teamId}" class="add-pokemon-btn flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold p-3 rounded-md transition">+</button>` : ''}
                     </div>
-                    <div class="border-t pt-4 flex justify-between items-end">
-                        <div class="w-2/3">
-                            <h4 class="font-semibold mb-2">Notes</h4>
-                            <div class="space-y-2 max-h-40 overflow-y-auto mb-2 pr-2">${notesHtml}</div>
+                    <div class="border-t pt-4 flex flex-col md:flex-row justify-between items-start gap-6">
+                         <div class="w-full md:w-1/2">
+                            <div class="flex justify-between items-center mb-2">
+                                <h4 class="font-semibold">Creator's Notes</h4>
+                                ${canManageTeam ? `<button data-team-id="${teamId}" class="edit-creator-notes-btn text-sm text-blue-600 hover:underline">Edit</button>` : ''}
+                            </div>
+                            <div data-team-id="${teamId}" class="creator-notes-display text-sm bg-gray-50 p-3 rounded-md min-h-[100px] whitespace-pre-wrap">${team.creatorNotes || '<span class="text-gray-400">No notes from the creator yet.</span>'}</div>
+                        </div>
+                        <div class="w-full md:w-1/2">
+                            <h4 class="font-semibold mb-2">Comments</h4>
+                            <div class="space-y-2 max-h-40 overflow-y-auto mb-2 pr-2">${commentsHtml}</div>
                             <div class="flex gap-2">
-                                <input type="text" data-team-id="${teamId}" class="note-input flex-grow border rounded p-2" placeholder="Add a note...">
-                                <button data-team-id="${teamId}" class="add-note-btn bg-gray-600 text-white px-4 rounded-lg">Post</button>
+                                <input type="text" data-team-id="${teamId}" class="comment-input flex-grow border rounded p-2 text-sm" placeholder="Add a comment...">
+                                <button data-team-id="${teamId}" class="add-comment-btn bg-gray-600 text-white px-4 rounded-lg text-sm">Post</button>
                             </div>
                         </div>
                         ${checkPermission('canVoteOnTeams') ? `
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 w-full md:w-auto justify-center">
                             <button data-team-id="${teamId}" data-vote="up" class="vote-btn p-2 rounded-full ${userVote === 'up' ? 'bg-green-500 text-white' : 'bg-gray-200 hover:bg-green-200'}">▲</button>
                             <span class="font-bold text-lg">${score}</span>
                             <button data-team-id="${teamId}" data-vote="down" class="vote-btn p-2 rounded-full ${userVote === 'down' ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-red-200'}">▼</button>
@@ -618,45 +662,69 @@
                 await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId), { isPublic });
             });
 
-            document.querySelectorAll('.add-note-btn').forEach(btn => btn.onclick = async e => {
+            document.querySelectorAll('.add-comment-btn').forEach(btn => btn.onclick = async e => {
                 const teamId = e.target.dataset.teamId;
-                const input = document.querySelector(`.note-input[data-team-id="${teamId}"]`);
+                const input = document.querySelector(`.comment-input[data-team-id="${teamId}"]`);
                 if (input && input.value.trim()) { 
                     try {
-                        const noteData = { 
+                        const commentData = { 
                             text: input.value, 
                             authorId: currentUserId, 
                             createdAt: new Date().toISOString() 
                         };
                         await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId), { 
-                            notes: arrayUnion(noteData) 
+                            comments: arrayUnion(commentData) 
                         }); 
                         input.value = ''; 
                     } catch (error) {
-                        console.error("Error adding note:", error);
-                        alert("Could not add note.");
+                        console.error("Error adding comment:", error);
+                        alert("Could not add comment.");
                     }
                 }
             });
 
-            document.querySelectorAll('.delete-note-btn').forEach(btn => btn.onclick = async e => {
-                const { teamId, noteIndex } = e.target.dataset;
+            document.querySelectorAll('.delete-comment-btn').forEach(btn => btn.onclick = async e => {
+                const { teamId, commentIndex } = e.target.dataset;
                 const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
                 const teamSnap = await getDoc(teamRef);
                 if (teamSnap.exists()) {
                     const teamData = teamSnap.data();
-                    const noteToRemove = teamData.notes[noteIndex];
-                    if (noteToRemove) {
-                        const canDeleteNote = noteToRemove.authorId === currentUserId || ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
-                        if (canDeleteNote) {
-                            showModal('Delete this note?', () => {
-                                updateDoc(teamRef, { notes: arrayRemove(noteToRemove) });
+                    const commentToRemove = teamData.comments[commentIndex];
+                    if (commentToRemove) {
+                        const canDeleteComment = commentToRemove.authorId === currentUserId || ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
+                        if (canDeleteComment) {
+                            showModal('Delete this comment?', () => {
+                                updateDoc(teamRef, { comments: arrayRemove(commentToRemove) });
                             });
                         } else {
-                            alert("You don't have permission to delete this note.");
+                            alert("You don't have permission to delete this comment.");
                         }
                     }
                 }
+            });
+
+            document.querySelectorAll('.edit-creator-notes-btn').forEach(btn => btn.onclick = async e => {
+                const teamId = e.target.dataset.teamId;
+                const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
+                const teamSnap = await getDoc(teamRef);
+                if (!teamSnap.exists()) return;
+
+                const currentNotes = teamSnap.data().creatorNotes || "";
+                const formHtml = `
+                    <form>
+                        <textarea name="creatorNotes" class="w-full h-48 p-2 border rounded-lg">${currentNotes}</textarea>
+                        <div class="flex justify-end gap-4 mt-4">
+                            <button type="button" class="generic-modal-close-btn bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                            <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Save Notes</button>
+                        </div>
+                    </form>
+                `;
+                showGenericModal('Edit Creator Notes', formHtml, async (event) => {
+                    const newNotes = event.target.creatorNotes.value;
+                    await updateDoc(teamRef, { creatorNotes: newNotes });
+                    hideGenericModal();
+                });
+                genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
             });
 
             document.querySelectorAll('.delete-pokemon-team-btn').forEach(btn => btn.onclick = e => {
@@ -1287,11 +1355,37 @@
                     </div>
                 </div>
                 <div id="leaderboard-content" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-lg shadow xl:col-span-2"><h3 class="text-xl font-bold mb-4 text-gray-800">Team Contribution Breakdown</h3><canvas id="leaderboard-chart"></canvas></div>
-                    <div class="bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-bold mb-4 text-gray-800">Community Inventory</h3><div id="leaderboard-inventory" class="space-y-2 max-h-64 overflow-y-auto pr-2">Loading...</div></div>
-                    <div class="bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-bold mb-4 text-gray-800">Overall Top Contributors</h3><div id="leaderboard-overall" class="space-y-2">Loading...</div></div>
-                    <div class="bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-bold mb-4 text-gray-800">Most PokeYen Contributed</h3><div id="leaderboard-pokeyen" class="space-y-2">Loading...</div></div>
-                    <div class="bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-bold mb-4 text-gray-800">Rising Stars</h3><div id="leaderboard-rising">Loading...</div></div>
+                    <div class="bg-white p-6 rounded-lg shadow xl:col-span-2">
+                        <h3 class="text-xl font-bold mb-4 text-gray-800">Team Contribution Breakdown</h3>
+                        <div class="relative h-80">
+                            <canvas id="leaderboard-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-gray-800">Community Inventory</h3>
+                            <button class="text-sm text-blue-600 hover:underline" data-leaderboard-type="inventory">See More</button>
+                        </div>
+                        <div id="leaderboard-inventory" class="space-y-2 max-h-64 overflow-y-auto pr-2">Loading...</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-gray-800">Overall Top Contributors</h3>
+                            <button class="text-sm text-blue-600 hover:underline" data-leaderboard-type="overall">See More</button>
+                        </div>
+                        <div id="leaderboard-overall" class="space-y-2">Loading...</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                         <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-gray-800">Most PokeYen Contributed</h3>
+                            <button class="text-sm text-blue-600 hover:underline" data-leaderboard-type="pokeyen">See More</button>
+                        </div>
+                        <div id="leaderboard-pokeyen" class="space-y-2">Loading...</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-xl font-bold mb-4 text-gray-800">Rising Stars</h3>
+                        <div id="leaderboard-rising">Loading...</div>
+                    </div>
                 </div>`;
 
             const getPokeyenTitle = (rank) => {
@@ -1358,42 +1452,50 @@
                             }
                         });
                     });
+                    
+                    // --- Full Data for Modals ---
+                    const fullData = {};
 
-                    // Render Overall
+                    // Process Overall
                     const overallScores = filteredContributions.reduce((acc, c) => { acc[c.userId] = (acc[c.userId] || 0) + 1; return acc; }, {});
-                    const sortedOverall = Object.entries(overallScores).sort((a, b) => b[1] - a[1]);
-                    containers.overall.innerHTML = (await Promise.all(sortedOverall.slice(0, 5).map(async ([userId, score], index) => {
+                    fullData.overall = Object.entries(overallScores).sort((a, b) => b[1] - a[1]);
+                    containers.overall.innerHTML = (await Promise.all(fullData.overall.slice(0, 5).map(async ([userId, score], index) => {
                         const username = await getUsername(userId);
                         return `<div data-user-id="${userId}" data-user-name="${username.toLowerCase()}" class="leaderboard-item flex justify-between items-center p-2 rounded-md transition-all ${index === 0 ? 'bg-yellow-100' : ''}"><span class="font-semibold">${index+1}. ${username}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>`
                     }))).join('') || '<p class="text-gray-500">No data.</p>';
 
-                    // Render PokeYen
+                    // Process PokeYen
                     const pokeyenScores = filteredContributions.reduce((acc, c) => {
                         const yen = c.items?.PokeYen || 0;
                         if (yen > 0) { acc[c.userId] = (acc[c.userId] || 0) + yen; }
                         return acc;
                     }, {});
-                    const sortedPokeyen = Object.entries(pokeyenScores).sort((a, b) => b[1] - a[1]);
-                    containers.pokeyen.innerHTML = (await Promise.all(sortedPokeyen.slice(0, 5).map(async ([userId, score], index) => {
+                    fullData.pokeyen = Object.entries(pokeyenScores).sort((a, b) => b[1] - a[1]);
+                    containers.pokeyen.innerHTML = (await Promise.all(fullData.pokeyen.slice(0, 5).map(async ([userId, score], index) => {
                         const username = await getUsername(userId);
                         const title = getPokeyenTitle(index);
                         const titleColor = ['text-yellow-500', 'text-gray-400', 'text-orange-400', 'text-green-500', 'text-blue-500'][index] || 'text-gray-500';
                         return `<div data-user-id="${userId}" data-user-name="${username.toLowerCase()}" class="leaderboard-item flex justify-between items-center p-2 rounded-md transition-all"><span class="font-semibold">${index+1}. ${username} - <em class="font-bold ${titleColor}">${title}</em></span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>`
                     }))).join('') || '<p class="text-gray-500">No PokeYen data.</p>';
 
-                    // Render Community Inventory
+                    // Process Community Inventory
                     const inventory = filteredContributions.reduce((acc, c) => {
                         Object.entries(c.items || {}).forEach(([item, qty]) => { acc[item] = (acc[item] || 0) + qty; });
                         return acc;
                     }, {});
-                    const sortedInventory = Object.entries(inventory).sort((a, b) => b[1] - a[1]);
-                    containers.inventory.innerHTML = sortedInventory.slice(0, 10).map(([item, qty]) => `<div class="flex justify-between text-sm p-1"><span class="text-gray-600">${item}</span><span class="font-semibold">${qty.toLocaleString()}</span></div>`).join('') || '<p class="text-gray-500">No items contributed.</p>';
+                    fullData.inventory = Object.entries(inventory).sort((a, b) => b[1] - a[1]);
+                    containers.inventory.innerHTML = fullData.inventory.slice(0, 10).map(([item, qty]) => `<div class="flex justify-between text-sm p-1"><span class="text-gray-600">${item}</span><span class="font-semibold">${qty.toLocaleString()}</span></div>`).join('') || '<p class="text-gray-500">No items contributed.</p>';
                     
-                    // Render Rising Stars
+                    // Process Rising Stars
                     containers.rising.innerHTML = '<p class="text-gray-500">Feature under development.</p>';
                     
                     // Render Chart
                     renderLeaderboardCharts(inventory);
+
+                    // Attach "See More" listeners
+                    document.querySelectorAll('[data-leaderboard-type]').forEach(btn => {
+                        btn.onclick = () => showLeaderboardDetailModal(btn.dataset.leaderboardType, fullData);
+                    });
 
                 } catch (error) {
                     console.error("Error building leaderboard:", error);
@@ -1478,6 +1580,48 @@
                     }
                 }
             });
+        }
+
+        async function showLeaderboardDetailModal(type, fullData) {
+            let title = '';
+            let data = [];
+            let formatter = async (item, index) => '';
+
+            if (type === 'overall') {
+                title = 'Overall Top Contributors (All)';
+                data = fullData.overall;
+                formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>`;
+            } else if (type === 'pokeyen') {
+                title = 'Most PokeYen Contributed (All)';
+                data = fullData.pokeyen;
+                formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>`;
+            } else if (type === 'inventory') {
+                title = 'Community Inventory (All)';
+                data = fullData.inventory;
+                formatter = async ([item, qty], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${item.toLowerCase()}"><span class="font-semibold">${item}</span><span class="font-bold">${qty.toLocaleString()}</span></div>`;
+            }
+            
+            const listHtml = (await Promise.all(data.map(formatter))).join('');
+
+            const modalContent = `
+                <div class="relative mb-4">
+                    <input type="text" id="leaderboard-modal-search" placeholder="Search..." class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-full text-sm">
+                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </div>
+                <div class="space-y-1 max-h-[50vh] overflow-y-auto pr-2" id="leaderboard-modal-list">
+                    ${listHtml}
+                </div>
+            `;
+            
+            showGenericModal(title, modalContent, null, '2xl');
+
+            document.getElementById('leaderboard-modal-search').oninput = (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                document.querySelectorAll('.leaderboard-modal-item').forEach(item => {
+                    const name = item.dataset.userName;
+                    item.style.display = name.includes(searchTerm) ? 'flex' : 'none';
+                });
+            };
         }
         // --- MODIFICATION END ---
         
