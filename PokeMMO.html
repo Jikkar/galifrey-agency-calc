@@ -397,10 +397,22 @@
                     </div>`;
             }))).join('');
 
-            const notesHtml = (await Promise.all((team.notes || []).map(async note => {
+            const notesHtml = (await Promise.all((team.notes || []).map(async (note, index) => {
                 const authorName = await getUsername(note.authorId);
-                return `<div class="text-sm bg-gray-100 p-2 rounded"><strong>${authorName}</strong>: ${note.text}</div>`;
+                const canDeleteNote = note.authorId === currentUserId || ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
+                const noteTimestamp = note.createdAt ? new Date(note.createdAt).toLocaleString() : '';
+
+                return `<div class="text-sm bg-gray-100 p-2 rounded group relative">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <strong>${authorName}</strong>: ${note.text}
+                                </div>
+                                ${canDeleteNote ? `<button data-team-id="${teamId}" data-note-index="${index}" class="delete-note-btn absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>` : ''}
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1 text-right">${noteTimestamp}</div>
+                        </div>`;
             }))).join('');
+
 
             if (score <= -15) {
                 return `
@@ -487,7 +499,7 @@
                         const noteData = { 
                             text: input.value, 
                             authorId: currentUserId, 
-                            createdAt: serverTimestamp() 
+                            createdAt: new Date().toISOString() 
                         };
                         await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId), { 
                             notes: arrayUnion(noteData) 
@@ -496,6 +508,26 @@
                     } catch (error) {
                         console.error("Error adding note:", error);
                         alert("Could not add note.");
+                    }
+                }
+            });
+
+            document.querySelectorAll('.delete-note-btn').forEach(btn => btn.onclick = async e => {
+                const { teamId, noteIndex } = e.target.dataset;
+                const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
+                const teamSnap = await getDoc(teamRef);
+                if (teamSnap.exists()) {
+                    const teamData = teamSnap.data();
+                    const noteToRemove = teamData.notes[noteIndex];
+                    if (noteToRemove) {
+                        const canDeleteNote = noteToRemove.authorId === currentUserId || ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
+                        if (canDeleteNote) {
+                            showModal('Delete this note?', () => {
+                                updateDoc(teamRef, { notes: arrayRemove(noteToRemove) });
+                            });
+                        } else {
+                            alert("You don't have permission to delete this note.");
+                        }
                     }
                 }
             });
@@ -565,7 +597,7 @@
             });
         }
 
-        // --- TASKS MODULE (REFINED) ---
+        // --- TASKS MODULE (REFINED & FIXED) ---
         function renderTasks() {
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
@@ -583,7 +615,12 @@
 
             const renderTabContent = (tab) => {
                 const container = document.getElementById('tasks-content');
+                if (!container) return;
+                
                 let q;
+                unsubscribeListeners.forEach(unsub => unsub());
+                unsubscribeListeners = [];
+
                 if (tab === 'shared' || tab === 'completed') {
                     const isCompleted = tab === 'completed';
                     container.innerHTML = `
@@ -619,12 +656,18 @@
                     
                     document.getElementById('add-personal-task-btn').onclick = () => showNewPersonalTaskModal();
 
-                    q = query(collection(db, `users/${currentUserId}/tasks`), where("completed", "==", false), orderBy("createdAt", "desc"));
+                    // --- FIX START: Removed orderBy to prevent index error ---
+                    q = query(collection(db, `users/${currentUserId}/tasks`), where("completed", "==", false));
                     const unsub = onSnapshot(q, async (snapshot) => {
                         const taskContainer = document.getElementById('personal-tasks-container'); if (!taskContainer) return;
-                        taskContainer.innerHTML = snapshot.empty 
+                        
+                        // Sort the results on the client-side
+                        const docs = snapshot.docs.sort((a, b) => (b.data().createdAt?.toDate() || 0) - (a.data().createdAt?.toDate() || 0));
+
+                        taskContainer.innerHTML = docs.length === 0
                             ? '<p class="text-gray-500 text-center mt-8">No personal tasks.</p>' 
-                            : (await Promise.all(snapshot.docs.map(renderPersonalTaskCard))).join('');
+                            : (await Promise.all(docs.map(renderPersonalTaskCard))).join('');
+                        // --- FIX END ---
                         attachPersonalTaskCardListeners();
                     });
                     unsubscribeListeners.push(unsub);
@@ -714,6 +757,28 @@
                 modalForm.querySelector('#recurrencePeriod').classList.toggle('hidden', !e.target.checked);
             };
         }
+
+        // --- FIX START: Added missing function ---
+        function showNewPersonalTaskModal() {
+            const formHtml = `
+                <form id="add-personal-task-form-modal" class="space-y-4">
+                    <input type="text" name="text" placeholder="What do you need to do?" class="w-full p-2 border rounded-lg" required>
+                    <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded-lg font-bold hover:bg-blue-600">Add Personal Task</button>
+                </form>`;
+            
+            showGenericModal('New Personal Task', formHtml, async (e) => {
+                const form = e.target;
+                if (form.text.value) {
+                    const taskData = {
+                        text: form.text.value,
+                        completed: false,
+                        createdAt: serverTimestamp(),
+                    };
+                    await addDoc(collection(db, `users/${currentUserId}/tasks`), taskData);
+                }
+            }, 'md');
+        }
+        // --- FIX END ---
 
         async function renderTaskCard(doc) {
             const task = doc.data();
@@ -826,6 +891,19 @@
                     </div>
                 </div>
             `;
+        }
+
+        async function renderPersonalTaskCard(doc) {
+            const task = doc.data();
+            const taskId = doc.id;
+            return `
+                <div class="bg-white p-4 rounded-lg shadow flex items-center justify-between">
+                    <p class="text-gray-800">${task.text}</p>
+                    <div class="flex items-center gap-2">
+                        <button data-task-id="${taskId}" class="personal-task-complete-btn text-green-500 hover:text-green-700">✓ Complete</button>
+                        <button data-task-id="${taskId}" class="personal-task-delete-btn text-red-500 hover:text-red-700 font-bold">&times;</button>
+                    </div>
+                </div>`;
         }
         
         function attachTaskCardListeners() {
@@ -945,6 +1023,24 @@
             });
         }
         
+        function attachPersonalTaskCardListeners() {
+            document.querySelectorAll('.personal-task-complete-btn').forEach(btn => {
+                btn.onclick = async (e) => {
+                    const taskId = e.target.dataset.taskId;
+                    const taskRef = doc(db, `users/${currentUserId}/tasks`, taskId);
+                    await updateDoc(taskRef, { completed: true });
+                };
+            });
+
+            document.querySelectorAll('.personal-task-delete-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    const taskId = e.target.dataset.taskId;
+                    const taskRef = doc(db, `users/${currentUserId}/tasks`, taskId);
+                    showModal('Delete this personal task?', () => deleteDoc(taskRef));
+                };
+            });
+        }
+
         const modalMessage = document.getElementById('confirmation-modal-message');
         const modalConfirmBtn = document.getElementById('confirmation-modal-confirm-btn');
         const modalCancelBtn = document.getElementById('confirmation-modal-cancel-btn');
@@ -960,6 +1056,63 @@
         function hideModal() {
             confirmationModal.classList.add('hidden');
             modalConfirmBtn.onclick = null;
+        }
+        
+        async function renderLeaderboard(container) {
+            container.innerHTML = `<div class="bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-bold mb-4 text-gray-800">Contribution Leaderboard</h3><div id="leaderboard-content">Loading...</div></div>`;
+            const leaderboardContent = document.getElementById('leaderboard-content');
+
+            try {
+                const tasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`));
+                const tasksSnapshot = await getDocs(tasksQuery);
+
+                const userScores = {};
+
+                const contributionPromises = tasksSnapshot.docs.map(taskDoc => {
+                    const contribsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified"));
+                    return getDocs(contribsQuery);
+                });
+
+                const allContributionsSnapshots = await Promise.all(contributionPromises);
+
+                allContributionsSnapshots.forEach(contribsSnapshot => {
+                    contribsSnapshot.forEach(contribDoc => {
+                        const contributorId = contribDoc.data().userId;
+                        userScores[contributorId] = (userScores[contributorId] || 0) + 1;
+                    });
+                });
+
+                if (Object.keys(userScores).length === 0) {
+                    leaderboardContent.innerHTML = '<p class="text-gray-500">No verified contributions yet.</p>';
+                    return;
+                }
+
+                const userIds = Object.keys(userScores);
+                const usernames = await Promise.all(userIds.map(getUsername));
+
+                const sortedUsers = userIds.map((id, index) => ({
+                    id,
+                    name: usernames[index],
+                    score: userScores[id]
+                })).sort((a, b) => b.score - a.score);
+
+                leaderboardContent.innerHTML = `
+                    <div class="space-y-3">
+                        ${sortedUsers.map((user, index) => `
+                            <div class="flex items-center justify-between p-3 rounded-lg ${index === 0 ? 'bg-yellow-100' : 'bg-gray-50'}">
+                                <div class="flex items-center">
+                                    <span class="font-bold text-lg w-8">${index + 1}</span>
+                                    <span class="font-semibold text-gray-800">${user.name}</span>
+                                </div>
+                                <span class="font-bold text-teal-600">${user.score.toLocaleString()} contributions</span>
+                            </div>
+                        `).join('')}
+                    </div>`;
+
+            } catch (error) {
+                console.error("Error building leaderboard:", error);
+                leaderboardContent.innerHTML = '<p class="text-red-500">Could not load leaderboard data.</p>';
+            }
         }
         
         function renderBreedingProjects() { 
