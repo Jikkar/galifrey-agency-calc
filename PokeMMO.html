@@ -12,7 +12,7 @@
         import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, deleteDoc, updateDoc, arrayRemove, arrayUnion, query, orderBy, writeBatch, serverTimestamp, increment, runTransaction, getDocs, Timestamp, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // --- Your web app's Firebase configuration ---
+        // --- Firebase Configuration ---
         const firebaseConfig = {
             apiKey: "AIzaSyDsacPQOqciPdM5SLHMh0muDH9GXswnyU0",
             authDomain: "pokemmo-team.firebaseapp.com",
@@ -39,25 +39,30 @@
         const SUPERADMIN_UID = "G9MP7oe0cTQsu92SEXB6wqy1nQs1";
 
         // --- DOM Elements ---
-        const authContainer = document.getElementById('auth-container');
-        const appContainer = document.getElementById('app-container');
-        const teamSpaceIdDisplay = document.getElementById('team-space-id-display');
-        const teamSpaceIdInput = document.getElementById('team-space-id-input');
-        const changeTeamSpaceBtn = document.getElementById('change-team-space-btn');
-        const createTeamSpaceBtn = document.getElementById('create-team-space-btn');
-        const mainContent = document.getElementById('main-content');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        const navButtons = document.querySelectorAll('.nav-button');
-        const userProfileDisplay = document.getElementById('user-profile-display');
-        const logoutBtn = document.getElementById('logout-btn');
-        const genericModal = document.getElementById('generic-modal');
-        const genericModalTitle = document.getElementById('generic-modal-title');
-        const genericModalContent = document.getElementById('generic-modal-content');
-        const genericModalCloseBtn = document.getElementById('generic-modal-close-btn');
-        const officialTeamSpaceContainer = document.getElementById('official-team-space-container');
+        let authContainer, appContainer, teamSpaceIdDisplay, teamSpaceIdInput, changeTeamSpaceBtn, createTeamSpaceBtn, mainContent, loadingOverlay, userProfileDisplay, logoutBtn, genericModal, genericModalTitle, genericModalContent, genericModalCloseBtn, officialTeamSpaceContainer, confirmationModal;
+
+        function initializeDOMElements() {
+            authContainer = document.getElementById('auth-container');
+            appContainer = document.getElementById('app-container');
+            teamSpaceIdDisplay = document.getElementById('team-space-id-display');
+            teamSpaceIdInput = document.getElementById('team-space-id-input');
+            changeTeamSpaceBtn = document.getElementById('change-team-space-btn');
+            createTeamSpaceBtn = document.getElementById('create-team-space-btn');
+            mainContent = document.getElementById('main-content');
+            loadingOverlay = document.getElementById('loading-overlay');
+            userProfileDisplay = document.getElementById('user-profile-display');
+            logoutBtn = document.getElementById('logout-btn');
+            genericModal = document.getElementById('generic-modal');
+            genericModalTitle = document.getElementById('generic-modal-title');
+            genericModalContent = document.getElementById('generic-modal-content');
+            genericModalCloseBtn = document.getElementById('generic-modal-close-btn');
+            officialTeamSpaceContainer = document.getElementById('official-team-space-container');
+            confirmationModal = document.getElementById('confirmation-modal');
+        }
+
 
         // --- Core Functions ---
-        function showLoading(show) { loadingOverlay.style.display = show ? 'flex' : 'none'; }
+        function showLoading(show) { if(loadingOverlay) loadingOverlay.style.display = show ? 'flex' : 'none'; }
         
         function showGenericModal(title, content, formSubmitHandler = null, size = '2xl') {
             const modalDialog = genericModal.querySelector('.modal-dialog');
@@ -80,8 +85,6 @@
             genericModal.classList.add('hidden');
         }
         
-        genericModalCloseBtn.addEventListener('click', hideGenericModal);
-
         function checkPermission(action) {
             if (currentUserRole === 'Superadmin') return true;
             return teamSpacePermissions[currentUserRole]?.[action] === true;
@@ -110,10 +113,10 @@
         }
 
         function switchView(viewName) {
-            navButtons.forEach(btn => btn.classList.remove('bg-teal-600', 'text-white'));
+            document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('bg-teal-600', 'text-white'));
             const button = document.querySelector(`.nav-button[data-view="${viewName}"]`);
             if (button) button.classList.add('bg-teal-600', 'text-white');
-            mainContent.innerHTML = '';
+            if (mainContent) mainContent.innerHTML = '';
             unsubscribeListeners.forEach(unsub => unsub());
             unsubscribeListeners = [];
             const viewRenderers = { 
@@ -130,51 +133,94 @@
             if (viewRenderers[viewName]) viewRenderers[viewName]();
         }
 
-        async function setupTeamSpace(userId) {
-            let teamSpaceId = localStorage.getItem('currentTeamSpaceId');
-            
-            if (!teamSpaceId) {
-                teamSpaceId = "ExCorp";
-                localStorage.setItem('currentTeamSpaceId', teamSpaceId);
+        function refreshCurrentView() {
+            const activeNav = document.querySelector('.nav-button.bg-teal-600');
+            if (activeNav) {
+                switchView(activeNav.dataset.view);
             }
-            
-            const teamSpaceRef = doc(db, "team_spaces", teamSpaceId);
-            const teamSpaceSnap = await getDoc(teamSpaceRef);
+        }
 
-            if (!teamSpaceSnap.exists()) {
-                await setDoc(teamSpaceRef, {
-                    owner: userId,
-                    name: teamSpaceId === "ExCorp" ? "ExCorp Main Team" : "New Team Space",
-                    members: [userId],
-                    createdAt: serverTimestamp(),
-                    permissions: {
-                        Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true },
-                        Staff: { canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false },
-                        Member: { canCreatePublicTeams: true, canVoteOnTeams: true }
-                    }
-                });
-                if (teamSpaceId === "ExCorp") {
-                    await seedDefaultResources(teamSpaceId);
+        function setupTeamSpace(userId) {
+            return new Promise(async (resolve, reject) => {
+                let teamSpaceId = localStorage.getItem('currentTeamSpaceId');
+                if (!teamSpaceId) {
+                    teamSpaceId = "ExCorp";
+                    localStorage.setItem('currentTeamSpaceId', teamSpaceId);
                 }
-            }
-            
-            currentTeamSpaceId = teamSpaceId;
-            teamSpaceIdDisplay.textContent = currentTeamSpaceId;
-            teamSpaceIdInput.value = currentTeamSpaceId;
-            
-            const unsub = onSnapshot(teamSpaceRef, async (snap) => {
-                if(snap.exists()) {
-                    teamSpacePermissions = snap.data().permissions || {};
-                    if(!snap.data().members?.includes(userId)) {
-                        await updateDoc(teamSpaceRef, { members: arrayUnion(userId) });
+                
+                const teamSpaceRef = doc(db, "team_spaces", teamSpaceId);
+                
+                const defaultPermissions = {
+                    Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true },
+                    Staff: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false },
+                    Member: { canCreatePublicTeams: true, canVoteOnTeams: true, canManagePokemonTeams: false, canManageTasks: false, canManageProjects: false, canEditResources: false, canMarkStaffPick: false, canVerifyContributions: false, canDeletePublicTeams: false }
+                };
+
+                try {
+                    const teamSpaceSnap = await getDoc(teamSpaceRef);
+
+                    if (!teamSpaceSnap.exists()) {
+                        await setDoc(teamSpaceRef, {
+                            owner: userId,
+                            name: teamSpaceId === "ExCorp" ? "ExCorp Main Team" : "New Team Space",
+                            members: [userId],
+                            createdAt: serverTimestamp(),
+                            permissions: defaultPermissions
+                        });
+                        if (teamSpaceId === "ExCorp") {
+                            await seedDefaultResources(teamSpaceId);
+                        }
                     }
-                } else {
-                    alert(`Team Space with ID "${currentTeamSpaceId}" not found. You can create a new one.`);
-                    localStorage.removeItem('currentTeamSpaceId');
+                
+                    currentTeamSpaceId = teamSpaceId;
+                    teamSpaceIdDisplay.textContent = currentTeamSpaceId;
+                    teamSpaceIdInput.value = currentTeamSpaceId;
+                    
+                    let isFirstLoad = true;
+                    const unsub = onSnapshot(teamSpaceRef, async (snap) => {
+                        if(snap.exists()) {
+                            const loadedData = snap.data();
+                            const loadedPermissions = loadedData.permissions || {};
+                            
+                            const finalPermissions = {
+                                Admin: { ...defaultPermissions.Admin, ...loadedPermissions.Admin },
+                                Staff: { ...defaultPermissions.Staff, ...loadedPermissions.Staff },
+                                Member: { ...defaultPermissions.Member, ...loadedPermissions.Member }
+                            };
+
+                            teamSpacePermissions = finalPermissions;
+
+                            if (JSON.stringify(finalPermissions) !== JSON.stringify(loadedPermissions)) {
+                                console.log("Permissions mismatch detected. Healing Firestore document.");
+                                await updateDoc(teamSpaceRef, { permissions: finalPermissions }).catch(err => console.error("Error self-healing permissions:", err));
+                            }
+
+                            if(!loadedData.members?.includes(userId)) {
+                                await updateDoc(teamSpaceRef, { members: arrayUnion(userId) });
+                            }
+                            
+                            if (isFirstLoad) {
+                                isFirstLoad = false;
+                                resolve(); // Resolve promise on first successful load
+                            } else {
+                                refreshCurrentView(); // Re-render on subsequent updates
+                            }
+
+                        } else {
+                            alert(`Team Space with ID "${currentTeamSpaceId}" not found. You can create a new one.`);
+                            localStorage.removeItem('currentTeamSpaceId');
+                            reject(new Error("Team space not found."));
+                        }
+                    }, (error) => {
+                        console.error("Snapshot listener error:", error);
+                        reject(error);
+                    });
+                    unsubscribeListeners.push(unsub);
+                } catch (error) {
+                    console.error("Error in setupTeamSpace:", error);
+                    reject(error);
                 }
             });
-            unsubscribeListeners.push(unsub);
-            switchView('dashboard');
         }
 
         async function renderOfficialTeamSpaceButton() {
@@ -325,16 +371,15 @@
             const score = upvotes - downvotes;
             const userVote = team.upvotes?.includes(currentUserId) ? 'up' : team.downvotes?.includes(currentUserId) ? 'down' : null;
 
-            // --- Tiered Border Logic ---
             let borderClass = "border-gray-200";
             if (score <= -15) { /* Redacted */ }
             else if (score < 0) borderClass = "border-red-500 border-2";
-            else if (score >= 100) borderClass = "border-yellow-400 border-4 p-1 bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-500 shadow-2xl"; // Legendary
-            else if (score >= 75) borderClass = "border-purple-500 border-4 shadow-xl"; // Mythic
-            else if (score >= 60) borderClass = "border-indigo-500 border-2 shadow-lg"; // Epic
-            else if (score >= 40) borderClass = "border-blue-500 border-2 shadow-md"; // Rare
-            else if (score >= 25) borderClass = "border-green-500 border-2 shadow-md"; // Uncommon
-            else if (score >= 10) borderClass = "border-green-300 border-2"; // Common
+            else if (score >= 100) borderClass = "border-yellow-400 border-4 p-1 bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-500 shadow-2xl";
+            else if (score >= 75) borderClass = "border-purple-500 border-4 shadow-xl";
+            else if (score >= 60) borderClass = "border-indigo-500 border-2 shadow-lg";
+            else if (score >= 40) borderClass = "border-blue-500 border-2 shadow-md";
+            else if (score >= 25) borderClass = "border-green-500 border-2 shadow-md";
+            else if (score >= 10) borderClass = "border-green-300 border-2";
 
             const pokemonHtml = (await Promise.all((team.pokemon || []).map(async (p, i) => {
                 const addedByName = await getUsername(p.addedBy);
@@ -434,23 +479,33 @@
             document.querySelectorAll('.add-note-btn').forEach(btn => btn.onclick = async e => {
                 const teamId = e.target.dataset.teamId;
                 const input = document.querySelector(`.note-input[data-team-id="${teamId}"]`);
-                if (input.value.trim()) { 
-                    await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId), { 
-                        notes: arrayUnion({ text: input.value, authorId: currentUserId, createdAt: serverTimestamp() }) 
-                    }); 
-                    input.value = ''; 
+                if (input && input.value.trim()) { 
+                    try {
+                        await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId), { 
+                            notes: arrayUnion({ text: input.value, authorId: currentUserId, createdAt: serverTimestamp() }) 
+                        }); 
+                        input.value = ''; 
+                    } catch (error) {
+                        console.error("Error adding note:", error);
+                        alert("Could not add note.");
+                    }
                 }
             });
 
             document.querySelectorAll('.delete-pokemon-team-btn').forEach(btn => btn.onclick = e => {
                 const teamId = e.target.dataset.teamId;
                 const isPublic = e.target.dataset.isPublic === 'true';
-                const canDelete = (isPublic && checkPermission('canDeletePublicTeams')) || !isPublic;
-                if(canDelete) {
-                    showModal('Delete this entire Pokémon team?', () => deleteDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId)));
-                } else {
-                    alert("You don't have permission to delete this public team.");
-                }
+                const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
+                getDoc(teamRef).then(teamSnap => {
+                    if (!teamSnap.exists()) return;
+                    const createdBy = teamSnap.data().createdBy;
+                    const canDelete = (createdBy === currentUserId) || (isPublic && checkPermission('canDeletePublicTeams'));
+                    if(canDelete) {
+                        showModal('Delete this entire Pokémon team?', () => deleteDoc(teamRef));
+                    } else {
+                        alert("You don't have permission to delete this team.");
+                    }
+                });
             });
             
             document.querySelectorAll('.delete-pokemon-btn').forEach(btn => btn.onclick = async e => {
@@ -467,7 +522,6 @@
                 const { teamId, vote } = e.currentTarget.dataset;
                 const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
                 
-                // Superadmin multi-vote logic
                 if (currentUserRole === 'Superadmin') {
                     if (vote === 'up') {
                         await updateDoc(teamRef, { upvotes: arrayUnion(currentUserId + Math.random()) });
@@ -635,7 +689,6 @@
                 await addDoc(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), taskData);
             }, 'md');
 
-            // Add event listeners for the modal form
             const modalForm = document.getElementById('add-task-form-modal');
             modalForm.querySelector('select[name="type"]').onchange = (e) => {
                 modalForm.querySelector('#goal-fields').classList.toggle('hidden', e.target.value !== 'goal');
@@ -663,7 +716,7 @@
             if (task.type === 'goal') {
                 contentHtml += `<div class="mt-4 space-y-3">`;
                 (task.goalItems || []).forEach((item, index) => {
-                    const progressPercent = Math.min(100, (item.progress / item.target) * 100);
+                    const progressPercent = item.target > 0 ? Math.min(100, (item.progress / item.target) * 100) : 0;
                     contentHtml += `
                         <div>
                             <div class="flex justify-between text-sm font-semibold text-gray-600 mb-1">
@@ -695,7 +748,6 @@
                     </div>`;
             }
 
-            // Contribution Log
             let logHtml = `<div class="mt-4 border-t pt-4">
                 <h4 class="font-semibold mb-2">Contribution Log</h4>
                 <div id="log-${taskId}" class="space-y-2 max-h-48 overflow-y-auto pr-2">
@@ -703,7 +755,6 @@
                 </div>
             </div>`;
             
-            // Real-time listener for contributions
             const contributionsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskId}/contributions`), orderBy('timestamp', 'desc'));
             const unsub = onSnapshot(contributionsQuery, async (snapshot) => {
                 const logContainer = document.getElementById(`log-${taskId}`);
@@ -729,7 +780,6 @@
                             </div>`;
                     }))).join('');
                 }
-                 // Re-attach listeners for newly rendered buttons
                 attachTaskCardListeners();
             });
             unsubscribeListeners.push(unsub);
@@ -775,9 +825,15 @@
         function attachTaskCardListeners() {
             document.querySelectorAll('.task-complete-btn').forEach(el => el.onclick = async e => {
                 if (checkPermission('canManageTasks')) {
-                    await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, e.target.dataset.taskId), { completed: true });
+                    try {
+                        await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, e.target.dataset.taskId), { completed: true });
+                    } catch (error) {
+                        console.error("Error completing task:", error);
+                        alert("Could not complete task.");
+                    }
                 }
             });
+
             if (checkPermission('canManageTasks')) {
                 document.querySelectorAll('.delete-task-btn').forEach(btn => btn.onclick = () => {
                     showModal('Delete this task?', () => deleteDoc(doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, btn.dataset.taskId)));
@@ -795,7 +851,7 @@
                         userId: currentUserId,
                         timestamp: serverTimestamp(),
                         items: { [itemName]: value },
-                        status: 'pending' // pending, verified
+                        status: 'pending'
                     });
                     input.value = '';
                 }
@@ -815,7 +871,7 @@
 
                         const taskData = taskDoc.data();
                         const contribData = contribDoc.data();
-                        if (contribData.status === 'verified') return; // Already done
+                        if (contribData.status === 'verified') return;
 
                         const newGoalItems = [...taskData.goalItems];
                         Object.entries(contribData.items).forEach(([name, value]) => {
@@ -883,27 +939,23 @@
             });
         }
         
-        // --- MODAL (Confirmation) ---
-        const modal = document.getElementById('confirmation-modal');
         const modalMessage = document.getElementById('confirmation-modal-message');
         const modalConfirmBtn = document.getElementById('confirmation-modal-confirm-btn');
         const modalCancelBtn = document.getElementById('confirmation-modal-cancel-btn');
 
         function showModal(message, onConfirm) {
             modalMessage.textContent = message;
-            modal.classList.remove('hidden');
+            confirmationModal.classList.remove('hidden');
             modalConfirmBtn.onclick = () => {
                 onConfirm();
                 hideModal();
             };
         }
         function hideModal() {
-            modal.classList.add('hidden');
+            confirmationModal.classList.add('hidden');
             modalConfirmBtn.onclick = null;
         }
-        modalCancelBtn.addEventListener('click', hideModal);
-
-        // --- OTHER MODULES (Breeding, Hunts, Pokedex, etc.) ---
+        
         function renderBreedingProjects() { 
             mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Breeding Projects</h2><p class="text-gray-500">Feature coming soon.</p>`; 
         }
@@ -920,7 +972,10 @@
              mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Money Guide</h2><p class="text-gray-500">Feature coming soon.</p>`; 
         }
         async function renderAdminPanel() {
-            if (currentUserRole !== 'Superadmin') { mainContent.innerHTML = `<p class="text-red-500">Access Denied.</p>`; return; }
+            if (!['Superadmin', 'Admin'].includes(currentUserRole)) { 
+                mainContent.innerHTML = `<p class="text-red-500">Access Denied.</p>`; 
+                return; 
+            }
             mainContent.innerHTML = `
                 <h2 class="text-3xl font-bold text-gray-800 mb-6">Admin Panel</h2>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -933,7 +988,7 @@
                         <div id="permissions-container" class="space-y-4"></div>
                         <button id="save-perms-btn" class="mt-6 w-full bg-teal-500 text-white p-3 rounded-lg font-bold hover:bg-teal-600">Save Permissions</button>
                     </div>
-                    <!-- NEW: Superadmin Controls -->
+                    ${currentUserRole === 'Superadmin' ? `
                     <div class="bg-white p-6 rounded-lg shadow lg:col-span-2">
                         <h3 class="text-xl font-bold mb-4 text-red-600">Superadmin Controls</h3>
                         <div class="space-y-6">
@@ -952,19 +1007,21 @@
                             </div>
                         </div>
                     </div>
+                    ` : ''}
                 </div>`;
             
-            // --- Admin Panel Logic ---
             const allUsersQuery = query(collection(db, "users"));
             const allUsersSnapshot = await getDocs(allUsersQuery);
             const allUsers = allUsersSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-            const usersHtml = allUsers.map(user => {
-                if (user.id === SUPERADMIN_UID) return `<div class="flex justify-between items-center"><p>${user.username} <span class="text-xs font-bold text-yellow-500">Superadmin</span></p></div>`;
-                return `<div class="flex justify-between items-center"><p>${user.username}</p><select data-uid="${user.id}" class="role-selector p-1 border rounded"><option value="Member" ${user.role === 'Member' ? 'selected' : ''}>Member</option><option value="Staff" ${user.role === 'Staff' ? 'selected' : ''}>Staff</option><option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option></select></div>`;
-            }).join('');
-            document.getElementById('user-roles-container').innerHTML = usersHtml;
-            document.querySelectorAll('.role-selector').forEach(sel => { sel.onchange = async (e) => await updateDoc(doc(db, "users", e.target.dataset.uid), { role: e.target.value }); });
+            const usersContainer = document.getElementById('user-roles-container');
+            if(usersContainer) {
+                usersContainer.innerHTML = allUsers.map(user => {
+                    if (user.id === SUPERADMIN_UID) return `<div class="flex justify-between items-center"><p>${user.username} <span class="text-xs font-bold text-yellow-500">Superadmin</span></p></div>`;
+                    return `<div class="flex justify-between items-center"><p>${user.username}</p><select data-uid="${user.id}" class="role-selector p-1 border rounded"><option value="Member" ${user.role === 'Member' ? 'selected' : ''}>Member</option><option value="Staff" ${user.role === 'Staff' ? 'selected' : ''}>Staff</option><option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option></select></div>`;
+                }).join('');
+                document.querySelectorAll('.role-selector').forEach(sel => { sel.onchange = async (e) => await updateDoc(doc(db, "users", e.target.dataset.uid), { role: e.target.value }); });
+            }
             
             const permsContainer = document.getElementById('permissions-container');
             const rolesToManage = ['Admin', 'Staff', 'Member'];
@@ -979,68 +1036,68 @@
                 canVerifyContributions: "Verify Task Contributions",
                 canDeletePublicTeams: "Delete Public Pokémon Teams"
             };
-            permsContainer.innerHTML = rolesToManage.map(role => `
-                <div class="border p-4 rounded-lg">
-                    <h4 class="font-bold text-lg">${role}</h4>
-                    <div class="space-y-2 mt-2">
-                        ${Object.entries(actions).map(([key, label]) => `
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" data-role="${role}" data-action="${key}" class="perm-checkbox h-4 w-4" ${teamSpacePermissions[role]?.[key] === true ? 'checked' : ''}> ${label}
-                            </label>`).join('')}
-                    </div>
-                </div>`).join('');
+            if(permsContainer) {
+                permsContainer.innerHTML = rolesToManage.map(role => `
+                    <div class="border p-4 rounded-lg">
+                        <h4 class="font-bold text-lg">${role}</h4>
+                        <div class="space-y-2 mt-2">
+                            ${Object.entries(actions).map(([key, label]) => `
+                                <label class="flex items-center gap-2">
+                                    <input type="checkbox" data-role="${role}" data-action="${key}" class="perm-checkbox h-4 w-4" ${teamSpacePermissions[role]?.[key] === true ? 'checked' : ''}> ${label}
+                                </label>`).join('')}
+                        </div>
+                    </div>`).join('');
+            }
             
-            document.getElementById('save-perms-btn').onclick = async () => {
-                showLoading(true);
-                const newPermissions = JSON.parse(JSON.stringify(teamSpacePermissions));
-                document.querySelectorAll('.perm-checkbox').forEach(box => {
-                    const { role, action } = box.dataset;
-                    if (!newPermissions[role]) newPermissions[role] = {};
-                    newPermissions[role][action] = box.checked;
-                });
-                try {
-                    const teamSpaceDoc = doc(db, "team_spaces", currentTeamSpaceId);
-                    const docSnap = await getDoc(teamSpaceDoc);
-                    if (docSnap.exists()) {
-                        await updateDoc(teamSpaceDoc, { permissions: newPermissions });
-                        teamSpacePermissions = newPermissions; // FIX: Update local state immediately
-                        alert("Permissions saved successfully!");
-                    } else {
-                        throw new Error("Team Space document does not exist.");
-                    }
-                } catch (error) {
-                    alert("Error saving permissions: " + error.message);
-                    console.error("Permissions save error:", error);
-                } finally {
-                    showLoading(false);
-                }
-            };
-
-            // Superadmin button listeners
-            document.getElementById('mark-official-btn').onclick = async () => {
-                if (confirm(`Are you sure you want to mark "${currentTeamSpaceId}" as the official Team Space?`)) {
-                    const teamSnap = await getDoc(doc(db, "team_spaces", currentTeamSpaceId));
-                    const teamName = teamSnap.exists() ? teamSnap.data().name || currentTeamSpaceId : currentTeamSpaceId;
-                    await setDoc(doc(db, "system_settings", "official_team_space"), {
-                        id: currentTeamSpaceId,
-                        name: teamName
+            const savePermsBtn = document.getElementById('save-perms-btn');
+            if(savePermsBtn) {
+                savePermsBtn.onclick = async () => {
+                    showLoading(true);
+                    const newPermissions = JSON.parse(JSON.stringify(teamSpacePermissions));
+                    document.querySelectorAll('.perm-checkbox').forEach(box => {
+                        const { role, action } = box.dataset;
+                        if (!newPermissions[role]) newPermissions[role] = {};
+                        newPermissions[role][action] = box.checked;
                     });
-                    alert("Official Team Space has been set.");
-                }
-            };
-            document.getElementById('rename-team-space-btn').onclick = async () => {
-                const newId = document.getElementById('new-team-space-id-input').value.trim();
-                if (newId && newId !== currentTeamSpaceId) {
-                    if (confirm(`This is a major action. Are you sure you want to rename '${currentTeamSpaceId}' to '${newId}'?`)) {
-                        await renameTeamSpace(currentTeamSpaceId, newId);
+
+                    try {
+                        const teamSpaceDoc = doc(db, "team_spaces", currentTeamSpaceId);
+                        await updateDoc(teamSpaceDoc, { permissions: newPermissions });
+                        alert("Permissions saved successfully! The view will now update based on the new data from Firebase.");
+                    } catch (error) {
+                        alert("Error saving permissions: " + error.message);
+                        console.error("Permissions save error:", error);
+                    } finally {
+                        showLoading(false);
                     }
-                } else {
-                    alert("Please enter a new, valid ID.");
-                }
-            };
+                };
+            }
+
+            if (currentUserRole === 'Superadmin') {
+                document.getElementById('mark-official-btn').onclick = async () => {
+                    if (confirm(`Are you sure you want to mark "${currentTeamSpaceId}" as the official Team Space?`)) {
+                        const teamSnap = await getDoc(doc(db, "team_spaces", currentTeamSpaceId));
+                        const teamName = teamSnap.exists() ? teamSnap.data().name || currentTeamSpaceId : currentTeamSpaceId;
+                        await setDoc(doc(db, "system_settings", "official_team_space"), {
+                            id: currentTeamSpaceId,
+                            name: teamName
+                        });
+                        alert("Official Team Space has been set.");
+                    }
+                };
+                document.getElementById('rename-team-space-btn').onclick = async () => {
+                    const newId = document.getElementById('new-team-space-id-input').value.trim();
+                    if (newId && newId !== currentTeamSpaceId) {
+                        if (confirm(`This is a major action. Are you sure you want to rename '${currentTeamSpaceId}' to '${newId}'?`)) {
+                            await renameTeamSpace(currentTeamSpaceId, newId);
+                        }
+                    } else {
+                        alert("Please enter a new, valid ID.");
+                    }
+                };
+            }
         }
 
-        // --- NEW: Superadmin Functions ---
         async function renameTeamSpace(oldId, newId) {
             showLoading(true);
             try {
@@ -1102,55 +1159,64 @@
 
 
         // --- Event Listeners ---
-        onAuthStateChanged(auth, async (user) => {
-            try {
-                showLoading(true);
-                if (user) {
-                    currentUserId = user.uid;
-                    const userRef = doc(db, "users", currentUserId);
-                    const userSnap = await getDoc(userRef);
-                    if (userSnap.exists()) {
-                        const userData = userSnap.data();
-                        currentUsername = userData.username;
-                        currentUserRole = user.uid === SUPERADMIN_UID ? 'Superadmin' : userData.role;
-                        if (user.uid === SUPERADMIN_UID && userData.role !== 'Superadmin') {
-                            await updateDoc(userRef, { role: 'Superadmin' });
-                        }
-                        userProfileDisplay.textContent = `${currentUsername} (${currentUserRole})`;
-                        document.getElementById('admin-panel-btn').style.display = currentUserRole === 'Superadmin' ? 'block' : 'none';
-                        authContainer.classList.add('hidden');
-                        appContainer.classList.remove('hidden');
-                        await setupTeamSpace(currentUserId);
-                        await renderOfficialTeamSpaceButton(); 
-                    } else { await signOut(auth); }
-                } else {
-                    authContainer.classList.remove('hidden');
-                    appContainer.classList.add('hidden');
-                }
-            } catch (error) { console.error("Authentication Error:", error); } 
-            finally { showLoading(false); }
-        });
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeDOMElements();
+            
+            onAuthStateChanged(auth, async (user) => {
+                try {
+                    showLoading(true);
+                    if (user) {
+                        currentUserId = user.uid;
+                        const userRef = doc(db, "users", currentUserId);
+                        const userSnap = await getDoc(userRef);
+                        if (userSnap.exists()) {
+                            const userData = userSnap.data();
+                            currentUsername = userData.username;
+                            currentUserRole = user.uid === SUPERADMIN_UID ? 'Superadmin' : userData.role;
+                            if (user.uid === SUPERADMIN_UID && userData.role !== 'Superadmin') {
+                                await updateDoc(userRef, { role: 'Superadmin' });
+                            }
+                            userProfileDisplay.textContent = `${currentUsername} (${currentUserRole})`;
+                            document.getElementById('admin-panel-btn').style.display = ['Superadmin', 'Admin'].includes(currentUserRole) ? 'block' : 'none';
+                            authContainer.classList.add('hidden');
+                            appContainer.classList.remove('hidden');
+                            
+                            await setupTeamSpace(currentUserId); // Wait for permissions to load
+                            
+                            await renderOfficialTeamSpaceButton();
+                            switchView('dashboard'); // Then render the initial view
 
-        document.getElementById('login-form').onsubmit = async (e) => { e.preventDefault(); showLoading(true); const email = e.target.email.value; const password = e.target.password.value; try { await signInWithEmailAndPassword(auth, email, password); } catch (error) { alert(error.message); } finally { showLoading(false); } };
-        
-        document.getElementById('signup-form').onsubmit = async (e) => {
-            e.preventDefault(); showLoading(true); const email = e.target.signup_email.value; const password = e.target.signup_password.value; const username = e.target.signup_username.value;
-            if (password.length < 6) { alert("Password must be at least 6 characters."); showLoading(false); return; }
-            if (username.length < 3) { alert("Username must be at least 3 characters."); showLoading(false); return; }
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password); const user = userCredential.user;
-                let role = user.uid === SUPERADMIN_UID ? 'Superadmin' : 'Member';
-                await setDoc(doc(db, "users", user.uid), { username, email, role });
-            } catch (error) { alert(error.message); } finally { showLoading(false); }
-        };
-        
-        logoutBtn.onclick = () => signOut(auth);
-        navButtons.forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
-        changeTeamSpaceBtn.addEventListener('click', () => { const newTeamSpaceId = teamSpaceIdInput.value.trim(); if (newTeamSpaceId && newTeamSpaceId !== currentTeamSpaceId) { localStorage.setItem('currentTeamSpaceId', newTeamSpaceId); location.reload(); } });
-        createTeamSpaceBtn.addEventListener('click', () => { 
-            const randomId = `team-${Math.random().toString(36).substring(2, 9)}`;
-            localStorage.setItem('currentTeamSpaceId', randomId);
-            location.reload();
+                        } else { await signOut(auth); }
+                    } else {
+                        authContainer.classList.remove('hidden');
+                        appContainer.classList.add('hidden');
+                    }
+                } catch (error) { console.error("Authentication Error:", error); } 
+                finally { showLoading(false); }
+            });
+
+            document.getElementById('login-form').onsubmit = async (e) => { e.preventDefault(); showLoading(true); const email = e.target.email.value; const password = e.target.password.value; try { await signInWithEmailAndPassword(auth, email, password); } catch (error) { alert(error.message); } finally { showLoading(false); } };
+            
+            document.getElementById('signup-form').onsubmit = async (e) => {
+                e.preventDefault(); showLoading(true); const email = e.target.signup_email.value; const password = e.target.signup_password.value; const username = e.target.signup_username.value;
+                if (password.length < 6) { alert("Password must be at least 6 characters."); showLoading(false); return; }
+                if (username.length < 3) { alert("Username must be at least 3 characters."); showLoading(false); return; }
+                try {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password); const user = userCredential.user;
+                    let role = user.uid === SUPERADMIN_UID ? 'Superadmin' : 'Member';
+                    await setDoc(doc(db, "users", user.uid), { username, email, role });
+                } catch (error) { alert(error.message); } finally { showLoading(false); }
+            };
+            
+            logoutBtn.onclick = () => signOut(auth);
+            document.querySelectorAll('.nav-button').forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
+            changeTeamSpaceBtn.addEventListener('click', () => { const newTeamSpaceId = teamSpaceIdInput.value.trim(); if (newTeamSpaceId && newTeamSpaceId !== currentTeamSpaceId) { localStorage.setItem('currentTeamSpaceId', newTeamSpaceId); location.reload(); } });
+            createTeamSpaceBtn.addEventListener('click', () => { 
+                const randomId = `team-${Math.random().toString(36).substring(2, 9)}`;
+                localStorage.setItem('currentTeamSpaceId', randomId);
+                location.reload();
+            });
+            modalCancelBtn.addEventListener('click', hideModal);
         });
 
     </script>
@@ -1158,17 +1224,19 @@
         body { font-family: 'Inter', sans-serif; }
         .tasks-tab-btn.active, .teams-filter-btn.active { color: #0d9488; border-color: #0d9488; }
         .modal-dialog { transition: all 0.3s ease-out; }
-        /* FIX: Ensure sidebar fills the screen height */
         #app-container > .flex {
             min-height: 100vh;
         }
         aside {
             display: flex;
             flex-direction: column;
-            height: 100vh; /* Make sidebar full height */
+            height: 100vh;
+        }
+        aside nav {
+            flex-grow: 1;
         }
         .sidebar-bottom {
-            overflow-y: auto; /* Allow this part to scroll */
+            overflow-y: auto;
         }
     </style>
 </head>
@@ -1249,7 +1317,7 @@
                     <div id="user-profile-display" class="text-sm text-center text-gray-600 font-semibold"></div>
                     <button id="logout-btn" class="w-full text-sm text-red-500 hover:underline">Logout</button>
                     
-                    <!-- NEW: Official Team Space Section -->
+                    <!-- Official Team Space Section -->
                     <div id="official-team-space-container" class="border-t pt-3"></div>
 
                     <div class="border-t pt-3">
