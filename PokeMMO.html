@@ -484,8 +484,13 @@
                 const input = document.querySelector(`.note-input[data-team-id="${teamId}"]`);
                 if (input && input.value.trim()) { 
                     try {
+                        const noteData = { 
+                            text: input.value, 
+                            authorId: currentUserId, 
+                            createdAt: serverTimestamp() 
+                        };
                         await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId), { 
-                            notes: arrayUnion({ text: input.value, authorId: currentUserId, createdAt: serverTimestamp() }) 
+                            notes: arrayUnion(noteData) 
                         }); 
                         input.value = ''; 
                     } catch (error) {
@@ -1341,4 +1346,3 @@
     </div>
 </body>
 </html>
-
