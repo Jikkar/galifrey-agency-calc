@@ -1322,6 +1322,9 @@
                             progress: 0
                         });
                     }
+                    else if (taskData.goalItems.length === 0) { // If no goal items are entered, remove the array entirely.
+                        delete taskData.goalItems;
+                    }
                 });
 
                 await addDoc(collection(db, `users/${currentUserId}/tasks`), taskData);
@@ -2060,7 +2063,7 @@
                         <svg class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     </div>
                     <div class="flex rounded-md bg-gray-100 p-1" id="pokedex-type-filter">
-                        <button data-type="All" class="type-filter-btn px-3 py-1 text-sm font-semibold rounded-md bg-teal-500 text-white">All Types</button>
+                        <button data-type="All" class="type-filter-btn px-3 py-1 text-sm font-semibold rounded-md bg-teal-500 text-white">All</button>
                         ${['Normal', 'Fire', 'Water', 'Grass', 'Electric', 'Ice', 'Fighting', 'Poison', 'Ground', 'Flying', 'Psychic', 'Bug', 'Rock', 'Ghost', 'Dragon', 'Steel', 'Dark', 'Fairy'].map(type => `<button data-type="${type}" class="type-filter-btn px-3 py-1 text-sm font-semibold rounded-md">${type}</button>`).join('')}
                     </div>
                 </div>
@@ -2229,6 +2232,7 @@
                 </form> 
             `;
             showGenericModal(isEditing ? 'Edit Pokédex Entry' : 'Add New Pokédex Entry', formHtml, async (e) => {
+                console.log("Pokedex form submitted."); // Debugging line
                 const form = e.target;
                 const newEntry = { 
                     id: form.id.value, 
@@ -2253,21 +2257,30 @@
                     }
                 });
 
+                console.log("New Pokedex entry data:", newEntry); // Debugging line
+
                 const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) { 
-                    let entries = docSnap.data().entries || []; 
-                    if (isEditing) { 
-                        entries = entries.map(item => item.id === newEntry.id ? newEntry : item); 
-                    } else { 
-                        entries.push(newEntry); 
-                    } 
-                    await updateDoc(docRef, { entries }); 
-                } else {
-                    // If the pokedex document doesn't exist, create it with the first entry
-                    await setDoc(docRef, { entries: [newEntry] });
+                try {
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) { 
+                        let entries = docSnap.data().entries || []; 
+                        if (isEditing) { 
+                            entries = entries.map(item => item.id === newEntry.id ? newEntry : item); 
+                        } else { 
+                            entries.push(newEntry); 
+                        } 
+                        await updateDoc(docRef, { entries }); 
+                        console.log("Pokedex entry updated/added successfully!"); // Log success
+                    } else {
+                        // If the pokedex document doesn't exist, create it with the first entry
+                        await setDoc(docRef, { entries: [newEntry] });
+                        console.log("Pokedex document created and entry added successfully!"); // Log success
+                    }
+                    hideGenericModal(); // Close modal on success
+                } catch (error) {
+                    console.error("Error saving Pokedex entry:", error); // Log error
+                    alert("Failed to save Pokédex entry: " + error.message); // Inform user
                 }
-                hideGenericModal();
             }, '2xl');
 
             // Add Build button listener
@@ -2643,7 +2656,7 @@
                     </div>
                     <div class="flex justify-end gap-4 pt-4 border-t">
                         <button type="button" class="generic-modal-close-btn bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancel</button>
-                        <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-6 rounded-lg">${isEditing ? 'Save Changes' : 'Create Guide'}</button>
+                        <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-6 rounded-lg">${isEditing ? 'Save Changes' : 'Create Guide'}</button>
                     </div>
                 </form>
             `;
