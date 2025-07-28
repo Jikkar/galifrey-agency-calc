@@ -6,8 +6,10 @@
     <title>PokeMMO Player Team Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Added Chart.js for leaderboards -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Quill WYSIWYG Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     <script type="module">
         // Firebase App (the core)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -39,8 +41,9 @@
         let unsubscribeListeners = [];
         const usernameCache = {};
         const SUPERADMIN_UID = "G9MP7oe0cTQsu92SEXB6wqy1nQs1";
-        let leaderboardChart = null; // To hold the chart instance
-        let dashboardChart = null; // For the new dashboard chart
+        let leaderboardChart = null;
+        let dashboardChart = null; 
+        let quillEditor = null; // For the WYSIWYG editor instance
 
         // --- DOM Elements ---
         let authContainer, appContainer, teamSpaceIdDisplay, teamSpaceIdInput, changeTeamSpaceBtn, createTeamSpaceBtn, mainContent, loadingOverlay, userProfileDisplay, logoutBtn, genericModal, genericModalTitle, genericModalContent, genericModalCloseBtn, officialTeamSpaceContainer, confirmationModal;
@@ -70,7 +73,7 @@
         
         function showGenericModal(title, content, formSubmitHandler = null, size = '2xl') {
             const modalDialog = genericModal.querySelector('.modal-dialog');
-            modalDialog.classList.remove('max-w-md', 'max-w-2xl', 'max-w-4xl');
+            modalDialog.classList.remove('max-w-md', 'max-w-2xl', 'max-w-4xl', 'max-w-6xl'); // Added 6xl
             modalDialog.classList.add(`max-w-${size}`);
             genericModalTitle.textContent = title;
             genericModalContent.innerHTML = content;
@@ -83,13 +86,15 @@
                 form.onsubmit = (e) => {
                     e.preventDefault();
                     if(formSubmitHandler) formSubmitHandler(e);
-                    // Do not automatically hide modal, let the handler decide
                 };
             }
         }
         
         function hideGenericModal() {
             genericModal.classList.add('hidden');
+            if (quillEditor) { // Destroy Quill instance on modal close
+                quillEditor = null;
+            }
         }
         
         function checkPermission(action) {
@@ -114,8 +119,7 @@
             const moneyRef = doc(db, `team_spaces/${teamSpaceId}/resources/moneyGuide`);
             const evRef = doc(db, `team_spaces/${teamSpaceId}/resources/evHotspots`);
             batch.set(pokedexRef, { entries: { "Garchomp": { name: "Garchomp", stats: "108/130/95/80/85/102", abilities: "Sand Veil, Rough Skin (HA)", builds: [{ name: "Swords Dance", nature: "Jolly", evs: "252 Atk / 4 SpD / 252 Spe", moves: "Swords Dance, Earthquake, Outrage"}] } }});
-            batch.set(moneyRef, { entries: [ { id: "gym_reruns", name: 'Gym Rebattles', details: 'Most consistent endgame income.', potential: 'High (~400k/hr)' } ]});
-             // --- MODIFICATION START: Seed EV Hotspots data ---
+            // DEPRECATED: Old money guide seed data removed. New section uses its own collection.
             batch.set(evRef, { 
                 entries: [
                     { id: "hp_marill", stat: 'HP', pokemon: 'Marill (x5)', location: 'Route 114, Hoenn (Surf)', yield: '10 HP' },
@@ -126,7 +130,6 @@
                     { id: "spe_rapidash", stat: 'Speed', pokemon: 'Rapidash (x5)', location: 'Route 12, Unova (Grass)', yield: '10 Speed' }
                 ]
             });
-            // --- MODIFICATION END ---
             await batch.commit();
         }
 
@@ -145,7 +148,7 @@
                 'hunts': renderShinyHunts, 
                 'pokedex': renderPokedex, 
                 'ev-hotspots': renderEvHotspots, 
-                'money-guide': renderMoneyGuide, 
+                'money-guide': renderMoneyGuide, // <-- ADDED
                 'admin-panel': renderAdminPanel 
             };
             if (viewRenderers[viewName]) viewRenderers[viewName]();
@@ -168,10 +171,11 @@
                 
                 const teamSpaceRef = doc(db, "team_spaces", teamSpaceId);
                 
+                // --- NEW PERMISSIONS FOR MONEY GUIDES ---
                 const defaultPermissions = {
-                    Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true },
-                    Staff: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false },
-                    Member: { canCreatePublicTeams: true, canVoteOnTeams: true, canManagePokemonTeams: false, canManageTasks: false, canManageProjects: false, canEditResources: false, canMarkStaffPick: false, canVerifyContributions: false, canDeletePublicTeams: false }
+                    Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true, canManageMoneyGuides: true },
+                    Staff: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false, canManageMoneyGuides: true },
+                    Member: { canCreatePublicTeams: true, canVoteOnTeams: true, canManagePokemonTeams: false, canManageTasks: false, canManageProjects: false, canEditResources: false, canMarkStaffPick: false, canVerifyContributions: false, canDeletePublicTeams: false, canManageMoneyGuides: false }
                 };
 
                 try {
@@ -267,210 +271,86 @@
 
         // --- Render Functions ---
         
-        // --- NEW DASHBOARD RENDER FUNCTION ---
         async function renderDashboard() {
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-3xl font-bold text-gray-800">Team Dashboard</h2>
                     <span class="text-sm font-semibold text-gray-500">${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
                 </div>
-
-                <!-- KPIs -->
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8">
-                    <div class="bg-white p-6 rounded-lg shadow-md text-center">
-                        <h4 class="text-sm font-semibold text-gray-500 uppercase">Active Members</h4>
-                        <p id="kpi-members" class="text-4xl font-bold text-teal-600">--</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-lg shadow-md text-center">
-                        <h4 class="text-sm font-semibold text-gray-500 uppercase">Public Teams</h4>
-                        <p id="kpi-teams" class="text-4xl font-bold text-blue-600">--</p>
-                    </div>
-                     <div class="bg-white p-6 rounded-lg shadow-md text-center">
-                        <h4 class="text-sm font-semibold text-gray-500 uppercase">Private Teams</h4>
-                        <p id="kpi-private-teams" class="text-4xl font-bold text-indigo-600">--</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-lg shadow-md text-center">
-                        <h4 class="text-sm font-semibold text-gray-500 uppercase">Active Tasks</h4>
-                        <p id="kpi-tasks" class="text-4xl font-bold text-purple-600">--</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-lg shadow-md text-center">
-                        <h4 class="text-sm font-semibold text-gray-500 uppercase">Total Contributions</h4>
-                        <p id="kpi-contributions" class="text-4xl font-bold text-pink-600">--</p>
-                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Active Members</h4><p id="kpi-members" class="text-4xl font-bold text-teal-600">--</p></div>
+                    <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Public Teams</h4><p id="kpi-teams" class="text-4xl font-bold text-blue-600">--</p></div>
+                    <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Private Teams</h4><p id="kpi-private-teams" class="text-4xl font-bold text-indigo-600">--</p></div>
+                    <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Active Tasks</h4><p id="kpi-tasks" class="text-4xl font-bold text-purple-600">--</p></div>
+                    <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Total Contributions</h4><p id="kpi-contributions" class="text-4xl font-bold text-pink-600">--</p></div>
                 </div>
-
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <!-- Left Column: Chart & Tasks -->
                     <div class="lg:col-span-2 space-y-8">
-                        <div class="bg-white p-6 rounded-lg shadow-md">
-                            <h3 class="text-xl font-bold text-gray-800 mb-4">Weekly Contribution Breakdown</h3>
-                            <div class="relative h-80">
-                                <canvas id="dashboard-chart"></canvas>
-                            </div>
-                        </div>
-                        <div class="bg-white p-6 rounded-lg shadow-md">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="text-xl font-bold text-gray-800">Active Task Board</h3>
-                                <button onclick="document.querySelector('[data-view=tasks]').click()" class="text-sm text-teal-600 hover:underline">View All Tasks &rarr;</button>
-                            </div>
-                            <div id="dashboard-tasks-list" class="space-y-3"></div>
-                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-md"><h3 class="text-xl font-bold text-gray-800 mb-4">Weekly Contribution Breakdown</h3><div class="relative h-80"><canvas id="dashboard-chart"></canvas></div></div>
+                        <div class="bg-white p-6 rounded-lg shadow-md"><div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-gray-800">Active Task Board</h3><button onclick="document.querySelector('[data-view=tasks]').click()" class="text-sm text-teal-600 hover:underline">View All Tasks &rarr;</button></div><div id="dashboard-tasks-list" class="space-y-3"></div></div>
                     </div>
-
-                    <!-- Right Column: Teams, Guides & Members -->
                     <div class="space-y-8">
-                        <div class="bg-white p-6 rounded-lg shadow-md">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="text-xl font-bold text-gray-800">Recently Added Teams</h3>
-                                <button onclick="document.querySelector('[data-view=pokemon-teams]').click()" class="text-sm text-teal-600 hover:underline">View Team Locker &rarr;</button>
-                            </div>
-                            <div id="dashboard-teams-list" class="space-y-4"></div>
-                        </div>
-                        <div class="bg-white p-6 rounded-lg shadow-md">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="text-xl font-bold text-gray-800">New Money Guides</h3>
-                                <button onclick="document.querySelector('[data-view=money-guide]').click()" class="text-sm text-teal-600 hover:underline">View All Guides &rarr;</button>
-                            </div>
-                            <div id="dashboard-guides-list" class="space-y-4"></div>
-                        </div>
-                        <div class="bg-white p-6 rounded-lg shadow-md">
-                            <h3 class="text-xl font-bold text-gray-800 mb-4">Top Contributors (All Time)</h3>
-                            <div id="dashboard-leaderboard" class="space-y-3"></div>
-                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-md"><div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-gray-800">Recently Added Teams</h3><button onclick="document.querySelector('[data-view=pokemon-teams]').click()" class="text-sm text-teal-600 hover:underline">View Team Locker &rarr;</button></div><div id="dashboard-teams-list" class="space-y-4"></div></div>
+                        <div class="bg-white p-6 rounded-lg shadow-md"><div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-gray-800">New Money Guides</h3><button onclick="document.querySelector('[data-view=money-guide]').click()" class="text-sm text-teal-600 hover:underline">View All Guides &rarr;</button></div><div id="dashboard-guides-list" class="space-y-4"></div></div>
+                        <div class="bg-white p-6 rounded-lg shadow-md"><h3 class="text-xl font-bold text-gray-800 mb-4">Top Contributors (All Time)</h3><div id="dashboard-leaderboard" class="space-y-3"></div></div>
                     </div>
                 </div>
             `;
 
-            // --- Data Fetching and Rendering Logic ---
-
             // KPIs
-            const teamSpaceUnsub = onSnapshot(doc(db, "team_spaces", currentTeamSpaceId), (snap) => {
-                if (snap.exists()) {
-                    document.getElementById('kpi-members').textContent = snap.data().members?.length || 0;
-                }
-            });
+            const teamSpaceUnsub = onSnapshot(doc(db, "team_spaces", currentTeamSpaceId), (snap) => { if (snap.exists()) { document.getElementById('kpi-members').textContent = snap.data().members?.length || 0; } });
             unsubscribeListeners.push(teamSpaceUnsub);
-
             const publicTeamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), where("isPublic", "==", true));
-            const publicTeamsUnsub = onSnapshot(publicTeamsQuery, (snap) => {
-                document.getElementById('kpi-teams').textContent = snap.size;
-            });
+            const publicTeamsUnsub = onSnapshot(publicTeamsQuery, (snap) => { document.getElementById('kpi-teams').textContent = snap.size; });
             unsubscribeListeners.push(publicTeamsUnsub);
-            
             const privateTeamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), where("isPublic", "==", false));
-            const privateTeamsUnsub = onSnapshot(privateTeamsQuery, (snap) => {
-                document.getElementById('kpi-private-teams').textContent = snap.size;
-            });
+            const privateTeamsUnsub = onSnapshot(privateTeamsQuery, (snap) => { document.getElementById('kpi-private-teams').textContent = snap.size; });
             unsubscribeListeners.push(privateTeamsUnsub);
-
             const tasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", false));
-            const tasksUnsub = onSnapshot(tasksQuery, (snap) => {
-                document.getElementById('kpi-tasks').textContent = snap.size;
-            });
+            const tasksUnsub = onSnapshot(tasksQuery, (snap) => { document.getElementById('kpi-tasks').textContent = snap.size; });
             unsubscribeListeners.push(tasksUnsub);
 
-            // Fetch all contributions for KPI and Chart
             const tasksSnapshot = await getDocs(query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`)));
-            const contributionPromises = tasksSnapshot.docs.map(taskDoc => 
-                getDocs(query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified")))
-            );
+            const contributionPromises = tasksSnapshot.docs.map(taskDoc => getDocs(query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified"))));
             const allContributionsSnapshots = await Promise.all(contributionPromises);
             const allContributions = allContributionsSnapshots.flatMap(snap => snap.docs.map(d => d.data()));
-            
             document.getElementById('kpi-contributions').textContent = allContributions.length;
-
-            // Dashboard Chart
             renderDashboardChart(allContributions);
 
-            // Dashboard Tasks List (Top 5 active)
             const activeTasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", false), orderBy("createdAt", "desc"));
             const activeTasksUnsub = onSnapshot(activeTasksQuery, async (snapshot) => {
-                const container = document.getElementById('dashboard-tasks-list');
-                if (!container) return;
+                const container = document.getElementById('dashboard-tasks-list'); if (!container) return;
                 const tasks = snapshot.docs.slice(0, 5);
-                if (tasks.length === 0) {
-                    container.innerHTML = `<p class="text-gray-500">No active tasks on the board.</p>`;
-                    return;
-                }
-                container.innerHTML = (await Promise.all(tasks.map(async doc => {
-                    const task = doc.data();
-                    const creator = await getUsername(task.createdBy);
-                    return `
-                        <div class="p-3 bg-gray-50 rounded-md border">
-                            <p class="font-semibold text-gray-800">${task.text}</p>
-                            <p class="text-xs text-gray-500">Added by ${creator} ${task.reward ? `| Reward: <span class="font-bold text-yellow-600">${task.reward}</span>` : ''}</p>
-                        </div>
-                    `;
-                }))).join('');
+                if (tasks.length === 0) { container.innerHTML = `<p class="text-gray-500">No active tasks on the board.</p>`; return; }
+                container.innerHTML = (await Promise.all(tasks.map(async doc => { const task = doc.data(); const creator = await getUsername(task.createdBy); return `<div class="p-3 bg-gray-50 rounded-md border"><p class="font-semibold text-gray-800">${task.text}</p><p class="text-xs text-gray-500">Added by ${creator} ${task.reward ? `| Reward: <span class="font-bold text-yellow-600">${task.reward}</span>` : ''}</p></div>`; }))).join('');
             });
             unsubscribeListeners.push(activeTasksUnsub);
 
-            // Dashboard Teams List (Top 3 recent)
             const recentTeamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), orderBy("createdAt", "desc"));
             const recentTeamsUnsub = onSnapshot(recentTeamsQuery, async (snapshot) => {
-                const container = document.getElementById('dashboard-teams-list');
-                if (!container) return;
+                const container = document.getElementById('dashboard-teams-list'); if (!container) return;
                 const teams = snapshot.docs.slice(0, 3);
-                 if (teams.length === 0) {
-                    container.innerHTML = `<p class="text-gray-500">No teams have been created yet.</p>`;
-                    return;
-                }
-                container.innerHTML = (await Promise.all(teams.map(async doc => {
-                    const team = doc.data();
-                    const creator = await getUsername(team.createdBy);
-                    const score = (team.upvotes?.length || 0) - (team.downvotes?.length || 0);
-                    return `
-                        <div class="border-b pb-3">
-                            <div class="flex justify-between items-center">
-                                <p class="font-bold text-gray-900">${team.name}</p>
-                                <span class="text-sm font-bold ${score >= 0 ? 'text-green-600' : 'text-red-600'}">${score > 0 ? '+' : ''}${score}</span>
-                            </div>
-                            <p class="text-sm text-gray-600">${team.purpose}</p>
-                            <p class="text-xs text-gray-400 mt-1">By ${creator}</p>
-                        </div>
-                    `;
-                }))).join('');
+                if (teams.length === 0) { container.innerHTML = `<p class="text-gray-500">No teams have been created yet.</p>`; return; }
+                container.innerHTML = (await Promise.all(teams.map(async doc => { const team = doc.data(); const creator = await getUsername(team.createdBy); const score = (team.upvotes?.length || 0) - (team.downvotes?.length || 0); return `<div class="border-b pb-3"><div class="flex justify-between items-center"><p class="font-bold text-gray-900">${team.name}</p><span class="text-sm font-bold ${score >= 0 ? 'text-green-600' : 'text-red-600'}">${score > 0 ? '+' : ''}${score}</span></div><p class="text-sm text-gray-600">${team.purpose}</p><p class="text-xs text-gray-400 mt-1">By ${creator}</p></div>`; }))).join('');
             });
             unsubscribeListeners.push(recentTeamsUnsub);
 
-            // Dashboard Money Guides List
-            const moneyGuideUnsub = onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/moneyGuide`), (docSnap) => {
-                const container = document.getElementById('dashboard-guides-list');
-                if (!container) return;
-                if (docSnap.exists()) {
-                    const guides = (docSnap.data().entries || []).slice(-3).reverse(); // Get last 3, newest first
-                    if (guides.length === 0) {
-                        container.innerHTML = `<p class="text-gray-500">No money guides added yet.</p>`;
-                        return;
-                    }
-                    container.innerHTML = guides.map(guide => `
-                        <div class="border-b pb-3">
-                            <p class="font-bold text-gray-900">${guide.name}</p>
-                            <p class="text-sm text-gray-600">${guide.potential}</p>
-                        </div>
-                    `).join('');
-                }
+            // Dashboard Money Guides List (New)
+            const moneyGuideQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/money_guides`), orderBy("createdAt", "desc"));
+            const moneyGuideUnsub = onSnapshot(moneyGuideQuery, (snapshot) => {
+                const container = document.getElementById('dashboard-guides-list'); if (!container) return;
+                const guides = snapshot.docs.slice(0, 3).map(d => d.data());
+                if (guides.length === 0) { container.innerHTML = `<p class="text-gray-500">No money guides added yet.</p>`; return; }
+                container.innerHTML = guides.map(guide => `<div class="border-b pb-3"><p class="font-bold text-gray-900">${guide.title}</p><p class="text-sm text-gray-600">${guide.reward}</p></div>`).join('');
             });
             unsubscribeListeners.push(moneyGuideUnsub);
             
-            // Dashboard Leaderboard (Top 5)
             const overallScores = allContributions.reduce((acc, c) => { acc[c.userId] = (acc[c.userId] || 0) + 1; return acc; }, {});
             const sortedContributors = Object.entries(overallScores).sort((a, b) => b[1] - a[1]).slice(0, 5);
             const leaderboardContainer = document.getElementById('dashboard-leaderboard');
             if (leaderboardContainer) {
-                 if (sortedContributors.length === 0) {
-                    leaderboardContainer.innerHTML = `<p class="text-gray-500">No contributions have been verified yet.</p>`;
-                } else {
-                    leaderboardContainer.innerHTML = (await Promise.all(sortedContributors.map(async ([userId, score], index) => {
-                        const username = await getUsername(userId);
-                        return `
-                            <div class="flex items-center justify-between text-sm p-2 rounded-md ${index === 0 ? 'bg-yellow-100' : ''}">
-                                <span class="font-semibold text-gray-700">${index + 1}. ${username}</span>
-                                <span class="font-bold text-teal-700">${score.toLocaleString()} contributions</span>
-                            </div>
-                        `;
-                    }))).join('');
-                }
+                if (sortedContributors.length === 0) { leaderboardContainer.innerHTML = `<p class="text-gray-500">No contributions have been verified yet.</p>`; } 
+                else { leaderboardContainer.innerHTML = (await Promise.all(sortedContributors.map(async ([userId, score], index) => { const username = await getUsername(userId); return `<div class="flex items-center justify-between text-sm p-2 rounded-md ${index === 0 ? 'bg-yellow-100' : ''}"><span class="font-semibold text-gray-700">${index + 1}. ${username}</span><span class="font-bold text-teal-700">${score.toLocaleString()} contributions</span></div>`; }))).join(''); }
             }
         }
 
@@ -478,104 +358,15 @@
             const ctx = document.getElementById('dashboard-chart')?.getContext('2d');
             if (!ctx) return;
             if (dashboardChart) dashboardChart.destroy();
-
-            const now = new Date();
-            const lastWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-            
+            const now = new Date(); const lastWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
             const weeklyData = {};
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(lastWeek);
-                d.setDate(d.getDate() + i);
-                const label = d.toLocaleDateString('en-US', { weekday: 'short' });
-                weeklyData[label] = { PokeYen: 0, Items: 0 };
-            }
-
-            contributions.forEach(c => {
-                if (c.timestamp) {
-                    const contribDate = c.timestamp.toDate();
-                    if (contribDate >= lastWeek && contribDate <= now) {
-                        const label = contribDate.toLocaleDateString('en-US', { weekday: 'short' });
-                        if (weeklyData[label]) {
-                            weeklyData[label].PokeYen += c.items?.PokeYen || 0;
-                            weeklyData[label].Items += Object.values(c.items).reduce((sum, val, key) => key !== 'PokeYen' ? sum + val : sum, 0);
-                        }
-                    }
-                }
-            });
-
-            dashboardChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(weeklyData),
-                    datasets: [
-                        {
-                            label: 'PokeYen Contributed',
-                            data: Object.values(weeklyData).map(d => d.PokeYen),
-                            backgroundColor: '#F59E0B', // Amber 500
-                            borderColor: '#D97706', // Amber 600
-                            borderWidth: 1
-                        },
-                        {
-                            label: 'Items Contributed (Count)',
-                            data: Object.values(weeklyData).map(d => d.Items),
-                            backgroundColor: '#10B981', // Emerald 500
-                            borderColor: '#059669', // Emerald 600
-                            borderWidth: 1
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { stacked: true, grid: { display: false } },
-                        y: { stacked: true, beginAtZero: true }
-                    },
-                    plugins: {
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                        },
-                        legend: {
-                            position: 'bottom',
-                        }
-                    }
-                }
-            });
-        }
-        // --- END NEW DASHBOARD ---
-
-        // --- POKEMON TEAMS MODULE ---
-        // --- MODIFICATION START: IV/EV Formatting Helpers ---
-        function formatIVs(ivString) {
-            if (!ivString) return 'N/A';
-            const parts = ivString.split(/[\s/,-]+/); // Split by space, slash, comma, or hyphen
-            return parts.map(part => {
-                const num = parseInt(part, 10);
-                if (!isNaN(num)) {
-                    let colorClass = 'text-red-600';
-                    if (num === 31) colorClass = 'text-green-600 font-bold';
-                    else if (num >= 25) colorClass = 'text-yellow-500';
-                    else if (num >= 20) colorClass = 'text-orange-500';
-                    return `<span class="${colorClass}">${num}</span>`;
-                }
-                return `<span>${part.toUpperCase()}</span>`; // Keep non-numeric parts like 'x'
-            }).join('/');
+            for (let i = 0; i < 7; i++) { const d = new Date(lastWeek); d.setDate(d.getDate() + i); const label = d.toLocaleDateString('en-US', { weekday: 'short' }); weeklyData[label] = { PokeYen: 0, Items: 0 }; }
+            contributions.forEach(c => { if (c.timestamp) { const contribDate = c.timestamp.toDate(); if (contribDate >= lastWeek && contribDate <= now) { const label = contribDate.toLocaleDateString('en-US', { weekday: 'short' }); if (weeklyData[label]) { weeklyData[label].PokeYen += c.items?.PokeYen || 0; weeklyData[label].Items += Object.values(c.items).reduce((sum, val, key) => key !== 'PokeYen' ? sum + val : sum, 0); } } } });
+            dashboardChart = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(weeklyData), datasets: [ { label: 'PokeYen Contributed', data: Object.values(weeklyData).map(d => d.PokeYen), backgroundColor: '#F59E0B', borderColor: '#D97706', borderWidth: 1 }, { label: 'Items Contributed (Count)', data: Object.values(weeklyData).map(d => d.Items), backgroundColor: '#10B981', borderColor: '#059669', borderWidth: 1 } ] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true } }, plugins: { tooltip: { mode: 'index', intersect: false, }, legend: { position: 'bottom', } } } });
         }
 
-        function formatEVs(evString) {
-            if (!evString) return 'N/A';
-            // Regex to find numbers and the text that follows them
-            return evString.replace(/(\d+)\s*([a-zA-Z]+)/g, (match, num, stat) => {
-                const numVal = parseInt(num, 10);
-                const statUpper = stat.toUpperCase();
-                if (numVal === 252) {
-                    return `<span class="text-green-600 font-bold">${numVal}</span> ${statUpper}`;
-                }
-                return `${numVal} ${statUpper}`;
-            });
-        }
-        // --- MODIFICATION END ---
+        function formatIVs(ivString) { if (!ivString) return 'N/A'; const parts = ivString.split(/[\s/,-]+/); return parts.map(part => { const num = parseInt(part, 10); if (!isNaN(num)) { let colorClass = 'text-red-600'; if (num === 31) colorClass = 'text-green-600 font-bold'; else if (num >= 25) colorClass = 'text-yellow-500'; else if (num >= 20) colorClass = 'text-orange-500'; return `<span class="${colorClass}">${num}</span>`; } return `<span>${part.toUpperCase()}</span>`; }).join('/'); }
+        function formatEVs(evString) { if (!evString) return 'N/A'; return evString.replace(/(\d+)\s*([a-zA-Z]+)/g, (match, num, stat) => { const numVal = parseInt(num, 10); const statUpper = stat.toUpperCase(); if (numVal === 252) { return `<span class="text-green-600 font-bold">${numVal}</span> ${statUpper}`; } return `${numVal} ${statUpper}`; }); }
 
         function renderPokemonTeams() {
             mainContent.innerHTML = `
@@ -1038,7 +829,6 @@
             });
         }
 
-        // --- TASKS MODULE (REFINED & FIXED) ---
         function renderTasks() {
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
@@ -1196,7 +986,6 @@
             };
         }
 
-        // --- MODIFICATION START: New Personal Task Modal ---
         function showNewPersonalTaskModal() {
             const formHtml = `
                 <form id="add-personal-task-form-modal" class="space-y-4">
@@ -1254,8 +1043,7 @@
                 container.insertAdjacentHTML('beforeend', newItemHtml);
             };
         }
-        // --- MODIFICATION END ---
-
+        
         async function renderTaskCard(doc) {
             const task = doc.data();
             const taskId = doc.id;
@@ -1369,7 +1157,6 @@
             `;
         }
 
-        // --- MODIFICATION START: New Personal Task Card ---
         async function renderPersonalTaskCard(doc) {
             const task = doc.data();
             const taskId = doc.id;
@@ -1418,9 +1205,7 @@
                     ${contentHtml}
                 </div>`;
         }
-        // --- MODIFICATION END ---
         
-        // --- FIX START: Created missing function ---
         function attachPersonalTaskCardListeners() {
             document.querySelectorAll('.personal-task-complete-btn').forEach(btn => {
                 btn.onclick = async (e) => {
@@ -1469,7 +1254,6 @@
                 }
             });
         }
-        // --- FIX END ---
         
         function attachTaskCardListeners() {
             // Shared Task Listeners
@@ -1595,7 +1379,6 @@
             modalConfirmBtn.onclick = null;
         }
         
-        // --- MODIFICATION START: Expanded and Fixed Leaderboard ---
         async function renderLeaderboard(container) {
             container.innerHTML = `
                 <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
@@ -1645,253 +1428,75 @@
                 </div>`;
 
             const getPokeyenTitle = (rank) => {
-                const titles = [
-                    "Poké Tycoon",      // Rank 1
-                    "GTL Baron",        // Rank 2
-                    "Item Magnate",     // Rank 3
-                    "Berry Boss",       // Rank 4
-                    "Charm Collector"   // Rank 5
-                ];
+                const titles = [ "Poké Tycoon", "GTL Baron", "Item Magnate", "Berry Boss", "Charm Collector" ];
                 return titles[rank] || "";
             };
 
             const processLeaderboardData = async (period = 'all') => {
-                document.querySelectorAll('#leaderboard-period-selector button').forEach(b => {
-                    b.classList.toggle('bg-white', b.dataset.period === period);
-                    b.classList.toggle('text-gray-800', b.dataset.period === period);
-                });
-                
-                const containers = {
-                    overall: document.getElementById('leaderboard-overall'),
-                    pokeyen: document.getElementById('leaderboard-pokeyen'),
-                    inventory: document.getElementById('leaderboard-inventory'),
-                    rising: document.getElementById('leaderboard-rising')
-                };
-
+                document.querySelectorAll('#leaderboard-period-selector button').forEach(b => { b.classList.toggle('bg-white', b.dataset.period === period); b.classList.toggle('text-gray-800', b.dataset.period === period); });
+                const containers = { overall: document.getElementById('leaderboard-overall'), pokeyen: document.getElementById('leaderboard-pokeyen'), inventory: document.getElementById('leaderboard-inventory'), rising: document.getElementById('leaderboard-rising') };
                 Object.values(containers).forEach(c => { if(c) c.innerHTML = 'Loading...'; });
-
                 showLoading(true);
                 try {
-                    let startDate = null;
-                    const now = new Date();
-                    if (period === 'day') {
-                        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    } else if (period === 'week') {
-                        startDate = new Date();
-                        startDate.setDate(startDate.getDate() - 7);
-                    } else if (period === 'month') {
-                        startDate = new Date();
-                        startDate.setMonth(startDate.getMonth() - 1);
-                    }
-
+                    let startDate = null; const now = new Date();
+                    if (period === 'day') { startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); } 
+                    else if (period === 'week') { startDate = new Date(); startDate.setDate(startDate.getDate() - 7); } 
+                    else if (period === 'month') { startDate = new Date(); startDate.setMonth(startDate.getMonth() - 1); }
                     const tasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`));
                     const tasksSnapshot = await getDocs(tasksQuery);
-
                     let allContributions = [];
-                    const contributionPromises = tasksSnapshot.docs.map(taskDoc => {
-                        const contribsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified"));
-                        return getDocs(contribsQuery);
-                    });
-                    
+                    const contributionPromises = tasksSnapshot.docs.map(taskDoc => { const contribsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified")); return getDocs(contribsQuery); });
                     const allContributionsSnapshots = await Promise.all(contributionPromises);
-                    
                     let filteredContributions = [];
-                    allContributionsSnapshots.forEach(snapshot => {
-                        snapshot.forEach(doc => {
-                            const data = doc.data();
-                            if (startDate) {
-                                if (data.timestamp && data.timestamp.toDate() >= startDate) {
-                                    filteredContributions.push(data);
-                                }
-                            } else {
-                                filteredContributions.push(data);
-                            }
-                        });
-                    });
-                    
-                    // --- Full Data for Modals ---
+                    allContributionsSnapshots.forEach(snapshot => { snapshot.forEach(doc => { const data = doc.data(); if (startDate) { if (data.timestamp && data.timestamp.toDate() >= startDate) { filteredContributions.push(data); } } else { filteredContributions.push(data); } }); });
                     const fullData = {};
-
-                    // Process Overall
                     const overallScores = filteredContributions.reduce((acc, c) => { acc[c.userId] = (acc[c.userId] || 0) + 1; return acc; }, {});
                     fullData.overall = Object.entries(overallScores).sort((a, b) => b[1] - a[1]);
-                    containers.overall.innerHTML = (await Promise.all(fullData.overall.slice(0, 5).map(async ([userId, score], index) => {
-                        const username = await getUsername(userId);
-                        return `<div data-user-id="${userId}" data-user-name="${username.toLowerCase()}" class="leaderboard-item flex justify-between items-center p-2 rounded-md transition-all ${index === 0 ? 'bg-yellow-100' : ''}"><span class="font-semibold">${index+1}. ${username}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>`
-                    }))).join('') || '<p class="text-gray-500">No data.</p>';
-
-                    // Process PokeYen
-                    const pokeyenScores = filteredContributions.reduce((acc, c) => {
-                        const yen = c.items?.PokeYen || 0;
-                        if (yen > 0) { acc[c.userId] = (acc[c.userId] || 0) + yen; }
-                        return acc;
-                    }, {});
+                    containers.overall.innerHTML = (await Promise.all(fullData.overall.slice(0, 5).map(async ([userId, score], index) => { const username = await getUsername(userId); return `<div data-user-id="${userId}" data-user-name="${username.toLowerCase()}" class="leaderboard-item flex justify-between items-center p-2 rounded-md transition-all ${index === 0 ? 'bg-yellow-100' : ''}"><span class="font-semibold">${index+1}. ${username}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>` }))).join('') || '<p class="text-gray-500">No data.</p>';
+                    const pokeyenScores = filteredContributions.reduce((acc, c) => { const yen = c.items?.PokeYen || 0; if (yen > 0) { acc[c.userId] = (acc[c.userId] || 0) + yen; } return acc; }, {});
                     fullData.pokeyen = Object.entries(pokeyenScores).sort((a, b) => b[1] - a[1]);
-                    containers.pokeyen.innerHTML = (await Promise.all(fullData.pokeyen.slice(0, 5).map(async ([userId, score], index) => {
-                        const username = await getUsername(userId);
-                        const title = getPokeyenTitle(index);
-                        const titleColor = ['text-yellow-500', 'text-gray-400', 'text-orange-400', 'text-green-500', 'text-blue-500'][index] || 'text-gray-500';
-                        return `<div data-user-id="${userId}" data-user-name="${username.toLowerCase()}" class="leaderboard-item flex justify-between items-center p-2 rounded-md transition-all"><span class="font-semibold">${index+1}. ${username} - <em class="font-bold ${titleColor}">${title}</em></span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>`
-                    }))).join('') || '<p class="text-gray-500">No PokeYen data.</p>';
-
-                    // Process Community Inventory
-                    const inventory = filteredContributions.reduce((acc, c) => {
-                        Object.entries(c.items || {}).forEach(([item, qty]) => { acc[item] = (acc[item] || 0) + qty; });
-                        return acc;
-                    }, {});
+                    containers.pokeyen.innerHTML = (await Promise.all(fullData.pokeyen.slice(0, 5).map(async ([userId, score], index) => { const username = await getUsername(userId); const title = getPokeyenTitle(index); const titleColor = ['text-yellow-500', 'text-gray-400', 'text-orange-400', 'text-green-500', 'text-blue-500'][index] || 'text-gray-500'; return `<div data-user-id="${userId}" data-user-name="${username.toLowerCase()}" class="leaderboard-item flex justify-between items-center p-2 rounded-md transition-all"><span class="font-semibold">${index+1}. ${username} - <em class="font-bold ${titleColor}">${title}</em></span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>` }))).join('') || '<p class="text-gray-500">No PokeYen data.</p>';
+                    const inventory = filteredContributions.reduce((acc, c) => { Object.entries(c.items || {}).forEach(([item, qty]) => { acc[item] = (acc[item] || 0) + qty; }); return acc; }, {});
                     fullData.inventory = Object.entries(inventory).sort((a, b) => b[1] - a[1]);
                     containers.inventory.innerHTML = fullData.inventory.slice(0, 10).map(([item, qty]) => `<div class="flex justify-between text-sm p-1"><span class="text-gray-600">${item}</span><span class="font-semibold">${qty.toLocaleString()}</span></div>`).join('') || '<p class="text-gray-500">No items contributed.</p>';
-                    
-                    // Process Rising Stars
                     containers.rising.innerHTML = '<p class="text-gray-500">Feature under development.</p>';
-                    
-                    // Render Chart
                     renderLeaderboardCharts(inventory);
-
-                    // Attach "See More" listeners
-                    document.querySelectorAll('[data-leaderboard-type]').forEach(btn => {
-                        btn.onclick = () => showLeaderboardDetailModal(btn.dataset.leaderboardType, fullData);
-                    });
-
-                } catch (error) {
-                    console.error("Error building leaderboard:", error);
-                    const contentContainer = document.getElementById('leaderboard-content');
-                    if (contentContainer) {
-                       contentContainer.innerHTML = '<p class="text-red-500 col-span-full">Could not load leaderboard data. This may be due to a missing database index.</p>';
-                    }
-                } finally {
-                    showLoading(false);
-                }
+                    document.querySelectorAll('[data-leaderboard-type]').forEach(btn => { btn.onclick = () => showLeaderboardDetailModal(btn.dataset.leaderboardType, fullData); });
+                } catch (error) { console.error("Error building leaderboard:", error); const contentContainer = document.getElementById('leaderboard-content'); if (contentContainer) { contentContainer.innerHTML = '<p class="text-red-500 col-span-full">Could not load leaderboard data. This may be due to a missing database index.</p>'; } } 
+                finally { showLoading(false); }
             };
             
-            document.getElementById('leaderboard-period-selector').onclick = (e) => {
-                if(e.target.tagName === 'BUTTON') {
-                    processLeaderboardData(e.target.dataset.period);
-                }
-            };
-
-            document.getElementById('leaderboard-search').oninput = (e) => {
-                const searchTerm = e.target.value.toLowerCase();
-                document.querySelectorAll('.leaderboard-item').forEach(item => {
-                    const userName = item.dataset.userName;
-                    if (searchTerm && userName.includes(searchTerm)) {
-                        item.classList.add('bg-yellow-200', 'ring-2', 'ring-yellow-500');
-                    } else {
-                        item.classList.remove('bg-yellow-200', 'ring-2', 'ring-yellow-500');
-                    }
-                });
-            };
-
+            document.getElementById('leaderboard-period-selector').onclick = (e) => { if(e.target.tagName === 'BUTTON') { processLeaderboardData(e.target.dataset.period); } };
+            document.getElementById('leaderboard-search').oninput = (e) => { const searchTerm = e.target.value.toLowerCase(); document.querySelectorAll('.leaderboard-item').forEach(item => { const userName = item.dataset.userName; if (searchTerm && userName.includes(searchTerm)) { item.classList.add('bg-yellow-200', 'ring-2', 'ring-yellow-500'); } else { item.classList.remove('bg-yellow-200', 'ring-2', 'ring-yellow-500'); } }); };
             processLeaderboardData('all');
         }
 
         function renderLeaderboardCharts(inventoryData) {
             const ctx = document.getElementById('leaderboard-chart')?.getContext('2d');
             if (!ctx) return;
-            if (leaderboardChart) {
-                leaderboardChart.destroy();
-            }
-
-            const otherCategoryThreshold = 0.03; // Items making up less than 3% of total go into "Other"
-            const totalItems = Object.values(inventoryData).reduce((sum, val) => sum + val, 0);
-            
-            const chartData = { labels: [], data: [] };
-            let otherValue = 0;
-
-            Object.entries(inventoryData).forEach(([item, qty]) => {
-                if ((qty / totalItems) < otherCategoryThreshold) {
-                    otherValue += qty;
-                } else {
-                    chartData.labels.push(item);
-                    chartData.data.push(qty);
-                }
-            });
-
-            if (otherValue > 0) {
-                chartData.labels.push('Other Items');
-                chartData.data.push(otherValue);
-            }
-
-            leaderboardChart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: chartData.labels,
-                    datasets: [{
-                        label: 'Contribution Count',
-                        data: chartData.data,
-                        backgroundColor: [
-                            '#10B981', '#3B82F6', '#EC4899', '#F59E0B', '#8B5CF6',
-                            '#6366F1', '#D946EF', '#0EA5E9', '#F43F5E', '#6B7280'
-                        ],
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right',
-                        }
-                    }
-                }
-            });
+            if (leaderboardChart) { leaderboardChart.destroy(); }
+            const otherCategoryThreshold = 0.03; const totalItems = Object.values(inventoryData).reduce((sum, val) => sum + val, 0);
+            const chartData = { labels: [], data: [] }; let otherValue = 0;
+            Object.entries(inventoryData).forEach(([item, qty]) => { if ((qty / totalItems) < otherCategoryThreshold) { otherValue += qty; } else { chartData.labels.push(item); chartData.data.push(qty); } });
+            if (otherValue > 0) { chartData.labels.push('Other Items'); chartData.data.push(otherValue); }
+            leaderboardChart = new Chart(ctx, { type: 'pie', data: { labels: chartData.labels, datasets: [{ label: 'Contribution Count', data: chartData.data, backgroundColor: [ '#10B981', '#3B82F6', '#EC4899', '#F59E0B', '#8B5CF6', '#6366F1', '#D946EF', '#0EA5E9', '#F43F5E', '#6B7280' ], hoverOffset: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', } } } });
         }
 
         async function showLeaderboardDetailModal(type, fullData) {
-            let title = '';
-            let data = [];
-            let formatter = async (item, index) => '';
-
-            if (type === 'overall') {
-                title = 'Overall Top Contributors (All)';
-                data = fullData.overall;
-                formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>`;
-            } else if (type === 'pokeyen') {
-                title = 'Most PokeYen Contributed (All)';
-                data = fullData.pokeyen;
-                formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>`;
-            } else if (type === 'inventory') {
-                title = 'Community Inventory (All)';
-                data = fullData.inventory;
-                formatter = async ([item, qty], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${item.toLowerCase()}"><span class="font-semibold">${item}</span><span class="font-bold">${qty.toLocaleString()}</span></div>`;
-            }
-            
+            let title = ''; let data = []; let formatter = async (item, index) => '';
+            if (type === 'overall') { title = 'Overall Top Contributors (All)'; data = fullData.overall; formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>`; } 
+            else if (type === 'pokeyen') { title = 'Most PokeYen Contributed (All)'; data = fullData.pokeyen; formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>`; } 
+            else if (type === 'inventory') { title = 'Community Inventory (All)'; data = fullData.inventory; formatter = async ([item, qty], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${item.toLowerCase()}"><span class="font-semibold">${item}</span><span class="font-bold">${qty.toLocaleString()}</span></div>`; }
             const listHtml = (await Promise.all(data.map(formatter))).join('');
-
-            const modalContent = `
-                <div class="relative mb-4">
-                    <input type="text" id="leaderboard-modal-search" placeholder="Search..." class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-full text-sm">
-                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                </div>
-                <div class="space-y-1 max-h-[50vh] overflow-y-auto pr-2" id="leaderboard-modal-list">
-                    ${listHtml}
-                </div>
-            `;
-            
+            const modalContent = ` <div class="relative mb-4"> <input type="text" id="leaderboard-modal-search" placeholder="Search..." class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-full text-sm"> <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg> </div> <div class="space-y-1 max-h-[50vh] overflow-y-auto pr-2" id="leaderboard-modal-list"> ${listHtml} </div> `;
             showGenericModal(title, modalContent, null, '2xl');
-
-            document.getElementById('leaderboard-modal-search').oninput = (e) => {
-                const searchTerm = e.target.value.toLowerCase();
-                document.querySelectorAll('.leaderboard-modal-item').forEach(item => {
-                    const name = item.dataset.userName;
-                    item.style.display = name.includes(searchTerm) ? 'flex' : 'none';
-                });
-            };
-        }
-        // --- MODIFICATION END ---
-        
-        function renderBreedingProjects() { 
-            mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Breeding Projects</h2><p class="text-gray-500">Feature coming soon.</p>`; 
-        }
-        function renderShinyHunts() {
-            mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Shiny Hunts</h2><p class="text-gray-500">Feature coming soon.</p>`; 
-        }
-        function renderPokedex() {
-             mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Pokédex & Builds</h2><p class="text-gray-500">Feature coming soon.</p>`; 
+            document.getElementById('leaderboard-modal-search').oninput = (e) => { const searchTerm = e.target.value.toLowerCase(); document.querySelectorAll('.leaderboard-modal-item').forEach(item => { const name = item.dataset.userName; item.style.display = name.includes(searchTerm) ? 'flex' : 'none'; }); };
         }
         
-        // --- MODIFICATION START: Implement EV Hotspots View ---
+        function renderBreedingProjects() { mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Breeding Projects</h2><p class="text-gray-500">Feature coming soon.</p>`; }
+        function renderShinyHunts() { mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Shiny Hunts</h2><p class="text-gray-500">Feature coming soon.</p>`; }
+        function renderPokedex() { mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Pokédex & Builds</h2><p class="text-gray-500">Feature coming soon.</p>`; }
+        
         function renderEvHotspots() {
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
@@ -1919,258 +1524,317 @@
                                 ${checkPermission('canEditResources') ? `<th scope="col" class="px-6 py-3"><span class="sr-only">Actions</span></th>` : ''}
                             </tr>
                         </thead>
-                        <tbody id="ev-hotspots-table-body">
-                            <!-- Rows will be rendered here -->
-                        </tbody>
+                        <tbody id="ev-hotspots-table-body"></tbody>
                     </table>
                 </div>`;
 
-            const unsub = onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    renderEvHotspotsTable(data.entries || []);
-                }
-            });
+            const unsub = onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => { if (docSnap.exists()) { renderEvHotspotsTable(docSnap.data().entries || []); } });
             unsubscribeListeners.push(unsub);
-
-            if (checkPermission('canEditResources')) {
-                document.getElementById('add-ev-hotspot-btn').onclick = () => showEvHotspotForm();
-            }
-            
-            document.getElementById('ev-search').oninput = () => {
-                 onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => {
-                    if (docSnap.exists()) renderEvHotspotsTable(docSnap.data().entries || []);
-                });
-            };
-
-            document.getElementById('ev-stat-filter').onclick = (e) => {
-                if (e.target.matches('.ev-filter-btn')) {
-                    document.querySelectorAll('.ev-filter-btn').forEach(btn => {
-                        btn.classList.remove('bg-teal-500', 'text-white');
-                    });
-                    e.target.classList.add('bg-teal-500', 'text-white');
-                    onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => {
-                        if (docSnap.exists()) renderEvHotspotsTable(docSnap.data().entries || []);
-                    });
-                }
-            };
+            if (checkPermission('canEditResources')) { document.getElementById('add-ev-hotspot-btn').onclick = () => showEvHotspotForm(); }
+            document.getElementById('ev-search').oninput = () => { onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => { if (docSnap.exists()) renderEvHotspotsTable(docSnap.data().entries || []); }); };
+            document.getElementById('ev-stat-filter').onclick = (e) => { if (e.target.matches('.ev-filter-btn')) { document.querySelectorAll('.ev-filter-btn').forEach(btn => { btn.classList.remove('bg-teal-500', 'text-white'); }); e.target.classList.add('bg-teal-500', 'text-white'); onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => { if (docSnap.exists()) renderEvHotspotsTable(docSnap.data().entries || []); }); } };
         }
 
         function renderEvHotspotsTable(entries) {
-            const tbody = document.getElementById('ev-hotspots-table-body');
-            if (!tbody) return;
-
+            const tbody = document.getElementById('ev-hotspots-table-body'); if (!tbody) return;
             const searchTerm = document.getElementById('ev-search').value.toLowerCase();
             const activeFilter = document.querySelector('.ev-filter-btn.bg-teal-500').dataset.stat;
-
-            const filteredEntries = entries.filter(entry => {
-                const matchesSearch = entry.pokemon.toLowerCase().includes(searchTerm) || entry.location.toLowerCase().includes(searchTerm);
-                const matchesFilter = activeFilter === 'All' || entry.stat === activeFilter;
-                return matchesSearch && matchesFilter;
-            });
-
-            if (filteredEntries.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-500">No EV hotspots found matching your criteria.</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = filteredEntries.map(entry => `
-                <tr class="bg-white border-b hover:bg-gray-50">
-                    <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">${entry.stat}</td>
-                    <td class="px-6 py-4">${entry.pokemon}</td>
-                    <td class="px-6 py-4">${entry.location}</td>
-                    <td class="px-6 py-4 font-bold text-teal-600">${entry.yield}</td>
-                    ${checkPermission('canEditResources') ? `
-                    <td class="px-6 py-4 text-right">
-                        <button data-action="edit-ev-hotspot" data-id="${entry.id}" class="font-medium text-blue-600 hover:underline mr-4">Edit</button>
-                        <button data-action="delete-ev-hotspot" data-id="${entry.id}" class="font-medium text-red-600 hover:underline">Delete</button>
-                    </td>` : ''}
-                </tr>
-            `).join('');
-
-            if (checkPermission('canEditResources')) {
-                document.querySelectorAll('[data-action="edit-ev-hotspot"]').forEach(btn => btn.onclick = (e) => {
-                    const entryId = e.target.dataset.id;
-                    const entry = entries.find(item => item.id === entryId);
-                    if (entry) showEvHotspotForm(entry);
-                });
-                document.querySelectorAll('[data-action="delete-ev-hotspot"]').forEach(btn => btn.onclick = (e) => {
-                    const entryId = e.target.dataset.id;
-                    showModal(`Are you sure you want to delete this hotspot?`, async () => {
-                         const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`);
-                         const docSnap = await getDoc(docRef);
-                         if (docSnap.exists()) {
-                            const updatedEntries = docSnap.data().entries.filter(item => item.id !== entryId);
-                            await updateDoc(docRef, { entries: updatedEntries });
-                         }
-                    });
-                });
-            }
+            const filteredEntries = entries.filter(entry => { const matchesSearch = entry.pokemon.toLowerCase().includes(searchTerm) || entry.location.toLowerCase().includes(searchTerm); const matchesFilter = activeFilter === 'All' || entry.stat === activeFilter; return matchesSearch && matchesFilter; });
+            if (filteredEntries.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-500">No EV hotspots found matching your criteria.</td></tr>`; return; }
+            tbody.innerHTML = filteredEntries.map(entry => ` <tr class="bg-white border-b hover:bg-gray-50"> <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">${entry.stat}</td> <td class="px-6 py-4">${entry.pokemon}</td> <td class="px-6 py-4">${entry.location}</td> <td class="px-6 py-4 font-bold text-teal-600">${entry.yield}</td> ${checkPermission('canEditResources') ? ` <td class="px-6 py-4 text-right"> <button data-action="edit-ev-hotspot" data-id="${entry.id}" class="font-medium text-blue-600 hover:underline mr-4">Edit</button> <button data-action="delete-ev-hotspot" data-id="${entry.id}" class="font-medium text-red-600 hover:underline">Delete</button> </td>` : ''} </tr> `).join('');
+            if (checkPermission('canEditResources')) { document.querySelectorAll('[data-action="edit-ev-hotspot"]').forEach(btn => btn.onclick = (e) => { const entryId = e.target.dataset.id; const entry = entries.find(item => item.id === entryId); if (entry) showEvHotspotForm(entry); }); document.querySelectorAll('[data-action="delete-ev-hotspot"]').forEach(btn => btn.onclick = (e) => { const entryId = e.target.dataset.id; showModal(`Are you sure you want to delete this hotspot?`, async () => { const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`); const docSnap = await getDoc(docRef); if (docSnap.exists()) { const updatedEntries = docSnap.data().entries.filter(item => item.id !== entryId); await updateDoc(docRef, { entries: updatedEntries }); } }); }); }
         }
 
         function showEvHotspotForm(entry = {}) {
             const isEditing = !!entry.id;
-            const formHtml = `
-                <form class="space-y-4">
-                    <input type="hidden" name="id" value="${entry.id || `ev-${Date.now()}`}">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Stat</label>
-                        <select name="stat" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm">
-                            ${['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed'].map(stat => `<option value="${stat}" ${entry.stat === stat ? 'selected' : ''}>${stat}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Pokémon Horde</label>
-                        <input type="text" name="pokemon" value="${entry.pokemon || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Marill (x5)">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Location</label>
-                        <input type="text" name="location" value="${entry.location || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Route 114, Hoenn (Surf)">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">EV Yield</label>
-                        <input type="text" name="yield" value="${entry.yield || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., 10 HP">
-                    </div>
-                    <div class="flex justify-end gap-4 pt-4">
-                         <button type="button" class="generic-modal-close-btn bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
-                         <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Add Hotspot'}</button>
-                    </div>
-                </form>
-            `;
+            const formHtml = ` <form class="space-y-4"> <input type="hidden" name="id" value="${entry.id || `ev-${Date.now()}`}"> <div> <label class="block text-sm font-medium text-gray-700">Stat</label> <select name="stat" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm"> ${['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed'].map(stat => `<option value="${stat}" ${entry.stat === stat ? 'selected' : ''}>${stat}</option>`).join('')} </select> </div> <div> <label class="block text-sm font-medium text-gray-700">Pokémon Horde</label> <input type="text" name="pokemon" value="${entry.pokemon || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Marill (x5)"> </div> <div> <label class="block text-sm font-medium text-gray-700">Location</label> <input type="text" name="location" value="${entry.location || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Route 114, Hoenn (Surf)"> </div> <div> <label class="block text-sm font-medium text-gray-700">EV Yield</label> <input type="text" name="yield" value="${entry.yield || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., 10 HP"> </div> <div class="flex justify-end gap-4 pt-4"> <button type="button" class="generic-modal-close-btn bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button> <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Add Hotspot'}</button> </div> </form> `;
             showGenericModal(isEditing ? 'Edit EV Hotspot' : 'Add New EV Hotspot', formHtml, async (e) => {
                 const form = e.target;
-                const newEntry = {
-                    id: form.id.value,
-                    stat: form.stat.value,
-                    pokemon: form.pokemon.value,
-                    location: form.location.value,
-                    yield: form.yield.value
-                };
-
+                const newEntry = { id: form.id.value, stat: form.stat.value, pokemon: form.pokemon.value, location: form.location.value, yield: form.yield.value };
                 const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`);
                 const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    let entries = docSnap.data().entries || [];
-                    if (isEditing) {
-                        entries = entries.map(item => item.id === newEntry.id ? newEntry : item);
-                    } else {
-                        entries.push(newEntry);
-                    }
-                    await updateDoc(docRef, { entries });
-                }
+                if (docSnap.exists()) { let entries = docSnap.data().entries || []; if (isEditing) { entries = entries.map(item => item.id === newEntry.id ? newEntry : item); } else { entries.push(newEntry); } await updateDoc(docRef, { entries }); }
                 hideGenericModal();
             }, 'md');
             genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
         }
-        // --- MODIFICATION END ---
 
         // --- NEW MONEY GUIDE FUNCTIONS ---
         function renderMoneyGuide() {
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-3xl font-bold text-gray-800">Money Making Guide</h2>
-                    ${checkPermission('canEditResources') ? `<button id="add-money-guide-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">Add Guide</button>` : ''}
+                    <h2 class="text-3xl font-bold text-gray-800">Money Making Guides</h2>
+                    ${checkPermission('canManageMoneyGuides') ? `<button id="add-money-guide-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">New Guide</button>` : ''}
                 </div>
-                <div id="money-guide-container" class="space-y-6">
-                    <!-- Guides will be rendered here -->
+                <div class="mb-4 border-b border-gray-200">
+                    <nav class="flex justify-between items-center" id="guides-filter-nav">
+                        <div class="flex space-x-4">
+                            <!-- Filter buttons can be added here later -->
+                        </div>
+                        <div>
+                            <span class="text-sm font-semibold mr-2">Sort by:</span>
+                            <button data-sort="votes" class="sort-btn bg-teal-500 text-white px-3 py-1 rounded-l-md text-sm">Top Voted</button>
+                            <button data-sort="latest" class="sort-btn bg-gray-200 text-gray-700 px-3 py-1 rounded-r-md text-sm">Latest</button>
+                        </div>
+                    </nav>
                 </div>
+                <div id="money-guides-container" class="space-y-4"></div>
             `;
 
-            const unsub = onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/moneyGuide`), (docSnap) => {
-                if (docSnap.exists()) {
-                    const entries = docSnap.data().entries || [];
-                    const container = document.getElementById('money-guide-container');
-                    if (!container) return;
-                    if (entries.length === 0) {
-                        container.innerHTML = `<p class="text-gray-500">No money-making guides have been added yet.</p>`;
-                        return;
-                    }
-                    container.innerHTML = entries.map(entry => `
-                        <div class="bg-white p-6 rounded-lg shadow-md relative group">
-                            ${checkPermission('canEditResources') ? `
-                            <div class="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button data-action="edit-money-guide" data-id="${entry.id}" class="text-blue-500 hover:text-blue-700 p-1">✏️ Edit</button>
-                                <button data-action="delete-money-guide" data-id="${entry.id}" class="text-red-500 hover:text-red-700 p-1">🗑️ Delete</button>
-                            </div>` : ''}
-                            <h3 class="text-2xl font-bold text-gray-800">${entry.name}</h3>
-                            <p class="text-lg font-semibold text-yellow-600 mt-1">${entry.potential}</p>
-                            <p class="text-gray-600 mt-4 whitespace-pre-wrap">${entry.details}</p>
-                        </div>
-                    `).join('');
+            let sortOrder = 'votes';
+            const q = query(collection(db, `team_spaces/${currentTeamSpaceId}/money_guides`));
 
-                    if (checkPermission('canEditResources')) {
-                        document.querySelectorAll('[data-action="edit-money-guide"]').forEach(btn => btn.onclick = (e) => {
-                            const entryId = e.currentTarget.dataset.id;
-                            const entry = entries.find(item => item.id === entryId);
-                            if (entry) showMoneyGuideForm(entry);
-                        });
-                        document.querySelectorAll('[data-action="delete-money-guide"]').forEach(btn => btn.onclick = (e) => {
-                            const entryId = e.currentTarget.dataset.id;
-                            showModal(`Are you sure you want to delete this guide?`, async () => {
-                                const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/moneyGuide`);
-                                const docSnap = await getDoc(docRef);
-                                if (docSnap.exists()) {
-                                    const updatedEntries = docSnap.data().entries.filter(item => item.id !== entryId);
-                                    await updateDoc(docRef, { entries: updatedEntries });
-                                }
-                            });
-                        });
-                    }
+            const renderFilteredGuides = (snapshot) => {
+                const container = document.getElementById('money-guides-container');
+                if (!container) return;
+                let guides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                if (sortOrder === 'votes') {
+                    guides.sort((a, b) => {
+                        const scoreA = (a.upvotes?.length || 0) - (a.downvotes?.length || 0);
+                        const scoreB = (b.upvotes?.length || 0) - (b.downvotes?.length || 0);
+                        return scoreB - scoreA;
+                    });
+                } else { // latest
+                    guides.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
                 }
-            });
+
+                if (guides.length === 0) {
+                    container.innerHTML = `<p class="text-gray-500 text-center mt-8">No money-making guides have been added yet.</p>`;
+                    return;
+                }
+                Promise.all(guides.map(renderMoneyGuideCard)).then(html => {
+                    container.innerHTML = html.join('');
+                    attachMoneyGuideListeners();
+                });
+            };
+
+            const unsub = onSnapshot(q, renderFilteredGuides);
             unsubscribeListeners.push(unsub);
 
-            if (checkPermission('canEditResources')) {
+            document.querySelectorAll('.sort-btn').forEach(btn => btn.onclick = (e) => {
+                sortOrder = e.target.dataset.sort;
+                document.querySelectorAll('.sort-btn').forEach(b => {
+                    b.classList.toggle('bg-teal-500', b.dataset.sort === sortOrder);
+                    b.classList.toggle('text-white', b.dataset.sort === sortOrder);
+                    b.classList.toggle('bg-gray-200', b.dataset.sort !== sortOrder);
+                    b.classList.toggle('text-gray-700', b.dataset.sort !== sortOrder);
+                });
+                onSnapshot(q, renderFilteredGuides);
+            });
+
+            if (checkPermission('canManageMoneyGuides')) {
                 document.getElementById('add-money-guide-btn').onclick = () => showMoneyGuideForm();
             }
         }
 
-        function showMoneyGuideForm(entry = {}) {
-            const isEditing = !!entry.id;
+        async function renderMoneyGuideCard(guide) {
+            const authorName = await getUsername(guide.createdBy);
+            const score = (guide.upvotes?.length || 0) - (guide.downvotes?.length || 0);
+            const userVote = guide.upvotes?.includes(currentUserId) ? 'up' : guide.downvotes?.includes(currentUserId) ? 'down' : null;
+
+            return `
+                <div class="bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer" data-action="view-guide" data-id="${guide.id}">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800">${guide.title}</h3>
+                            <p class="text-sm text-gray-500">By ${authorName}</p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            ${guide.isStaffPick ? `<span class="text-xs font-bold bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full">⭐ Staff Pick</span>` : ''}
+                            <div class="flex items-center gap-2">
+                                <button data-action="vote-guide" data-id="${guide.id}" data-vote="up" class="vote-btn p-1 rounded-full ${userVote === 'up' ? 'bg-green-500 text-white' : 'bg-gray-200 hover:bg-green-200'}">▲</button>
+                                <span class="font-bold text-lg">${score}</span>
+                                <button data-action="vote-guide" data-id="${guide.id}" data-vote="down" class="vote-btn p-1 rounded-full ${userVote === 'down' ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-red-200'}">▼</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 grid grid-cols-3 gap-4 text-center">
+                        <div><p class="text-xs text-gray-500 uppercase">Category</p><p class="font-semibold">${guide.category}</p></div>
+                        <div><p class="text-xs text-gray-500 uppercase">Effort</p><p class="font-semibold">${guide.effort}</p></div>
+                        <div><p class="text-xs text-gray-500 uppercase">Reward</p><p class="font-semibold text-green-600">${guide.reward}</p></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showMoneyGuideForm(guide = {}) {
+            const isEditing = !!guide.id;
             const formHtml = `
                 <form class="space-y-4">
-                    <input type="hidden" name="id" value="${entry.id || `guide-${Date.now()}`}">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Guide Name</label>
-                        <input type="text" name="name" value="${entry.name || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required>
+                    <input type="text" name="title" placeholder="Guide Title" class="w-full p-2 border rounded-lg text-lg font-bold" value="${guide.title || ''}" required>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <input type="text" name="category" placeholder="Category (e.g., Farming)" class="w-full p-2 border rounded-lg" value="${guide.category || ''}" required>
+                        <input type="text" name="effort" placeholder="Effort (e.g., Low, Medium, High)" class="w-full p-2 border rounded-lg" value="${guide.effort || ''}" required>
+                        <input type="text" name="reward" placeholder="Reward (e.g., ~400k/hr)" class="w-full p-2 border rounded-lg" value="${guide.reward || ''}" required>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Potential Earnings</label>
-                        <input type="text" name="potential" value="${entry.potential || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" placeholder="e.g., High (~400k/hr)">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Detailed Description</label>
+                        <div id="quill-editor" style="height: 300px;"></div>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Details & Instructions</label>
-                        <textarea name="details" rows="6" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">${entry.details || ''}</textarea>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="url" name="imageUrl" placeholder="Image URL (optional)" class="w-full p-2 border rounded-lg" value="${guide.imageUrl || ''}">
+                        <input type="url" name="videoUrl" placeholder="YouTube/Video URL (optional)" class="w-full p-2 border rounded-lg" value="${guide.videoUrl || ''}">
                     </div>
-                    <div class="flex justify-end gap-4 pt-4">
-                         <button type="button" class="generic-modal-close-btn bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
-                         <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Add Guide'}</button>
+                    <div class="flex justify-end gap-4 pt-4 border-t">
+                        <button type="button" class="generic-modal-close-btn bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancel</button>
+                        <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-6 rounded-lg">${isEditing ? 'Save Changes' : 'Create Guide'}</button>
                     </div>
                 </form>
             `;
-            showGenericModal(isEditing ? 'Edit Money Guide' : 'Add New Money Guide', formHtml, async (e) => {
+            
+            showGenericModal(isEditing ? 'Edit Money Guide' : 'New Money Guide', formHtml, async (e) => {
                 const form = e.target;
-                const newEntry = {
-                    id: form.id.value,
-                    name: form.name.value,
-                    potential: form.potential.value,
-                    details: form.details.value
+                const guideData = {
+                    title: form.title.value,
+                    category: form.category.value,
+                    effort: form.effort.value,
+                    reward: form.reward.value,
+                    description: quillEditor.root.innerHTML, // Get HTML content from Quill
+                    imageUrl: form.imageUrl.value,
+                    videoUrl: form.videoUrl.value,
                 };
 
-                const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/moneyGuide`);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    let entries = docSnap.data().entries || [];
-                    if (isEditing) {
-                        entries = entries.map(item => item.id === newEntry.id ? newEntry : item);
-                    } else {
-                        entries.push(newEntry);
-                    }
-                    await updateDoc(docRef, { entries });
+                if (isEditing) {
+                    await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guide.id), guideData);
+                } else {
+                    await addDoc(collection(db, `team_spaces/${currentTeamSpaceId}/money_guides`), {
+                        ...guideData,
+                        createdBy: currentUserId,
+                        createdAt: serverTimestamp(),
+                        isStaffPick: false,
+                        upvotes: [],
+                        downvotes: []
+                    });
                 }
                 hideGenericModal();
-            }, '2xl');
+            }, '4xl');
+
+            // Initialize Quill Editor
+            quillEditor = new Quill('#quill-editor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        ['link', 'image'],
+                        ['clean']
+                    ]
+                }
+            });
+            if (isEditing && guide.description) {
+                quillEditor.root.innerHTML = guide.description;
+            }
+
             genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
+        }
+
+        async function showGuideDetailModal(guide) {
+            const authorName = await getUsername(guide.createdBy);
+            let mediaHtml = '';
+            if (guide.imageUrl) {
+                mediaHtml += `<img src="${guide.imageUrl}" class="w-full h-auto object-cover rounded-lg mb-4" alt="Guide Image">`;
+            }
+            if (guide.videoUrl) {
+                // Basic YouTube embed logic
+                let embedUrl = guide.videoUrl;
+                if (guide.videoUrl.includes('youtube.com/watch?v=')) {
+                    const videoId = new URL(guide.videoUrl).searchParams.get('v');
+                    embedUrl = `https://www.youtube.com/embed/${videoId}`;
+                } else if (guide.videoUrl.includes('youtu.be/')) {
+                    const videoId = new URL(guide.videoUrl).pathname.substring(1);
+                    embedUrl = `https://www.youtube.com/embed/${videoId}`;
+                }
+                mediaHtml += `<div class="aspect-w-16 aspect-h-9"><iframe src="${embedUrl}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full rounded-lg"></iframe></div>`;
+            }
+
+            const modalContent = `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2">
+                        <div class="prose max-w-none text-gray-800">${guide.description}</div>
+                    </div>
+                    <div class="space-y-6">
+                        <div class="bg-gray-100 p-4 rounded-lg">
+                            <h4 class="font-bold mb-2">Details</h4>
+                            <p><strong>Category:</strong> ${guide.category}</p>
+                            <p><strong>Effort:</strong> ${guide.effort}</p>
+                            <p><strong>Reward:</strong> <span class="text-green-600 font-semibold">${guide.reward}</span></p>
+                            <p><strong>Author:</strong> ${authorName}</p>
+                        </div>
+                        ${mediaHtml ? `<div class="bg-gray-100 p-4 rounded-lg">${mediaHtml}</div>` : ''}
+                        ${checkPermission('canManageMoneyGuides') ? `
+                        <div class="bg-gray-100 p-4 rounded-lg space-y-2">
+                             <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                <input type="checkbox" data-action="toggle-staff-pick-guide" data-id="${guide.id}" ${guide.isStaffPick ? 'checked' : ''}> Mark as Staff Pick
+                            </label>
+                            <button data-action="edit-guide" data-id="${guide.id}" class="w-full bg-yellow-500 text-white p-2 rounded-lg text-sm">Edit Guide</button>
+                            <button data-action="delete-guide" data-id="${guide.id}" class="w-full bg-red-500 text-white p-2 rounded-lg text-sm">Delete Guide</button>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+            showGenericModal(guide.title, modalContent, null, '6xl');
+            attachMoneyGuideListeners();
+        }
+
+        function attachMoneyGuideListeners() {
+            document.querySelectorAll('[data-action="view-guide"]').forEach(card => card.onclick = async e => {
+                // Prevent vote clicks from triggering the modal
+                if (e.target.closest('.vote-btn')) return;
+                const guideId = e.currentTarget.dataset.id;
+                const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId);
+                const guideSnap = await getDoc(guideRef);
+                if (guideSnap.exists()) {
+                    showGuideDetailModal({ id: guideSnap.id, ...guideSnap.data() });
+                }
+            });
+
+            document.querySelectorAll('[data-action="vote-guide"]').forEach(btn => btn.onclick = async e => {
+                e.stopPropagation(); // Prevent modal from opening
+                const { id, vote } = e.currentTarget.dataset;
+                const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, id);
+                await runTransaction(db, async (transaction) => {
+                    const guideDoc = await transaction.get(guideRef);
+                    if (!guideDoc.exists()) return;
+                    const data = guideDoc.data();
+                    const upvotes = data.upvotes || []; const downvotes = data.downvotes || [];
+                    const hasUpvoted = upvotes.includes(currentUserId); const hasDownvoted = downvotes.includes(currentUserId);
+                    let newUpvotes = [...upvotes]; let newDownvotes = [...downvotes];
+                    if (vote === 'up') {
+                        if (hasUpvoted) { newUpvotes = newUpvotes.filter(uid => uid !== currentUserId); } 
+                        else { newUpvotes.push(currentUserId); newDownvotes = newDownvotes.filter(uid => uid !== currentUserId); }
+                    } else if (vote === 'down') {
+                        if (hasDownvoted) { newDownvotes = newDownvotes.filter(uid => uid !== currentUserId); } 
+                        else { newDownvotes.push(currentUserId); newUpvotes = newUpvotes.filter(uid => uid !== currentUserId); }
+                    }
+                    transaction.update(guideRef, { upvotes: newUpvotes, downvotes: newDownvotes });
+                });
+            });
+
+            document.querySelectorAll('[data-action="edit-guide"]').forEach(btn => btn.onclick = async e => {
+                const guideId = e.currentTarget.dataset.id;
+                const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId);
+                const guideSnap = await getDoc(guideRef);
+                if (guideSnap.exists()) {
+                    showMoneyGuideForm({ id: guideSnap.id, ...guideSnap.data() });
+                }
+            });
+
+            document.querySelectorAll('[data-action="delete-guide"]').forEach(btn => btn.onclick = e => {
+                const guideId = e.currentTarget.dataset.id;
+                showModal('Are you sure you want to delete this guide?', () => {
+                    deleteDoc(doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId));
+                    hideGenericModal();
+                });
+            });
+            
+            document.querySelectorAll('[data-action="toggle-staff-pick-guide"]').forEach(box => box.onchange = async e => {
+                const guideId = e.currentTarget.dataset.id;
+                const isStaffPick = e.target.checked;
+                await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId), { isStaffPick });
+            });
         }
         // --- END NEW MONEY GUIDE FUNCTIONS ---
 
@@ -2237,7 +1901,8 @@
                 canCreatePublicTeams: "Create Public Pokémon Teams",
                 canVoteOnTeams: "Upvote/Downvote Pokémon Teams",
                 canVerifyContributions: "Verify Task Contributions",
-                canDeletePublicTeams: "Delete Public Pokémon Teams"
+                canDeletePublicTeams: "Delete Public Pokémon Teams",
+                canManageMoneyGuides: "Manage Money Guides" // New permission
             };
             if(permsContainer) {
                 permsContainer.innerHTML = rolesToManage.map(role => `
@@ -2320,7 +1985,7 @@
                     transaction.delete(oldDocRef);
                 });
 
-                const subcollections = ['pokemon_teams', 'tasks', 'breeding', 'hunts', 'resources'];
+                const subcollections = ['pokemon_teams', 'tasks', 'breeding', 'hunts', 'resources', 'money_guides']; // Added money_guides
                 for (const sub of subcollections) {
                     const oldSubCollectionRef = collection(db, `team_spaces/${oldId}/${sub}`);
                     const snapshot = await getDocs(oldSubCollectionRef);
@@ -2376,19 +2041,14 @@
                             const userData = userSnap.data();
                             currentUsername = userData.username;
                             currentUserRole = user.uid === SUPERADMIN_UID ? 'Superadmin' : userData.role;
-                            if (user.uid === SUPERADMIN_UID && userData.role !== 'Superadmin') {
-                                await updateDoc(userRef, { role: 'Superadmin' });
-                            }
+                            if (user.uid === SUPERADMIN_UID && userData.role !== 'Superadmin') { await updateDoc(userRef, { role: 'Superadmin' }); }
                             userProfileDisplay.textContent = `${currentUsername} (${currentUserRole})`;
                             document.getElementById('admin-panel-btn').style.display = ['Superadmin', 'Admin'].includes(currentUserRole) ? 'block' : 'none';
                             authContainer.classList.add('hidden');
                             appContainer.classList.remove('hidden');
-                            
                             await setupTeamSpace(currentUserId);
-                            
                             await renderOfficialTeamSpaceButton();
                             switchView('dashboard');
-
                         } else { await signOut(auth); }
                     } else {
                         authContainer.classList.remove('hidden');
@@ -2399,48 +2059,39 @@
             });
 
             document.getElementById('login-form').onsubmit = async (e) => { e.preventDefault(); showLoading(true); const email = e.target.email.value; const password = e.target.password.value; try { await signInWithEmailAndPassword(auth, email, password); } catch (error) { alert(error.message); } finally { showLoading(false); } };
-            
-            document.getElementById('signup-form').onsubmit = async (e) => {
-                e.preventDefault(); showLoading(true); const email = e.target.signup_email.value; const password = e.target.signup_password.value; const username = e.target.signup_username.value;
-                if (password.length < 6) { alert("Password must be at least 6 characters."); showLoading(false); return; }
-                if (username.length < 3) { alert("Username must be at least 3 characters."); showLoading(false); return; }
-                try {
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, password); const user = userCredential.user;
-                    let role = user.uid === SUPERADMIN_UID ? 'Superadmin' : 'Member';
-                    await setDoc(doc(db, "users", user.uid), { username, email, role });
-                } catch (error) { alert(error.message); } finally { showLoading(false); }
-            };
-            
+            document.getElementById('signup-form').onsubmit = async (e) => { e.preventDefault(); showLoading(true); const email = e.target.signup_email.value; const password = e.target.signup_password.value; const username = e.target.signup_username.value; if (password.length < 6) { alert("Password must be at least 6 characters."); showLoading(false); return; } if (username.length < 3) { alert("Username must be at least 3 characters."); showLoading(false); return; } try { const userCredential = await createUserWithEmailAndPassword(auth, email, password); const user = userCredential.user; let role = user.uid === SUPERADMIN_UID ? 'Superadmin' : 'Member'; await setDoc(doc(db, "users", user.uid), { username, email, role }); } catch (error) { alert(error.message); } finally { showLoading(false); } };
             logoutBtn.onclick = () => signOut(auth);
             document.querySelectorAll('.nav-button').forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
             changeTeamSpaceBtn.addEventListener('click', () => { const newTeamSpaceId = teamSpaceIdInput.value.trim(); if (newTeamSpaceId && newTeamSpaceId !== currentTeamSpaceId) { localStorage.setItem('currentTeamSpaceId', newTeamSpaceId); location.reload(); } });
-            createTeamSpaceBtn.addEventListener('click', () => { 
-                const randomId = `team-${Math.random().toString(36).substring(2, 9)}`;
-                localStorage.setItem('currentTeamSpaceId', randomId);
-                location.reload();
-            });
+            createTeamSpaceBtn.addEventListener('click', () => { const randomId = `team-${Math.random().toString(36).substring(2, 9)}`; localStorage.setItem('currentTeamSpaceId', randomId); location.reload(); });
             modalCancelBtn.addEventListener('click', hideModal);
         });
-
     </script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .tasks-tab-btn.active, .teams-filter-btn.active { color: #0d9488; border-color: #0d9488; }
         .modal-dialog { transition: all 0.3s ease-out; }
-        #app-container > .flex {
-            min-height: 100vh;
-        }
-        aside {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-        aside nav {
-            flex-grow: 1;
-        }
-        .sidebar-bottom {
-            overflow-y: auto;
-        }
+        #app-container > .flex { min-height: 100vh; }
+        aside { display: flex; flex-direction: column; height: 100vh; }
+        aside nav { flex-grow: 1; }
+        .sidebar-bottom { overflow-y: auto; }
+        /* Quill Editor Styles */
+        .ql-toolbar { border-radius: 0.5rem 0.5rem 0 0; background-color: #f9fafb; border-color: #d1d5db; }
+        .ql-container { border-radius: 0 0 0.5rem 0.5rem; border-color: #d1d5db; }
+        .ql-editor { min-height: 250px; }
+        /* Styles for rendered Quill content */
+        .prose { color: #374151; }
+        .prose h1, .prose h2, .prose h3 { font-weight: 700; margin-top: 1.5em; margin-bottom: 0.5em; }
+        .prose p { margin-bottom: 1em; line-height: 1.6; }
+        .prose ul, .prose ol { margin-left: 1.5em; margin-bottom: 1em; }
+        .prose li { margin-bottom: 0.5em; }
+        .prose a { color: #2563eb; text-decoration: underline; }
+        .prose blockquote { border-left: 4px solid #d1d5db; padding-left: 1em; color: #6b7280; font-style: italic; }
+        .prose pre { background-color: #f3f4f6; padding: 1em; border-radius: 0.5rem; }
+        /* Aspect Ratio for video embeds */
+        .aspect-w-16 { position: relative; padding-bottom: 56.25%; }
+        .aspect-h-9 { height: 0; }
+        .aspect-w-16 > iframe { position: absolute; width: 100%; height: 100%; top: 0; left: 0; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -2481,17 +2132,17 @@
         <div id="generic-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 h-full w-full z-50 flex items-center justify-center">
             <div class="modal-dialog bg-white p-8 rounded-lg shadow-xl w-full mx-auto">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 id="generic-modal-title" class="text-2xl font-bold">Modal Title</h3>
+                    <h3 id="generic-modal-title" class="text-2xl font-bold text-gray-800">Modal Title</h3>
                     <button id="generic-modal-close-btn" class="text-gray-500 hover:text-gray-800 font-bold text-2xl">&times;</button>
                 </div>
-                <div id="generic-modal-content" class="max-h-[60vh] overflow-y-auto"></div>
+                <div id="generic-modal-content" class="max-h-[75vh] overflow-y-auto pr-4 -mr-4"></div>
             </div>
         </div>
         
         <!-- Confirmation Modal -->
         <div id="confirmation-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 h-full w-full z-50 flex items-center justify-center">
            <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md mx-auto">
-            <p id="confirmation-modal-message" class="text-xl mb-6 text-center"></p>
+            <p id="confirmation-modal-message" class="text-xl mb-6 text-center text-gray-800"></p>
             <div class="flex justify-center gap-4">
              <button id="confirmation-modal-cancel-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancel</button>
              <button id="confirmation-modal-confirm-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg">Confirm</button>
@@ -2519,10 +2170,7 @@
                 <div class="sidebar-bottom p-4 border-t space-y-3">
                     <div id="user-profile-display" class="text-sm text-center text-gray-600 font-semibold"></div>
                     <button id="logout-btn" class="w-full text-sm text-red-500 hover:underline">Logout</button>
-                    
-                    <!-- Official Team Space Section -->
                     <div id="official-team-space-container" class="border-t pt-3"></div>
-
                     <div class="border-t pt-3">
                         <h4 class="font-bold mb-2">My Team Spaces</h4>
                         <p class="text-sm text-gray-600 mb-2">Your current Team ID is:</p>
@@ -2535,9 +2183,7 @@
             </aside>
             <!-- Main Content -->
             <main class="flex-1 p-8 overflow-y-auto bg-gray-100">
-                <div id="main-content">
-                    <!-- Dynamic Content Rendered Here -->
-                </div>
+                <div id="main-content"></div>
             </main>
         </div>
     </div>
