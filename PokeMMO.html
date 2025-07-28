@@ -40,7 +40,7 @@
         let teamSpacePermissions = {};
         let unsubscribeListeners = [];
         const usernameCache = {};
-        const SUPERADMIN_UID = "G9MP7oe0cTQsu92SEXB6wqy1nQs1";
+        const SUPERADMIN_UID = "G9MP7oe0cTQsu92SEXB6wqy1nQs1"; // Placeholder Superadmin UID
         let leaderboardChart = null;
         let dashboardChart = null; 
         let quillEditor = null; // For the WYSIWYG editor instance
@@ -71,6 +71,7 @@
         // --- Core Functions ---
         function showLoading(show) { if(loadingOverlay) loadingOverlay.style.display = show ? 'flex' : 'none'; }
         
+        // Generic modal for forms and detailed views
         function showGenericModal(title, content, formSubmitHandler = null, size = '2xl') {
             const modalDialog = genericModal.querySelector('.modal-dialog');
             modalDialog.classList.remove('max-w-md', 'max-w-2xl', 'max-w-4xl', 'max-w-6xl'); // Added 6xl
@@ -92,13 +93,33 @@
         
         function hideGenericModal() {
             genericModal.classList.add('hidden');
-            if (quillEditor) { // Destroy Quill instance on modal close
+            // Destroy Quill instance on modal close if it exists
+            if (quillEditor) { 
                 quillEditor = null;
             }
         }
         
+        // Confirmation modal (simple yes/no dialog)
+        const modalMessage = document.getElementById('confirmation-modal-message');
+        const modalConfirmBtn = document.getElementById('confirmation-modal-confirm-btn');
+        const modalCancelBtn = document.getElementById('confirmation-modal-cancel-btn');
+
+        function showModal(message, onConfirm) {
+            modalMessage.textContent = message;
+            confirmationModal.classList.remove('hidden');
+            modalConfirmBtn.onclick = () => {
+                onConfirm();
+                hideModal();
+            };
+        }
+        function hideModal() {
+            confirmationModal.classList.add('hidden');
+            modalConfirmBtn.onclick = null; // Clear handler to prevent accidental re-trigger
+        }
+
         function checkPermission(action) {
             if (currentUserRole === 'Superadmin') return true;
+            // Access permissions dynamically from the loaded teamSpacePermissions
             return teamSpacePermissions[currentUserRole]?.[action] === true;
         }
 
@@ -116,10 +137,17 @@
         async function seedDefaultResources(teamSpaceId) {
             const batch = writeBatch(db);
             const pokedexRef = doc(db, `team_spaces/${teamSpaceId}/resources/pokedex`);
-            const moneyRef = doc(db, `team_spaces/${teamSpaceId}/resources/moneyGuide`);
             const evRef = doc(db, `team_spaces/${teamSpaceId}/resources/evHotspots`);
-            batch.set(pokedexRef, { entries: { "Garchomp": { name: "Garchomp", stats: "108/130/95/80/85/102", abilities: "Sand Veil, Rough Skin (HA)", builds: [{ name: "Swords Dance", nature: "Jolly", evs: "252 Atk / 4 SpD / 252 Spe", moves: "Swords Dance, Earthquake, Outrage"}] } }});
-            // DEPRECATED: Old money guide seed data removed. New section uses its own collection.
+            
+            // Pokedex Seed Data
+            batch.set(pokedexRef, { 
+                entries: [
+                    { id: "garchomp", name: "Garchomp", type1: "Dragon", type2: "Ground", stats: "108/130/95/80/85/102", abilities: "Sand Veil, Rough Skin (HA)", builds: [{ name: "Swords Dance Sweeper", nature: "Jolly", evs: "252 Atk / 4 SpD / 252 Spe", moves: "Swords Dance, Earthquake, Outrage, Dragon Claw"}] },
+                    { id: "gengar", name: "Gengar", type1: "Ghost", type2: "Poison", stats: "60/65/60/130/75/110", abilities: "Cursed Body", builds: [{ name: "Special Attacker", nature: "Timid", evs: "252 SpA / 4 SpD / 252 Spe", moves: "Shadow Ball, Sludge Bomb, Dazzling Gleam, Protect"}] }
+                ]
+            });
+            
+            // EV Hotspots Seed Data
             batch.set(evRef, { 
                 entries: [
                     { id: "hp_marill", stat: 'HP', pokemon: 'Marill (x5)', location: 'Route 114, Hoenn (Surf)', yield: '10 HP' },
@@ -138,8 +166,8 @@
             const button = document.querySelector(`.nav-button[data-view="${viewName}"]`);
             if (button) button.classList.add('bg-teal-600', 'text-white');
             if (mainContent) mainContent.innerHTML = '';
-            unsubscribeListeners.forEach(unsub => unsub());
-            unsubscribeListeners = [];
+            unsubscribeListeners.forEach(unsub => unsub()); // Unsubscribe old listeners
+            unsubscribeListeners = []; // Clear the array
             const viewRenderers = { 
                 'dashboard': renderDashboard, 
                 'pokemon-teams': renderPokemonTeams, 
@@ -148,7 +176,7 @@
                 'hunts': renderShinyHunts, 
                 'pokedex': renderPokedex, 
                 'ev-hotspots': renderEvHotspots, 
-                'money-guide': renderMoneyGuide, // <-- ADDED
+                'money-guide': renderMoneyGuide,
                 'admin-panel': renderAdminPanel 
             };
             if (viewRenderers[viewName]) viewRenderers[viewName]();
@@ -161,9 +189,11 @@
             }
         }
 
+        // Sets up the current team space or creates a default one
         function setupTeamSpace(userId) {
             return new Promise(async (resolve, reject) => {
                 let teamSpaceId = localStorage.getItem('currentTeamSpaceId');
+                // Default to "ExCorp" if no team space ID is set
                 if (!teamSpaceId) {
                     teamSpaceId = "ExCorp";
                     localStorage.setItem('currentTeamSpaceId', teamSpaceId);
@@ -171,73 +201,81 @@
                 
                 const teamSpaceRef = doc(db, "team_spaces", teamSpaceId);
                 
-                // --- NEW PERMISSIONS FOR MONEY GUIDES ---
+                // Define default permissions for different roles
                 const defaultPermissions = {
-                    Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true, canManageMoneyGuides: true },
-                    Staff: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false, canManageMoneyGuides: true },
-                    Member: { canCreatePublicTeams: true, canVoteOnTeams: true, canManagePokemonTeams: false, canManageTasks: false, canManageProjects: false, canEditResources: false, canMarkStaffPick: false, canVerifyContributions: false, canDeletePublicTeams: false, canManageMoneyGuides: false }
+                    Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true, canManageMoneyGuides: true, canManagePokedex: true, canEditAnyTeamName: true },
+                    Staff: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false, canManageMoneyGuides: true, canManagePokedex: false, canEditAnyTeamName: true },
+                    Member: { canCreatePublicTeams: true, canVoteOnTeams: true, canManagePokemonTeams: false, canManageTasks: false, canManageProjects: false, canEditResources: false, canMarkStaffPick: false, canVerifyContributions: false, canDeletePublicTeams: false, canManageMoneyGuides: false, canManagePokedex: false, canEditAnyTeamName: false }
                 };
 
                 try {
                     const teamSpaceSnap = await getDoc(teamSpaceRef);
 
                     if (!teamSpaceSnap.exists()) {
+                        // If team space doesn't exist, create it
                         await setDoc(teamSpaceRef, {
-                            owner: userId,
+                            owner: userId, // Set the current user as the owner
                             name: teamSpaceId === "ExCorp" ? "ExCorp Main Team" : "New Team Space",
-                            members: [userId],
+                            members: [userId], // Add the current user as a member
                             createdAt: serverTimestamp(),
-                            permissions: defaultPermissions
+                            permissions: defaultPermissions // Set default permissions
                         });
+                        // Seed default resources if it's the "ExCorp" team space
                         if (teamSpaceId === "ExCorp") {
                             await seedDefaultResources(teamSpaceId);
                         }
                     }
                 
-                    currentTeamSpaceId = teamSpaceId;
-                    teamSpaceIdDisplay.textContent = currentTeamSpaceId;
-                    teamSpaceIdInput.value = currentTeamSpaceId;
+                    currentTeamSpaceId = teamSpaceId; // Update global state
+                    teamSpaceIdDisplay.textContent = currentTeamSpaceId; // Update UI
+                    teamSpaceIdInput.value = currentTeamSpaceId; // Update UI
                     
                     let isFirstLoad = true;
+                    // Listen for real-time updates to the team space document
                     const unsub = onSnapshot(teamSpaceRef, async (snap) => {
                         if(snap.exists()) {
                             const loadedData = snap.data();
                             const loadedPermissions = loadedData.permissions || {};
                             
+                            // Merge loaded permissions with default permissions to ensure all actions are defined
                             const finalPermissions = {
                                 Admin: { ...defaultPermissions.Admin, ...loadedPermissions.Admin },
                                 Staff: { ...defaultPermissions.Staff, ...loadedPermissions.Staff },
                                 Member: { ...defaultPermissions.Member, ...loadedPermissions.Member }
                             };
 
-                            teamSpacePermissions = finalPermissions;
+                            teamSpacePermissions = finalPermissions; // Update global permissions state
 
+                            // Self-heal permissions if there's a mismatch (e.g., new permissions added to default config)
                             if (JSON.stringify(finalPermissions) !== JSON.stringify(loadedPermissions)) {
                                 console.log("Permissions mismatch detected. Healing Firestore document.");
                                 await updateDoc(teamSpaceRef, { permissions: finalPermissions }).catch(err => console.error("Error self-healing permissions:", err));
                             }
 
+                            // Add current user to members if not already included
                             if(!loadedData.members?.includes(userId)) {
                                 await updateDoc(teamSpaceRef, { members: arrayUnion(userId) });
                             }
                             
+                            // Resolve the promise on first load, refresh view on subsequent updates
                             if (isFirstLoad) {
                                 isFirstLoad = false;
                                 resolve(); 
                             } else {
-                                refreshCurrentView(); 
+                                refreshCurrentView(); // Refresh the current view to apply new permissions/data
                             }
 
                         } else {
+                            // If team space document is deleted or doesn't exist, prompt user
                             alert(`Team Space with ID "${currentTeamSpaceId}" not found. You can create a new one.`);
-                            localStorage.removeItem('currentTeamSpaceId');
+                            localStorage.removeItem('currentTeamSpaceId'); // Clear invalid ID
                             reject(new Error("Team space not found."));
                         }
                     }, (error) => {
                         console.error("Snapshot listener error:", error);
                         reject(error);
                     });
-                    unsubscribeListeners.push(unsub);
+                    unsubscribeListeners.push(unsub); // Add unsubscribe function to list
                 } catch (error) {
                     console.error("Error in setupTeamSpace:", error);
                     reject(error);
@@ -245,6 +283,7 @@
             });
         }
 
+        // Renders the button to join the official team space if set by a Superadmin
         async function renderOfficialTeamSpaceButton() {
             const settingsRef = doc(db, "system_settings", "official_team_space");
             onSnapshot(settingsRef, (docSnap) => {
@@ -255,15 +294,16 @@
                         <button id="join-official-team-btn" data-id="${id}" class="w-full bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600 font-bold">
                             Join ${name}
                         </button>`;
+                    // Attach click listener for the official team join button
                     document.getElementById('join-official-team-btn').onclick = (e) => {
                         const officialId = e.currentTarget.dataset.id;
                         if (officialId !== currentTeamSpaceId) {
                             localStorage.setItem('currentTeamSpaceId', officialId);
-                            location.reload();
+                            location.reload(); // Reload to switch team spaces
                         }
                     };
                 } else {
-                    officialTeamSpaceContainer.innerHTML = '';
+                    officialTeamSpaceContainer.innerHTML = ''; // Hide if no official team is set
                 }
             });
         }
@@ -271,6 +311,7 @@
 
         // --- Render Functions ---
         
+        // Renders the main dashboard view
         async function renderDashboard() {
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
@@ -297,7 +338,7 @@
                 </div>
             `;
 
-            // KPIs
+            // KPI Listeners (Active Members, Public/Private Teams, Active Tasks)
             const teamSpaceUnsub = onSnapshot(doc(db, "team_spaces", currentTeamSpaceId), (snap) => { if (snap.exists()) { document.getElementById('kpi-members').textContent = snap.data().members?.length || 0; } });
             unsubscribeListeners.push(teamSpaceUnsub);
             const publicTeamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), where("isPublic", "==", true));
@@ -310,6 +351,7 @@
             const tasksUnsub = onSnapshot(tasksQuery, (snap) => { document.getElementById('kpi-tasks').textContent = snap.size; });
             unsubscribeListeners.push(tasksUnsub);
 
+            // Fetch and display Total Contributions
             const tasksSnapshot = await getDocs(query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`)));
             const contributionPromises = tasksSnapshot.docs.map(taskDoc => getDocs(query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified"))));
             const allContributionsSnapshots = await Promise.all(contributionPromises);
@@ -317,21 +359,22 @@
             document.getElementById('kpi-contributions').textContent = allContributions.length;
             renderDashboardChart(allContributions);
 
-            // FIX: Removed orderBy from this query to prevent index error. Sorting is now done client-side.
+            // Active Task Board (Recently added, not yet completed)
             const activeTasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", false));
             const activeTasksUnsub = onSnapshot(activeTasksQuery, async (snapshot) => {
                 const container = document.getElementById('dashboard-tasks-list'); if (!container) return;
-                // Client-side sorting
+                // Client-side sorting by creation date (latest first)
                 const tasks = snapshot.docs.sort((a,b) => (b.data().createdAt?.toDate() || 0) - (a.data().createdAt?.toDate() || 0)).slice(0, 5);
                 if (tasks.length === 0) { container.innerHTML = `<p class="text-gray-500">No active tasks on the board.</p>`; return; }
                 container.innerHTML = (await Promise.all(tasks.map(async doc => { const task = doc.data(); const creator = await getUsername(task.createdBy); return `<div class="p-3 bg-gray-50 rounded-md border"><p class="font-semibold text-gray-800">${task.text}</p><p class="text-xs text-gray-500">Added by ${creator} ${task.reward ? `| Reward: <span class="font-bold text-yellow-600">${task.reward}</span>` : ''}</p></div>`; }))).join('');
             });
             unsubscribeListeners.push(activeTasksUnsub);
 
+            // Recently Added Teams
             const recentTeamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), orderBy("createdAt", "desc"));
             const recentTeamsUnsub = onSnapshot(recentTeamsQuery, async (snapshot) => {
                 const container = document.getElementById('dashboard-teams-list'); if (!container) return;
-                const teams = snapshot.docs.slice(0, 3);
+                const teams = snapshot.docs.slice(0, 3); // Display top 3 recent teams
                 if (teams.length === 0) { container.innerHTML = `<p class="text-gray-500">No teams have been created yet.</p>`; return; }
                 container.innerHTML = (await Promise.all(teams.map(async doc => { const team = doc.data(); const creator = await getUsername(team.createdBy); const score = (team.upvotes?.length || 0) - (team.downvotes?.length || 0); return `<div class="border-b pb-3"><div class="flex justify-between items-center"><p class="font-bold text-gray-900">${team.name}</p><span class="text-sm font-bold ${score >= 0 ? 'text-green-600' : 'text-red-600'}">${score > 0 ? '+' : ''}${score}</span></div><p class="text-sm text-gray-600">${team.purpose}</p><p class="text-xs text-gray-400 mt-1">By ${creator}</p></div>`; }))).join('');
             });
@@ -341,14 +384,15 @@
             const moneyGuideQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/money_guides`), orderBy("createdAt", "desc"));
             const moneyGuideUnsub = onSnapshot(moneyGuideQuery, (snapshot) => {
                 const container = document.getElementById('dashboard-guides-list'); if (!container) return;
-                const guides = snapshot.docs.slice(0, 3).map(d => d.data());
+                const guides = snapshot.docs.slice(0, 3).map(d => d.data()); // Display top 3 recent guides
                 if (guides.length === 0) { container.innerHTML = `<p class="text-gray-500">No money guides added yet.</p>`; return; }
                 container.innerHTML = guides.map(guide => `<div class="border-b pb-3"><p class="font-bold text-gray-900">${guide.title}</p><p class="text-sm text-gray-600">${guide.reward}</p></div>`).join('');
             });
             unsubscribeListeners.push(moneyGuideUnsub);
             
+            // Top Contributors Leaderboard
             const overallScores = allContributions.reduce((acc, c) => { acc[c.userId] = (acc[c.userId] || 0) + 1; return acc; }, {});
-            const sortedContributors = Object.entries(overallScores).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const sortedContributors = Object.entries(overallScores).sort((a, b) => b[1] - a[1]).slice(0, 5); // Top 5 contributors
             const leaderboardContainer = document.getElementById('dashboard-leaderboard');
             if (leaderboardContainer) {
                 if (sortedContributors.length === 0) { leaderboardContainer.innerHTML = `<p class="text-gray-500">No contributions have been verified yet.</p>`; } 
@@ -356,20 +400,106 @@
             }
         }
 
+        // Renders the weekly contribution breakdown chart on the dashboard
         function renderDashboardChart(contributions) {
             const ctx = document.getElementById('dashboard-chart')?.getContext('2d');
             if (!ctx) return;
-            if (dashboardChart) dashboardChart.destroy();
-            const now = new Date(); const lastWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+            if (dashboardChart) dashboardChart.destroy(); // Destroy existing chart before creating a new one
+
+            const now = new Date(); 
+            const lastWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6); // Data for last 7 days including today
+
             const weeklyData = {};
-            for (let i = 0; i < 7; i++) { const d = new Date(lastWeek); d.setDate(d.getDate() + i); const label = d.toLocaleDateString('en-US', { weekday: 'short' }); weeklyData[label] = { PokeYen: 0, Items: 0 }; }
-            contributions.forEach(c => { if (c.timestamp) { const contribDate = c.timestamp.toDate(); if (contribDate >= lastWeek && contribDate <= now) { const label = contribDate.toLocaleDateString('en-US', { weekday: 'short' }); if (weeklyData[label]) { weeklyData[label].PokeYen += c.items?.PokeYen || 0; weeklyData[label].Items += Object.values(c.items).reduce((sum, val, key) => key !== 'PokeYen' ? sum + val : sum, 0); } } } });
-            dashboardChart = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(weeklyData), datasets: [ { label: 'PokeYen Contributed', data: Object.values(weeklyData).map(d => d.PokeYen), backgroundColor: '#F59E0B', borderColor: '#D97706', borderWidth: 1 }, { label: 'Items Contributed (Count)', data: Object.values(weeklyData).map(d => d.Items), backgroundColor: '#10B981', borderColor: '#059669', borderWidth: 1 } ] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true } }, plugins: { tooltip: { mode: 'index', intersect: false, }, legend: { position: 'bottom', } } } });
+            // Initialize data for each day of the last week
+            for (let i = 0; i < 7; i++) { 
+                const d = new Date(lastWeek); 
+                d.setDate(d.getDate() + i); 
+                const label = d.toLocaleDateString('en-US', { weekday: 'short' }); 
+                weeklyData[label] = { PokeYen: 0, Items: 0 }; 
+            }
+            
+            // Aggregate contributions by day
+            contributions.forEach(c => { 
+                if (c.timestamp) { 
+                    const contribDate = c.timestamp.toDate(); 
+                    if (contribDate >= lastWeek && contribDate <= now) { 
+                        const label = contribDate.toLocaleDateString('en-US', { weekday: 'short' }); 
+                        if (weeklyData[label]) { 
+                            weeklyData[label].PokeYen += c.items?.PokeYen || 0; 
+                            // Sum all item quantities (excluding PokeYen)
+                            weeklyData[label].Items += Object.values(c.items).reduce((sum, val, key) => key !== 'PokeYen' ? sum + val : sum, 0); 
+                        } 
+                    } 
+                } 
+            });
+
+            dashboardChart = new Chart(ctx, { 
+                type: 'bar', 
+                data: { 
+                    labels: Object.keys(weeklyData), 
+                    datasets: [ 
+                        { 
+                            label: 'PokeYen Contributed', 
+                            data: Object.values(weeklyData).map(d => d.PokeYen), 
+                            backgroundColor: '#F59E0B', // Amber
+                            borderColor: '#D97706', 
+                            borderWidth: 1 
+                        }, 
+                        { 
+                            label: 'Items Contributed (Count)', 
+                            data: Object.values(weeklyData).map(d => d.Items), 
+                            backgroundColor: '#10B981', // Teal
+                            borderColor: '#059669', 
+                            borderWidth: 1 
+                        } 
+                    ] 
+                }, 
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    scales: { 
+                        x: { stacked: true, grid: { display: false } }, 
+                        y: { stacked: true, beginAtZero: true } 
+                    }, 
+                    plugins: { 
+                        tooltip: { mode: 'index', intersect: false, }, 
+                        legend: { position: 'bottom', } 
+                    } 
+                } 
+            });
         }
 
-        function formatIVs(ivString) { if (!ivString) return 'N/A'; const parts = ivString.split(/[\s/,-]+/); return parts.map(part => { const num = parseInt(part, 10); if (!isNaN(num)) { let colorClass = 'text-red-600'; if (num === 31) colorClass = 'text-green-600 font-bold'; else if (num >= 25) colorClass = 'text-yellow-500'; else if (num >= 20) colorClass = 'text-orange-500'; return `<span class="${colorClass}">${num}</span>`; } return `<span>${part.toUpperCase()}</span>`; }).join('/'); }
-        function formatEVs(evString) { if (!evString) return 'N/A'; return evString.replace(/(\d+)\s*([a-zA-Z]+)/g, (match, num, stat) => { const numVal = parseInt(num, 10); const statUpper = stat.toUpperCase(); if (numVal === 252) { return `<span class="text-green-600 font-bold">${numVal}</span> ${statUpper}`; } return `${numVal} ${statUpper}`; }); }
+        // Helper for formatting IVs with color coding
+        function formatIVs(ivString) { 
+            if (!ivString) return 'N/A'; 
+            const parts = ivString.split(/[\s/,-]+/); 
+            return parts.map(part => { 
+                const num = parseInt(part, 10); 
+                if (!isNaN(num)) { 
+                    let colorClass = 'text-red-600'; // Default for low IVs
+                    if (num === 31) colorClass = 'text-green-600 font-bold'; // Perfect IVs
+                    else if (num >= 25) colorClass = 'text-yellow-500'; // High IVs
+                    else if (num >= 20) colorClass = 'text-orange-500'; // Decent IVs
+                    return `<span class="${colorClass}">${num}</span>`; 
+                } 
+                return `<span>${part.toUpperCase()}</span>`; // Handle 'X' or non-numeric
+            }).join('/'); 
+        }
 
+        // Helper for formatting EVs with color coding (252 highlighted)
+        function formatEVs(evString) { 
+            if (!evString) return 'N/A'; 
+            return evString.replace(/(\d+)\s*([a-zA-Z]+)/g, (match, num, stat) => { 
+                const numVal = parseInt(num, 10); 
+                const statUpper = stat.toUpperCase(); 
+                if (numVal === 252) { 
+                    return `<span class="text-green-600 font-bold">${numVal}</span> ${statUpper}`; 
+                } 
+                return `${numVal} ${statUpper}`; 
+            }); 
+        }
+
+        // Renders the Pokemon Teams Locker view
         function renderPokemonTeams() {
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
@@ -393,17 +523,21 @@
                         </div>
                     </nav>
                 </div>
-                <div id="pokemon-teams-container" class="space-y-6"></div>`;
+                <div id="pokemon-teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>`; // Use grid for team cards
 
             let currentFilter = 'all';
-            let publicSortOrder = 'votes'; // 'votes' or 'latest'
-            const q = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`));
+            let publicSortOrder = 'votes'; // Default sort order for public teams
+            
+            const q = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`)); // Main query for all teams
 
+            // Function to render teams based on current filter and sort
             const renderFilteredTeams = (snapshot) => {
                 const container = document.getElementById('pokemon-teams-container');
                 if (!container) return;
+
                 let teams = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 
+                // Apply filters
                 if (currentFilter === 'staff') teams = teams.filter(t => t.isStaffPick);
                 else if (currentFilter === 'public') teams = teams.filter(t => t.isPublic);
                 else if (currentFilter === 'personal') teams = teams.filter(t => t.createdBy === currentUserId);
@@ -420,30 +554,35 @@
                         teams.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
                     }
                 } else {
+                    // Default sort for non-public filters: latest first
                     teams.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
                 }
 
                 if(teams.length === 0) {
-                    container.innerHTML = `<p class="text-gray-500 text-center mt-8">No Pokémon teams match the filter.</p>`;
+                    container.innerHTML = `<p class="text-gray-500 text-center col-span-full mt-8">No Pokémon teams match the filter.</p>`;
                     return;
                 }
                 Promise.all(teams.map(renderPokemonTeamCard)).then(html => {
                     container.innerHTML = html.join('');
-                    attachPokemonTeamCardListeners();
+                    attachPokemonTeamCardListeners(); // Attach listeners after rendering
                 });
             };
 
+            // Subscribe to real-time updates for teams
             const unsub = onSnapshot(q, renderFilteredTeams);
             unsubscribeListeners.push(unsub);
 
+            // Filter button event listeners
             document.querySelectorAll('.teams-filter-btn').forEach(btn => btn.onclick = (e) => {
                 document.querySelectorAll('.teams-filter-btn').forEach(b => b.classList.remove('active', 'text-teal-600', 'border-teal-600'));
                 e.target.classList.add('active', 'text-teal-600', 'border-teal-600');
                 currentFilter = e.target.dataset.filter;
+                // Show/hide sort options based on filter
                 document.getElementById('public-sort-options').classList.toggle('hidden', currentFilter !== 'public');
-                onSnapshot(q, renderFilteredTeams);
+                renderFilteredTeams(q._snapshot); // Re-render with current snapshot data immediately
             });
 
+            // Sort button event listeners
             document.querySelectorAll('.sort-btn').forEach(btn => btn.onclick = (e) => {
                 publicSortOrder = e.target.dataset.sort;
                 document.querySelectorAll('.sort-btn').forEach(b => {
@@ -452,51 +591,62 @@
                     b.classList.toggle('bg-gray-200', b.dataset.sort !== publicSortOrder);
                     b.classList.toggle('text-gray-700', b.dataset.sort !== publicSortOrder);
                 });
-                onSnapshot(q, renderFilteredTeams);
+                renderFilteredTeams(q._snapshot); // Re-render with current snapshot data immediately
             });
 
+            // "New Pokemon Team" button click handler
             document.getElementById('add-pokemon-team-btn').onclick = () => {
                 let formHtml = `
                     <form class="space-y-4">
                         <input type="text" name="name" placeholder="Team Name" class="w-full p-2 border rounded-lg" required>
                         <input type="text" name="purpose" placeholder="Purpose (e.g., Hoenn E4, Kanto Story)" class="w-full p-2 border rounded-lg">`;
+                // Only show public checkbox if user has permission
                 if(checkPermission('canCreatePublicTeams')) {
                     formHtml += `<label class="flex items-center gap-2"><input type="checkbox" name="isPublic"> Make Public</label>`;
                 }
                 formHtml += `<button type="submit" class="w-full bg-teal-500 text-white p-3 rounded-lg font-bold hover:bg-teal-600">Create Team</button></form>`;
                 
                 showGenericModal('New Pokémon Team', formHtml, async (e) => {
+                    // Only add team if name is provided
                     if(e.target.name.value) {
                         await addDoc(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), { 
                             name: e.target.name.value, 
                             purpose: e.target.purpose.value,
                             pokemon: [], 
-                            creatorNotes: "", // New field
-                            comments: [], // Renamed from 'notes'
+                            creatorNotes: "", // Initialize creator notes
+                            comments: [], // Initialize comments
                             createdBy: currentUserId, 
                             createdAt: serverTimestamp(), 
                             isStaffPick: false,
-                            isPublic: checkPermission('canCreatePublicTeams') ? e.target.isPublic.checked : false,
+                            isPublic: checkPermission('canCreatePublicTeams') ? e.target.isPublic.checked : false, // Check permission for public flag
                             upvotes: [],
                             downvotes: []
                         });
+                        hideGenericModal(); // Close modal after creation
                     }
                 });
             };
         }
 
+        // Renders a single collapsed Pokemon Team Card for the locker view
         async function renderPokemonTeamCard(team) {
             const teamId = team.id;
             const creatorName = await getUsername(team.createdBy);
-            const upvotes = team.upvotes?.length || 0;
-            const downvotes = team.downvotes?.length || 0;
-            const score = upvotes - downvotes;
-            const userVote = team.upvotes?.includes(currentUserId) ? 'up' : team.downvotes?.includes(currentUserId) ? 'down' : null;
-            const isStaffPlus = ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
+            const score = (team.upvotes?.length || 0) - (team.downvotes?.length || 0);
 
+            // Redacted team if score is too low
+            if (score <= -15) { 
+                return `
+                    <div data-action="view-team-details" data-team-id="${teamId}" class="bg-black p-6 rounded-lg shadow border-4 border-red-800 text-center relative cursor-pointer hover:shadow-2xl transition-all">
+                        <h3 class="text-2xl font-bold text-gray-400 mb-2">[REDACTED BY ORDER OF STAFF]</h3>
+                        <p class="text-gray-500 mt-2">This team build was deemed a public nuisance.</p>
+                        <p class="text-600 mt-1 text-sm">Original creator: ${creatorName}</p>
+                    </div>`;
+            }
+
+            // Determine border color based on score
             let borderClass = "border-gray-200";
-            if (score <= -15) { /* Redacted */ }
-            else if (score < 0) borderClass = "border-red-500 border-2";
+            if (score < 0) borderClass = "border-red-500 border-2";
             else if (score >= 100) borderClass = "border-yellow-400 border-4 p-1 bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-500 shadow-2xl";
             else if (score >= 75) borderClass = "border-purple-500 border-4 shadow-xl";
             else if (score >= 60) borderClass = "border-indigo-500 border-2 shadow-lg";
@@ -504,11 +654,64 @@
             else if (score >= 25) borderClass = "border-green-500 border-2 shadow-md";
             else if (score >= 10) borderClass = "border-green-300 border-2";
 
+            const pokemonPreviewHtml = (team.pokemon || []).slice(0, 6).map(p => { // Show up to 6 Pokemon
+                return `
+                    <div class="flex flex-col items-center justify-center p-1 rounded-md text-center text-xs font-semibold ${p.isShiny ? 'bg-yellow-100' : 'bg-gray-100'}">
+                        ${p.isShiny ? '<span class="text-yellow-500">⭐</span>' : ''}
+                        ${p.isAlpha ? '<span class="text-red-500">α</span>' : ''}
+                        <span class="text-gray-700">${p.species || 'N/A'}</span>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div data-action="view-team-details" data-team-id="${teamId}" class="bg-white p-5 rounded-lg shadow transition-all ${borderClass} cursor-pointer hover:shadow-lg">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-xl font-bold">${team.name}</h3>
+                            ${team.purpose ? `<p class="text-md font-semibold text-teal-700">${team.purpose}</p>` : ''}
+                            <p class="text-sm text-gray-500">Created by ${creatorName}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                             ${team.isPublic ? `<span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded-full">Public</span>` : `<span class="bg-gray-100 text-gray-800 text-xs font-bold px-2 py-0.5 rounded-full">Private</span>`}
+                            ${team.isStaffPick ? `<span class="bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-0.5 rounded-full">Staff Pick ⭐</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mb-4">
+                        ${pokemonPreviewHtml}
+                    </div>
+                    <div class="flex justify-between items-center border-t pt-4">
+                        <p class="text-sm text-gray-600">${(team.pokemon || []).length} Pokémon</p>
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg font-bold">${score}</span>
+                            <span class="text-sm text-gray-500">Votes</span>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // Displays the full details of a Pokemon team in a modal
+        async function showPokemonTeamDetailModal(teamId) {
+            showLoading(true);
+            const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
+            const teamSnap = await getDoc(teamRef);
+            if (!teamSnap.exists()) {
+                alert("Team not found.");
+                showLoading(false);
+                return;
+            }
+
+            const team = { id: teamSnap.id, ...teamSnap.data() };
+            const creatorName = await getUsername(team.createdBy);
+            const isStaffPlus = ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
+            const canManageTeam = team.createdBy === currentUserId || isStaffPlus;
+            const canTogglePublic = (team.createdBy === currentUserId && checkPermission('canCreatePublicTeams')) || isStaffPlus;
+
             const pokemonHtml = (await Promise.all((team.pokemon || []).map(async (p, i) => {
                 const addedByName = await getUsername(p.addedBy);
-                const canEditPokemon = team.createdBy === currentUserId || isStaffPlus;
+                const canEditPokemon = team.createdBy === currentUserId || isStaffPlus; // Owner or Staff+ can edit
 
-                let wrapperClasses = 'rounded-lg'; // Default wrapper
+                let wrapperClasses = 'rounded-lg'; // Default wrapper for border/background
                 if (p.isShiny && p.isAlpha) {
                     wrapperClasses += ' p-1 bg-gradient-to-r from-yellow-400 to-red-500';
                 } else if (p.isShiny) {
@@ -517,6 +720,7 @@
                     wrapperClasses += ' p-1 bg-red-500';
                 }
 
+                // Inner content of the Pokemon card
                 const contentHtml = `
                     <div class="bg-gray-50 p-4 rounded-md relative group h-full">
                         ${canEditPokemon ? `
@@ -541,19 +745,20 @@
                         <p class="text-xs text-gray-400 mt-2 pt-2 border-t">Added by ${addedByName}</p>
                     </div>`;
 
+                // Apply wrapper classes if Shiny/Alpha
                 if (p.isShiny || p.isAlpha) {
                     return `<div class="${wrapperClasses}">${contentHtml}</div>`;
                 } else {
-                    return `<div class="bg-gray-50 p-4 rounded-md border relative group">${contentHtml.replace('<div class="bg-gray-50 p-4 rounded-md relative group h-full">', '<div>')}</div>`;
+                    return contentHtml; // No special wrapper if not Shiny/Alpha
                 }
-
             }))).join('');
 
             const commentsHtml = (await Promise.all((team.comments || []).map(async (comment, index) => {
                 const authorName = await getUsername(comment.authorId);
-                const canDeleteComment = comment.authorId === currentUserId || isStaffPlus;
+                // Staff+ can delete any comment, owner can delete their own
+                const canDeleteComment = comment.authorId === currentUserId || isStaffPlus; 
                 const commentTimestamp = comment.createdAt ? new Date(comment.createdAt).toLocaleString() : '';
-                const isOp = comment.authorId === team.createdBy;
+                const isOp = comment.authorId === team.createdBy; // Check if comment author is team creator
 
                 return `<div class="text-sm bg-gray-100 p-2 rounded group relative">
                             <div class="flex justify-between items-start">
@@ -566,67 +771,72 @@
                         </div>`;
             }))).join('');
 
-
-            if (score <= -15) {
-                return `
-                    <div class="bg-black p-6 rounded-lg shadow border-4 border-red-800 text-center relative">
-                        ${checkPermission('canDeletePublicTeams') ? `<button data-team-id="${teamId}" data-is-public="${team.isPublic}" class="delete-pokemon-team-btn absolute top-2 right-2 text-white hover:text-red-400">Delete Team</button>` : ''}
-                        <h3 class="text-2xl font-bold text-gray-400">[REDACTED BY ORDER OF STAFF]</h3>
-                        <p class="text-gray-500 mt-4">This team build was deemed a public nuisance.</p>
-                        <p class="text-gray-600 mt-2 text-sm">Original creator: ${creatorName}</p>
-                    </div>`;
+            // Redacted view for extremely low-voted teams
+            if (team.score <= -15) { // Score threshold for redaction
+                showGenericModal(team.name, `
+                    <div class="bg-black p-6 rounded-lg text-center relative text-white">
+                        <h3 class="text-2xl font-bold text-gray-400 mb-2">[REDACTED BY ORDER OF STAFF]</h3>
+                        <p class="text-gray-500 mt-2">This team build was deemed a public nuisance.</p>
+                        <p class="text-600 mt-1 text-sm">Original creator: ${creatorName}</p>
+                    </div>`, null, 'md');
+                showLoading(false);
+                return;
             }
 
-            const canManageTeam = team.createdBy === currentUserId || isStaffPlus;
-            const canTogglePublic = (team.createdBy === currentUserId && checkPermission('canCreatePublicTeams')) || isStaffPlus;
-
-            return `
-                <div class="bg-white p-5 rounded-lg shadow transition-all ${borderClass}">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <h3 class="text-2xl font-bold">${team.name}</h3>
-                            ${team.purpose ? `<p class="text-md font-semibold text-teal-700">${team.purpose}</p>` : ''}
-                            <p class="text-sm text-gray-500">Created by ${creatorName}</p>
+            // Main modal content structure
+            const modalContentHtml = `
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-2xl font-bold text-gray-800" id="team-modal-name">${team.name}</h3>
+                        ${canManageTeam || checkPermission('canEditAnyTeamName') ? `
+                            <button data-team-id="${teamId}" class="edit-team-name-btn text-blue-500 hover:text-blue-700 text-sm">✏️ Edit</button>
+                        ` : ''}
+                    </div>
+                    <div class="flex items-center gap-4">
+                        ${canTogglePublic ? `
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" data-team-id="${teamId}" class="public-toggle-checkbox" ${team.isPublic ? 'checked' : ''}> Public
+                        </label>` : ''}
+                        ${checkPermission('canMarkStaffPick') && team.isPublic ? `<label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" data-team-id="${teamId}" class="staff-pick-checkbox" ${team.isStaffPick ? 'checked' : ''}> Staff Pick</label>` : ''}
+                        ${canManageTeam || checkPermission('canDeletePublicTeams') ? `<button data-team-id="${teamId}" data-is-public="${team.isPublic}" class="delete-pokemon-team-btn text-red-500 hover:text-red-700">Delete Team</button>` : ''}
+                    </div>
+                </div>
+                ${team.purpose ? `<p class="text-md font-semibold text-teal-700 mb-4">${team.purpose}</p>` : ''}
+                <p class="text-sm text-gray-500 mb-4">Created by ${creatorName}</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    ${pokemonHtml}
+                    ${(team.pokemon || []).length < 6 && canManageTeam ? `<button data-team-id="${teamId}" class="add-pokemon-btn flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold p-3 rounded-md transition">+</button>` : ''}
+                </div>
+                <div class="border-t pt-4 flex flex-col lg:flex-row justify-between items-start gap-6">
+                    <div class="w-full lg:w-1/2">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-semibold text-gray-800">Creator's Notes</h4>
+                            ${canManageTeam ? `<button data-team-id="${teamId}" class="edit-creator-notes-btn text-sm text-blue-600 hover:underline">Edit</button>` : ''}
                         </div>
-                        <div class="flex items-center gap-4">
-                            ${canTogglePublic ? `
-                            <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                <input type="checkbox" data-team-id="${teamId}" class="public-toggle-checkbox" ${team.isPublic ? 'checked' : ''}> Public
-                            </label>` : ''}
-                            ${checkPermission('canMarkStaffPick') && team.isPublic ? `<label class="flex items-center gap-2 text-sm"><input type="checkbox" data-team-id="${teamId}" class="staff-pick-checkbox" ${team.isStaffPick ? 'checked' : ''}> Staff Pick</label>` : ''}
-                            ${canManageTeam ? `<button data-team-id="${teamId}" class="delete-pokemon-team-btn text-red-500 hover:text-red-700">Delete Team</button>` : ''}
+                        <div data-team-id="${teamId}" class="creator-notes-display text-sm bg-gray-50 p-3 rounded-md min-h-[100px] whitespace-pre-wrap">${team.creatorNotes || '<span class="text-gray-400">No notes from the creator yet.</span>'}</div>
+                    </div>
+                    <div class="w-full lg:w-1/2">
+                        <h4 class="font-semibold text-gray-800 mb-2">Comments</h4>
+                        <div class="space-y-2 max-h-40 overflow-y-auto mb-2 pr-2">${commentsHtml}</div>
+                        <div class="flex gap-2">
+                            <input type="text" data-team-id="${teamId}" class="comment-input flex-grow border rounded p-2 text-sm" placeholder="Add a comment...">
+                            <button data-team-id="${teamId}" class="add-comment-btn bg-gray-600 text-white px-4 rounded-lg text-sm">Post</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                        ${pokemonHtml}
-                        ${(team.pokemon || []).length < 6 && canManageTeam ? `<button data-team-id="${teamId}" class="add-pokemon-btn flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold p-3 rounded-md transition">+</button>` : ''}
-                    </div>
-                    <div class="border-t pt-4 flex flex-col md:flex-row justify-between items-start gap-6">
-                         <div class="w-full md:w-1/2">
-                            <div class="flex justify-between items-center mb-2">
-                                <h4 class="font-semibold">Creator's Notes</h4>
-                                ${canManageTeam ? `<button data-team-id="${teamId}" class="edit-creator-notes-btn text-sm text-blue-600 hover:underline">Edit</button>` : ''}
-                            </div>
-                            <div data-team-id="${teamId}" class="creator-notes-display text-sm bg-gray-50 p-3 rounded-md min-h-[100px] whitespace-pre-wrap">${team.creatorNotes || '<span class="text-gray-400">No notes from the creator yet.</span>'}</div>
-                        </div>
-                        <div class="w-full md:w-1/2">
-                            <h4 class="font-semibold mb-2">Comments</h4>
-                            <div class="space-y-2 max-h-40 overflow-y-auto mb-2 pr-2">${commentsHtml}</div>
-                            <div class="flex gap-2">
-                                <input type="text" data-team-id="${teamId}" class="comment-input flex-grow border rounded p-2 text-sm" placeholder="Add a comment...">
-                                <button data-team-id="${teamId}" class="add-comment-btn bg-gray-600 text-white px-4 rounded-lg text-sm">Post</button>
-                            </div>
-                        </div>
-                        ${checkPermission('canVoteOnTeams') ? `
-                        <div class="flex items-center gap-2 w-full md:w-auto justify-center">
-                            <button data-team-id="${teamId}" data-vote="up" class="vote-btn p-2 rounded-full ${userVote === 'up' ? 'bg-green-500 text-white' : 'bg-gray-200 hover:bg-green-200'}">▲</button>
-                            <span class="font-bold text-lg">${score}</span>
-                            <button data-team-id="${teamId}" data-vote="down" class="vote-btn p-2 rounded-full ${userVote === 'down' ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-red-200'}">▼</button>
-                        </div>` : ''}
-                    </div>
-                </div>`;
+                    ${checkPermission('canVoteOnTeams') ? `
+                    <div class="flex items-center gap-2 w-full lg:w-auto justify-center lg:justify-end border-t lg:border-t-0 lg:pt-0 pt-4">
+                        <button data-team-id="${teamId}" data-vote="up" class="vote-btn p-2 rounded-full ${team.upvotes?.includes(currentUserId) ? 'bg-green-500 text-white' : 'bg-gray-200 hover:bg-green-200'}">▲</button>
+                        <span class="font-bold text-lg text-gray-800">${(team.upvotes?.length || 0) - (team.downvotes?.length || 0)}</span>
+                        <button data-team-id="${teamId}" data-vote="down" class="vote-btn p-2 rounded-full ${team.downvotes?.includes(currentUserId) ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-red-200'}">▼</button>
+                    </div>` : ''}
+                </div>
+            `;
+            showGenericModal(`${team.name} Details`, modalContentHtml, null, '4xl'); // Show modal with all details
+            attachPokemonTeamCardListeners(); // Re-attach listeners for dynamically loaded content
+            showLoading(false);
         }
 
+        // Handles adding or editing a Pokemon within a team
         function showPokemonFormModal(title, teamId, pokemon = {}, index = -1) {
             const isEditing = index > -1;
             const formHtml = `
@@ -684,17 +894,27 @@
                         pokemon: arrayUnion(pokemonData) 
                     });
                 }
-                hideGenericModal();
+                hideGenericModal(); // Close modal after saving
+                showPokemonTeamDetailModal(teamId); // Re-open detail modal to refresh
             });
             genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
         }
 
+        // Attach all event listeners related to Pokemon Team Cards (for both locker view and detail modal)
         function attachPokemonTeamCardListeners() {
+            // For the collapsed cards in the main locker view
+            document.querySelectorAll('[data-action="view-team-details"]').forEach(btn => btn.onclick = e => {
+                const teamId = e.currentTarget.dataset.teamId;
+                showPokemonTeamDetailModal(teamId);
+            });
+
+            // Add Pokemon button (within detail modal)
             document.querySelectorAll('.add-pokemon-btn').forEach(btn => btn.onclick = e => {
                 const teamId = e.target.dataset.teamId;
                 showPokemonFormModal('Add Pokémon to Team', teamId);
             });
 
+            // Edit Pokemon button (within detail modal)
             document.querySelectorAll('.edit-pokemon-btn').forEach(btn => btn.onclick = async e => {
                 const { teamId, pokemonIndex } = e.currentTarget.dataset;
                 const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
@@ -705,12 +925,14 @@
                 }
             });
             
+            // Public toggle checkbox (within detail modal)
             document.querySelectorAll('.public-toggle-checkbox').forEach(box => box.onchange = async e => {
                 const teamId = e.target.dataset.teamId;
                 const isPublic = e.target.checked;
                 await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId), { isPublic });
             });
 
+            // Add comment button (within detail modal)
             document.querySelectorAll('.add-comment-btn').forEach(btn => btn.onclick = async e => {
                 const teamId = e.target.dataset.teamId;
                 const input = document.querySelector(`.comment-input[data-team-id="${teamId}"]`);
@@ -724,7 +946,9 @@
                         await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId), { 
                             comments: arrayUnion(commentData) 
                         }); 
-                        input.value = ''; 
+                        input.value = ''; // Clear input field
+                        // Re-open detail modal to refresh comments
+                        showPokemonTeamDetailModal(teamId); 
                     } catch (error) {
                         console.error("Error adding comment:", error);
                         alert("Could not add comment.");
@@ -732,6 +956,7 @@
                 }
             });
 
+            // Delete comment button (within detail modal)
             document.querySelectorAll('.delete-comment-btn').forEach(btn => btn.onclick = async e => {
                 const { teamId, commentIndex } = e.target.dataset;
                 const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
@@ -742,8 +967,10 @@
                     if (commentToRemove) {
                         const canDeleteComment = commentToRemove.authorId === currentUserId || ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
                         if (canDeleteComment) {
-                            showModal('Delete this comment?', () => {
-                                updateDoc(teamRef, { comments: arrayRemove(commentToRemove) });
+                            showModal('Delete this comment?', async () => {
+                                await updateDoc(teamRef, { comments: arrayRemove(commentToRemove) });
+                                // Re-open detail modal to refresh comments
+                                showPokemonTeamDetailModal(teamId);
                             });
                         } else {
                             alert("You don't have permission to delete this comment.");
@@ -752,6 +979,7 @@
                 }
             });
 
+            // Edit creator notes button (within detail modal)
             document.querySelectorAll('.edit-creator-notes-btn').forEach(btn => btn.onclick = async e => {
                 const teamId = e.target.dataset.teamId;
                 const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
@@ -772,30 +1000,79 @@
                     const newNotes = event.target.creatorNotes.value;
                     await updateDoc(teamRef, { creatorNotes: newNotes });
                     hideGenericModal();
+                    showPokemonTeamDetailModal(teamId); // Re-open detail modal to refresh
                 });
                 genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
             });
 
+            // Edit Team Name and Purpose button (within detail modal)
+            document.querySelectorAll('.edit-team-name-btn').forEach(btn => btn.onclick = async e => {
+                const teamId = e.target.dataset.teamId;
+                const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
+                const teamSnap = await getDoc(teamRef);
+                if (!teamSnap.exists()) return;
+
+                const teamData = teamSnap.data();
+                const formHtml = `
+                    <form class="space-y-4">
+                        <input type="text" name="teamName" placeholder="Team Name" value="${teamData.name || ''}" class="w-full p-2 border rounded-lg" required>
+                        <input type="text" name="teamPurpose" placeholder="Purpose (e.g., Hoenn E4, Kanto Story)" value="${teamData.purpose || ''}" class="w-full p-2 border rounded-lg">
+                        <div class="flex justify-end gap-4 pt-4 border-t">
+                            <button type="button" class="generic-modal-close-btn bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancel</button>
+                            <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-6 rounded-lg">Save Changes</button>
+                        </div>
+                    </form>
+                `;
+                showGenericModal('Edit Team Details', formHtml, async (event) => {
+                    const newName = event.target.teamName.value;
+                    const newPurpose = event.target.teamPurpose.value;
+                    await updateDoc(teamRef, { name: newName, purpose: newPurpose });
+                    hideGenericModal();
+                    showPokemonTeamDetailModal(teamId); // Re-open detail modal to refresh
+                });
+                genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
+            });
+
+            // Delete Pokemon Team button (within detail modal and main view)
             document.querySelectorAll('.delete-pokemon-team-btn').forEach(btn => btn.onclick = e => {
                 const teamId = e.target.dataset.teamId;
                 const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
-                showModal('Delete this entire Pokémon team?', () => deleteDoc(teamRef));
+                const isPublicTeam = e.target.dataset.isPublic === 'true'; // Get public status from dataset
+                
+                // Permission check for deletion
+                const canDelete = (team.createdBy === currentUserId) || checkPermission('canDeletePublicTeams');
+
+                if (canDelete) {
+                    showModal('Delete this entire Pokémon team?', async () => {
+                        await deleteDoc(teamRef);
+                        hideGenericModal(); // Close detail modal if open
+                    });
+                } else {
+                    alert("You don't have permission to delete this team.");
+                }
             });
             
+            // Delete individual Pokemon from team (within detail modal)
             document.querySelectorAll('.delete-pokemon-btn').forEach(btn => btn.onclick = async e => {
                 const { teamId, pokemonIndex } = e.currentTarget.dataset;
                 const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId); 
                 const teamSnap = await getDoc(teamRef); 
                 const pokemonToRemove = teamSnap.data().pokemon[pokemonIndex];
-                showModal(`Delete ${pokemonToRemove.species}?`, () => updateDoc(teamRef, { pokemon: arrayRemove(pokemonToRemove) }));
+                showModal(`Delete ${pokemonToRemove.species}?`, async () => {
+                    await updateDoc(teamRef, { pokemon: arrayRemove(pokemonToRemove) });
+                    showPokemonTeamDetailModal(teamId); // Re-open detail modal to refresh
+                });
             });
 
+            // Staff Pick checkbox (within detail modal)
             document.querySelectorAll('.staff-pick-checkbox').forEach(box => box.onchange = async e => await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, e.target.dataset.teamId), { isStaffPick: e.target.checked }));
 
+            // Voting buttons (upvote/downvote)
             document.querySelectorAll('.vote-btn').forEach(btn => btn.onclick = async e => {
                 const { teamId, vote } = e.currentTarget.dataset;
                 const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
                 
+                // Superadmin can vote multiple times for testing
                 if (currentUserRole === 'Superadmin') {
                     if (vote === 'up') {
                         await updateDoc(teamRef, { upvotes: arrayUnion(currentUserId + Math.random()) });
@@ -805,6 +1082,7 @@
                     return;
                 }
 
+                // Standard voting logic: user can only upvote or downvote once
                 await runTransaction(db, async (transaction) => {
                     const teamDoc = await transaction.get(teamRef);
                     if (!teamDoc.exists()) return;
@@ -820,17 +1098,18 @@
                     let newDownvotes = [...downvotes];
 
                     if (vote === 'up') {
-                        if (hasUpvoted) { newUpvotes = newUpvotes.filter(id => id !== currentUserId); } 
-                        else { newUpvotes.push(currentUserId); newDownvotes = newDownvotes.filter(id => id !== currentUserId); }
+                        if (hasUpvoted) { newUpvotes = newUpvotes.filter(id => id !== currentUserId); } // Remove upvote
+                        else { newUpvotes.push(currentUserId); newDownvotes = newDownvotes.filter(id => id !== currentUserId); } // Add upvote, remove downvote if exists
                     } else if (vote === 'down') {
-                        if (hasDownvoted) { newDownvotes = newDownvotes.filter(id => id !== currentUserId); } 
-                        else { newDownvotes.push(currentUserId); newUpvotes = newUpvotes.filter(id => id !== currentUserId); }
+                        if (hasDownvoted) { newDownvotes = newDownvotes.filter(id => id !== currentUserId); } // Remove downvote
+                        else { newDownvotes.push(currentUserId); newUpvotes = newUpvotes.filter(id => id !== currentUserId); } // Add downvote, remove upvote if exists
                     }
                     transaction.update(teamRef, { upvotes: newUpvotes, downvotes: newDownvotes });
                 });
             });
         }
 
+        // Renders the Task Board view
         function renderTasks() {
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
@@ -846,12 +1125,13 @@
                 </div>
                 <div id="tasks-content"></div>`;
 
+            // Function to render content based on selected tab
             const renderTabContent = (tab) => {
                 const container = document.getElementById('tasks-content');
                 if (!container) return;
                 
                 let q;
-                unsubscribeListeners.forEach(unsub => unsub());
+                unsubscribeListeners.forEach(unsub => unsub()); // Clear previous listeners for this section
                 unsubscribeListeners = [];
 
                 if (tab === 'shared' || tab === 'completed') {
@@ -872,14 +1152,15 @@
                         const taskContainer = document.getElementById('shared-tasks-container');
                         if (!taskContainer) return;
                         
+                        // Sort documents by creation date (latest first)
                         const docs = snapshot.docs.sort((a, b) => (b.data().createdAt?.toDate() || 0) - (a.data().createdAt?.toDate() || 0));
 
                         taskContainer.innerHTML = docs.length === 0
                             ? `<p class="text-gray-500 text-center mt-8">No ${isCompleted ? 'completed' : 'active'} tasks.</p>` 
                             : (await Promise.all(docs.map(isCompleted ? renderCompletedTaskCard : renderTaskCard))).join('');
-                        attachTaskCardListeners();
+                        attachTaskCardListeners(); // Re-attach listeners for newly rendered cards
                     });
-                    unsubscribeListeners.push(unsub);
+                    unsubscribeListeners.push(unsub); // Add unsubscribe to list
                 } else if (tab === 'personal') {
                     container.innerHTML = `
                         <div class="bg-white p-6 rounded-lg shadow mb-6">
@@ -905,10 +1186,16 @@
                     renderLeaderboard(container);
                 }
             };
-            document.querySelectorAll('.tasks-tab-btn').forEach(btn => btn.onclick = (e) => { document.querySelectorAll('.tasks-tab-btn').forEach(b => b.classList.remove('text-teal-600', 'border-teal-600')); e.target.classList.add('text-teal-600', 'border-teal-600'); renderTabContent(e.target.dataset.tab); });
-            renderTabContent('shared');
+            // Tab navigation click handlers
+            document.querySelectorAll('.tasks-tab-btn').forEach(btn => btn.onclick = (e) => { 
+                document.querySelectorAll('.tasks-tab-btn').forEach(b => b.classList.remove('text-teal-600', 'border-teal-600')); 
+                e.target.classList.add('text-teal-600', 'border-teal-600'); 
+                renderTabContent(e.target.dataset.tab); 
+            });
+            renderTabContent('shared'); // Initial render
         }
 
+        // Displays modal for creating new shared tasks
         function showNewTaskModal() {
             const formHtml = `
                 <form id="add-task-form-modal" class="space-y-4">
@@ -934,6 +1221,7 @@
                          <select name="recurrencePeriod" id="recurrencePeriod" class="p-1 border rounded-lg hidden">
                             <option value="daily">Daily</option>
                             <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
                          </select>
                     </div>
                     <button type="submit" class="w-full bg-teal-500 text-white p-3 rounded-lg font-bold hover:bg-teal-600">Create Task</button>
@@ -951,7 +1239,7 @@
                     createdAt: serverTimestamp(),
                     isRecurring: form.isRecurring.checked,
                     recurrencePeriod: form.isRecurring.checked ? form.recurrencePeriod.value : null,
-                    lastReset: form.isRecurring.checked ? serverTimestamp() : null,
+                    lastReset: form.isRecurring.checked ? serverTimestamp() : null, // Track last reset for recurring tasks
                 };
                 if (taskData.type === 'goal') {
                     taskData.goalItems = [];
@@ -968,12 +1256,15 @@
                     });
                 }
                 await addDoc(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), taskData);
+                hideGenericModal(); // Close modal after adding
             }, 'md');
 
             const modalForm = document.getElementById('add-task-form-modal');
+            // Toggle visibility of goal-specific fields
             modalForm.querySelector('select[name="type"]').onchange = (e) => {
                 modalForm.querySelector('#goal-fields').classList.toggle('hidden', e.target.value !== 'goal');
             };
+            // Add new goal item input fields dynamically
             modalForm.querySelector('#add-goal-item-btn').onclick = () => {
                 const container = modalForm.querySelector('#goal-items-container');
                 const newItemHtml = `
@@ -983,11 +1274,13 @@
                     </div>`;
                 container.insertAdjacentHTML('beforeend', newItemHtml);
             };
+            // Toggle recurrence period dropdown
             modalForm.querySelector('#isRecurring').onchange = (e) => {
                 modalForm.querySelector('#recurrencePeriod').classList.toggle('hidden', !e.target.checked);
             };
         }
 
+        // Displays modal for creating new personal tasks
         function showNewPersonalTaskModal() {
             const formHtml = `
                 <form id="add-personal-task-form-modal" class="space-y-4">
@@ -1016,7 +1309,7 @@
                     completed: false,
                     createdBy: currentUserId,
                     createdAt: serverTimestamp(),
-                    goalItems: []
+                    goalItems: [] // Initialize goal items array
                 };
 
                 const itemNames = form.querySelectorAll('input[name="goalItemName"]');
@@ -1032,9 +1325,11 @@
                 });
 
                 await addDoc(collection(db, `users/${currentUserId}/tasks`), taskData);
+                hideGenericModal(); // Close modal after adding
             }, 'md');
 
             const modalForm = document.getElementById('add-personal-task-form-modal');
+            // Add new personal goal item input fields dynamically
             modalForm.querySelector('#add-personal-goal-item-btn').onclick = () => {
                 const container = modalForm.querySelector('#personal-goal-items-container');
                 const newItemHtml = `
@@ -1046,12 +1341,14 @@
             };
         }
         
+        // Renders a single shared task card
         async function renderTaskCard(doc) {
             const task = doc.data();
             const taskId = doc.id;
             const creatorName = await getUsername(task.createdBy);
             
             let contentHtml = '';
+            // Render goal-specific content for 'goal' type tasks
             if (task.type === 'goal') {
                 contentHtml += `<div class="mt-4 space-y-3">`;
                 (task.goalItems || []).forEach((item, index) => {
@@ -1080,6 +1377,7 @@
                 </div>`;
             }
 
+            // Render contribution log section
             let logHtml = `<div class="mt-4 border-t pt-4">
                 <h4 class="font-semibold mb-2">Contribution Log</h4>
                 <div id="log-${taskId}" class="space-y-2 max-h-48 overflow-y-auto pr-2">
@@ -1087,10 +1385,11 @@
                 </div>
             </div>`;
             
+            // Real-time listener for contributions to this specific task
             const contributionsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskId}/contributions`), orderBy('timestamp', 'desc'));
             const unsub = onSnapshot(contributionsQuery, async (snapshot) => {
                 const logContainer = document.getElementById(`log-${taskId}`);
-                if (!logContainer) return;
+                if (!logContainer) return; // Exit if container doesn't exist (e.g., task was deleted)
 
                 const contributions = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
                 if (contributions.length === 0) {
@@ -1099,7 +1398,7 @@
                     logContainer.innerHTML = (await Promise.all(contributions.map(async c => {
                         const contributorName = await getUsername(c.userId);
                         const contributionTime = c.timestamp ? new Timestamp(c.timestamp.seconds, c.timestamp.nanoseconds).toDate().toLocaleString() : '...';
-                        const itemEntries = Object.entries(c.items).map(([key, val]) => `${val.toLocaleString()} ${key}`).join(', ');
+                        const itemEntries = Object.entries(c.items).map(([key, val]) => `${val.toLocaleString()} ${key}`).join(', '); // Format contribution items
                         return `
                             <div class="text-sm p-2 rounded ${c.status === 'verified' ? 'bg-green-50' : 'bg-yellow-50'}">
                                 <div class="flex justify-between items-center">
@@ -1112,9 +1411,9 @@
                             </div>`;
                     }))).join('');
                 }
-                attachTaskCardListeners();
+                attachTaskCardListeners(); // Re-attach listeners after log updates
             });
-            unsubscribeListeners.push(unsub);
+            unsubscribeListeners.push(unsub); // Add unsubscribe to list
 
 
             return `
@@ -1126,7 +1425,9 @@
                         </div>
                         <div class="flex items-center gap-2">
                              ${task.isRecurring ? `<span class="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded-full">${task.recurrencePeriod}</span>` : ''}
-                             ${checkPermission('canManageTasks') ? `<button data-task-id="${taskId}" class="delete-task-btn text-red-500 hover:text-red-700">&times;</button>` : ''}
+                             ${checkPermission('canManageTasks') ? `
+                                <button data-task-id="${taskId}" class="edit-task-btn text-blue-500 hover:text-blue-700">✏️</button>
+                                <button data-task-id="${taskId}" class="delete-task-btn text-red-500 hover:text-red-700">&times;</button>` : ''}
                         </div>
                     </div>
                     ${task.details ? `<p class="text-gray-700 mt-2 p-2 bg-gray-50 rounded">${task.details}</p>` : ''}
@@ -1136,11 +1437,13 @@
                     ${checkPermission('canManageTasks') ? `
                         <div class="mt-4 pt-4 border-t flex justify-end">
                             <button data-task-id="${taskId}" class="task-complete-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Mark as Complete</button>
+                            ${task.isRecurring ? `<button data-task-id="${taskId}" class="task-reset-btn bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg ml-2">Reset Progress</button>` : ''}
                         </div>
                     ` : ''}
                 </div>`;
         }
         
+        // Renders a single completed task card
         async function renderCompletedTaskCard(doc) {
             const task = doc.data();
             const taskId = doc.id;
@@ -1159,11 +1462,13 @@
             `;
         }
 
+        // Renders a single personal task card
         async function renderPersonalTaskCard(doc) {
             const task = doc.data();
             const taskId = doc.id;
             
             let contentHtml = '';
+            // Render goal-specific content for personal tasks
             if (task.goalItems && task.goalItems.length > 0) {
                 contentHtml += `<div class="mt-4 space-y-3">`;
                 task.goalItems.forEach((item) => {
@@ -1208,6 +1513,7 @@
                 </div>`;
         }
         
+        // Attaches listeners for personal task cards
         function attachPersonalTaskCardListeners() {
             document.querySelectorAll('.personal-task-complete-btn').forEach(btn => {
                 btn.onclick = async (e) => {
@@ -1248,7 +1554,7 @@
                                 transaction.update(taskRef, { goalItems: newGoalItems });
                             }
                         });
-                        input.value = '';
+                        input.value = ''; // Clear input field
                     } catch (error) {
                         console.error("Failed to log personal progress:", error);
                         alert("Could not log progress.");
@@ -1257,8 +1563,9 @@
             });
         }
         
+        // Attaches listeners for shared task cards
         function attachTaskCardListeners() {
-            // Shared Task Listeners
+            // Mark task as complete button
             document.querySelectorAll('.task-complete-btn').forEach(el => el.onclick = async e => {
                 if (checkPermission('canManageTasks')) {
                     try {
@@ -1267,11 +1574,134 @@
                 }
             });
 
+            // Reset recurring task progress
+            document.querySelectorAll('.task-reset-btn').forEach(el => el.onclick = async e => {
+                if (checkPermission('canManageTasks')) {
+                    const taskId = e.target.dataset.taskId;
+                    const taskRef = doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, taskId);
+                    showModal('Are you sure you want to reset this recurring task\'s progress?', async () => {
+                        await runTransaction(db, async (transaction) => {
+                            const taskDoc = await transaction.get(taskRef);
+                            if (!taskDoc.exists()) return;
+
+                            const taskData = taskDoc.data();
+                            const updatedGoalItems = (taskData.goalItems || []).map(item => ({ ...item, progress: 0 }));
+                            transaction.update(taskRef, {
+                                goalItems: updatedGoalItems,
+                                lastReset: serverTimestamp(),
+                                completed: false // Mark as incomplete after reset
+                            });
+                        });
+                    });
+                }
+            });
+
+            // Edit task button
+            document.querySelectorAll('.edit-task-btn').forEach(btn => btn.onclick = async e => {
+                if (checkPermission('canManageTasks')) {
+                    const taskId = e.target.dataset.taskId;
+                    const taskRef = doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, taskId);
+                    const taskSnap = await getDoc(taskRef);
+                    if (!taskSnap.exists()) return;
+                    const task = taskSnap.data();
+
+                    const formHtml = `
+                        <form id="edit-task-form-modal" class="space-y-4">
+                            <input type="text" name="text" placeholder="Task Title" class="w-full p-2 border rounded-lg" value="${task.text || ''}" required>
+                            <textarea name="details" placeholder="Details & Instructions..." class="w-full p-2 border rounded-lg h-24">${task.details || ''}</textarea>
+                            <input type="text" name="reward" placeholder="Reward / Incentive" class="w-full p-2 border rounded-lg" value="${task.reward || ''}">
+                            <select name="type" class="w-full p-2 border rounded-lg">
+                                <option value="checklist" ${task.type === 'checklist' ? 'selected' : ''}>Simple Checklist Task</option>
+                                <option value="goal" ${task.type === 'goal' ? 'selected' : ''}>Collaborative Goal</option>
+                            </select>
+                            <div id="goal-fields" class="${task.type === 'goal' ? '' : 'hidden'} space-y-2">
+                                <div id="goal-items-container">
+                                    ${(task.goalItems || []).map(item => `
+                                        <div class="flex gap-2 items-center mt-2">
+                                            <input type="text" name="goalItemName" placeholder="Item Name" class="flex-grow p-2 border rounded-lg" value="${item.name || ''}">
+                                            <input type="number" name="goalItemTarget" placeholder="Target" class="w-28 p-2 border rounded-lg" value="${item.target || ''}">
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <button type="button" id="add-goal-item-btn" class="text-sm text-teal-600 hover:underline">+ Add another item</button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" name="isRecurring" id="isRecurring" ${task.isRecurring ? 'checked' : ''}>
+                                <label for="isRecurring">Is this a recurring task?</label>
+                                <select name="recurrencePeriod" id="recurrencePeriod" class="p-1 border rounded-lg ${task.isRecurring ? '' : 'hidden'}">
+                                    <option value="daily" ${task.recurrencePeriod === 'daily' ? 'selected' : ''}>Daily</option>
+                                    <option value="weekly" ${task.recurrencePeriod === 'weekly' ? 'selected' : ''}>Weekly</option>
+                                    <option value="monthly" ${task.recurrencePeriod === 'monthly' ? 'selected' : ''}>Monthly</option>
+                                </select>
+                            </div>
+                            <div class="flex justify-end gap-4 pt-4 border-t">
+                                <button type="button" class="generic-modal-close-btn bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancel</button>
+                                <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-6 rounded-lg">Save Changes</button>
+                            </div>
+                        </form>
+                    `;
+                    showGenericModal('Edit Task', formHtml, async (event) => {
+                        const form = event.target;
+                        const updatedTaskData = {
+                            text: form.text.value,
+                            details: form.details.value,
+                            reward: form.reward.value,
+                            type: form.type.value,
+                            isRecurring: form.isRecurring.checked,
+                            recurrencePeriod: form.isRecurring.checked ? form.recurrencePeriod.value : null,
+                            // Preserve createdAt, createdBy, completed status
+                        };
+                        if (updatedTaskData.type === 'goal') {
+                            updatedTaskData.goalItems = [];
+                            const itemNames = form.querySelectorAll('input[name="goalItemName"]');
+                            const itemTargets = form.querySelectorAll('input[name="goalItemTarget"]');
+                            itemNames.forEach((nameInput, index) => {
+                                if (nameInput.value) {
+                                    // Preserve existing progress if item name matches
+                                    const existingItem = task.goalItems?.find(item => item.name === nameInput.value);
+                                    updatedTaskData.goalItems.push({
+                                        name: nameInput.value,
+                                        target: Number(itemTargets[index].value) || 0,
+                                        progress: existingItem ? existingItem.progress : 0
+                                    });
+                                }
+                            });
+                        } else {
+                            updatedTaskData.goalItems = []; // Clear goal items if type changes from 'goal'
+                        }
+                        await updateDoc(taskRef, updatedTaskData);
+                        hideGenericModal();
+                    }, 'md');
+
+                    // Re-attach dynamic form listeners
+                    const modalForm = document.getElementById('edit-task-form-modal');
+                    modalForm.querySelector('select[name="type"]').onchange = (e) => {
+                        modalForm.querySelector('#goal-fields').classList.toggle('hidden', e.target.value !== 'goal');
+                    };
+                    modalForm.querySelector('#add-goal-item-btn').onclick = () => {
+                        const container = modalForm.querySelector('#goal-items-container');
+                        const newItemHtml = `
+                            <div class="flex gap-2 items-center mt-2">
+                                <input type="text" name="goalItemName" placeholder="Item Name (e.g., Ultra Balls, PokeYen)" class="flex-grow p-2 border rounded-lg">
+                                <input type="number" name="goalItemTarget" placeholder="Target" class="w-28 p-2 border rounded-lg">
+                            </div>`;
+                        container.insertAdjacentHTML('beforeend', newItemHtml);
+                    };
+                    modalForm.querySelector('#isRecurring').onchange = (e) => {
+                        modalForm.querySelector('#recurrencePeriod').classList.toggle('hidden', !e.target.checked);
+                    };
+                    genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
+                }
+            });
+
+            // Delete task button
             if (checkPermission('canManageTasks')) {
                 document.querySelectorAll('.delete-task-btn').forEach(btn => btn.onclick = () => {
                     showModal('Delete this task?', () => deleteDoc(doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, btn.dataset.taskId)));
                 });
             }
+
+            // Add contribution button
             document.querySelectorAll('.add-contribution-btn').forEach(btn => btn.onclick = async e => {
                 const taskId = e.target.dataset.taskId;
                 const input = document.querySelector(`.goal-contribution-input[data-task-id="${taskId}"]`);
@@ -1284,12 +1714,13 @@
                         userId: currentUserId,
                         timestamp: serverTimestamp(),
                         items: { [itemName]: value },
-                        status: 'pending'
+                        status: 'pending' // Contributions start as pending
                     });
-                    input.value = '';
+                    input.value = ''; // Clear input field
                 }
             });
 
+            // Verify contribution button (Admin/Staff permission)
             document.querySelectorAll('.verify-contribution-btn').forEach(btn => btn.onclick = async e => {
                 const { taskId, contribId } = e.currentTarget.dataset;
                 showLoading(true);
@@ -1300,12 +1731,13 @@
                     await runTransaction(db, async (transaction) => {
                         const taskDoc = await transaction.get(taskRef);
                         const contribDoc = await transaction.get(contribRef);
-                        if (!taskDoc.exists() || !contribDoc.exists()) return;
+                        if (!taskDoc.exists() || !contribDoc.exists()) return; // Ensure both documents exist
 
                         const taskData = taskDoc.data();
                         const contribData = contribDoc.data();
-                        if (contribData.status === 'verified') return;
+                        if (contribData.status === 'verified') return; // Prevent double verification
 
+                        // Update task's goal progress
                         const newGoalItems = [...taskData.goalItems];
                         Object.entries(contribData.items).forEach(([name, value]) => {
                             const itemIndex = newGoalItems.findIndex(item => item.name === name);
@@ -1314,6 +1746,7 @@
                             }
                         });
 
+                        // Update Firestore documents
                         transaction.update(taskRef, { goalItems: newGoalItems });
                         transaction.update(contribRef, { status: 'verified' });
                     });
@@ -1321,6 +1754,7 @@
                 finally { showLoading(false); }
             });
 
+            // View Breakdown button for completed tasks
             document.querySelectorAll('.view-breakdown-btn').forEach(btn => btn.onclick = async e => {
                 const taskId = e.target.dataset.taskId;
                 const taskRef = doc(db, `team_spaces/${currentTeamSpaceId}/tasks`, taskId);
@@ -1328,17 +1762,19 @@
                 if (!taskSnap.exists()) return;
                 const task = taskSnap.data();
 
+                // Fetch all contributions for this task
                 const contribsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskId}/contributions`));
                 const contribsSnap = await getDocs(contribsQuery);
                 
+                // Aggregate contributions by user
                 const userTotals = {};
                 contribsSnap.docs.forEach(d => {
                     const c = d.data();
-                    if (c.status !== 'verified') return;
+                    if (c.status !== 'verified') return; // Only count verified contributions
                     if (!userTotals[c.userId]) userTotals[c.userId] = {};
-                    Object.entries(c.items).forEach(([name, value]) => {
-                        if (!userTotals[c.userId][name]) userTotals[c.userId][name] = 0;
-                        userTotals[c.userId][name] += value;
+                    Object.entries(c.items).forEach(([item, qty]) => {
+                        if (!userTotals[c.userId][item]) userTotals[c.userId][item] = 0;
+                        userTotals[c.userId][item] += qty;
                     });
                 });
 
@@ -1346,7 +1782,8 @@
                 const userIds = Object.keys(userTotals);
                 if (userIds.length > 0) {
                     breakdownHtml += `<h4 class="font-bold">Top Contributors</h4>`;
-                    const userNames = await Promise.all(userIds.map(getUsername));
+                    const userNames = await Promise.all(userIds.map(getUsername)); // Fetch usernames
+                    // Create sorted list of contributors for display
                     const sortedContributors = userIds.map((id, index) => ({ id, name: userNames[index], totals: userTotals[id] }))
                         .sort((a, b) => Object.values(b.totals).reduce((s, v) => s + v, 0) - Object.values(a.totals).reduce((s, v) => s + v, 0));
 
@@ -1357,30 +1794,14 @@
                     breakdownHtml += `<p>No verified contributions for this task.</p>`;
                 }
                 breakdownHtml += `</div>`;
-                showGenericModal(`Breakdown for: ${task.text}`, breakdownHtml, null, 'md');
+                showGenericModal(`Breakdown for: ${task.text}`, breakdownHtml, null, 'md'); // Display in modal
             });
 
-            // Personal Task Listeners (now handled by its own function)
+            // Personal Task Listeners (now handled by its own function `attachPersonalTaskCardListeners`)
             attachPersonalTaskCardListeners();
         }
         
-        const modalMessage = document.getElementById('confirmation-modal-message');
-        const modalConfirmBtn = document.getElementById('confirmation-modal-confirm-btn');
-        const modalCancelBtn = document.getElementById('confirmation-modal-cancel-btn');
-
-        function showModal(message, onConfirm) {
-            modalMessage.textContent = message;
-            confirmationModal.classList.remove('hidden');
-            modalConfirmBtn.onclick = () => {
-                onConfirm();
-                hideModal();
-            };
-        }
-        function hideModal() {
-            confirmationModal.classList.add('hidden');
-            modalConfirmBtn.onclick = null;
-        }
-        
+        // Renders the leaderboard view
         async function renderLeaderboard(container) {
             container.innerHTML = `
                 <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
@@ -1410,7 +1831,7 @@
                         <div id="leaderboard-inventory" class="space-y-2 max-h-64 overflow-y-auto pr-2">Loading...</div>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow">
-                        <div class="flex justify-between items-center mb-4">
+                         <div class="flex justify-between items-center mb-4">
                             <h3 class="text-xl font-bold text-gray-800">Overall Top Contributors</h3>
                             <button class="text-sm text-blue-600 hover:underline" data-leaderboard-type="overall">See More</button>
                         </div>
@@ -1429,76 +1850,453 @@
                     </div>
                 </div>`;
 
+            // Helper to get PokeYen contribution titles based on rank
             const getPokeyenTitle = (rank) => {
                 const titles = [ "Poké Tycoon", "GTL Baron", "Item Magnate", "Berry Boss", "Charm Collector" ];
                 return titles[rank] || "";
             };
 
+            // Main function to process and display leaderboard data based on period
             const processLeaderboardData = async (period = 'all') => {
+                // Update active period button style
                 document.querySelectorAll('#leaderboard-period-selector button').forEach(b => { b.classList.toggle('bg-white', b.dataset.period === period); b.classList.toggle('text-gray-800', b.dataset.period === period); });
+                
+                // Clear and show loading for all leaderboard sections
                 const containers = { overall: document.getElementById('leaderboard-overall'), pokeyen: document.getElementById('leaderboard-pokeyen'), inventory: document.getElementById('leaderboard-inventory'), rising: document.getElementById('leaderboard-rising') };
                 Object.values(containers).forEach(c => { if(c) c.innerHTML = 'Loading...'; });
                 showLoading(true);
+
                 try {
-                    let startDate = null; const now = new Date();
+                    let startDate = null; 
+                    const now = new Date();
+                    // Determine start date based on selected period
                     if (period === 'day') { startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); } 
                     else if (period === 'week') { startDate = new Date(); startDate.setDate(startDate.getDate() - 7); } 
                     else if (period === 'month') { startDate = new Date(); startDate.setMonth(startDate.getMonth() - 1); }
+
+                    // Fetch all tasks and their contributions
                     const tasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`));
                     const tasksSnapshot = await getDocs(tasksQuery);
-                    let allContributions = [];
-                    const contributionPromises = tasksSnapshot.docs.map(taskDoc => { const contribsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified")); return getDocs(contribsQuery); });
-                    const allContributionsSnapshots = await Promise.all(contributionPromises);
+                    
                     let filteredContributions = [];
-                    allContributionsSnapshots.forEach(snapshot => { snapshot.forEach(doc => { const data = doc.data(); if (startDate) { if (data.timestamp && data.timestamp.toDate() >= startDate) { filteredContributions.push(data); } } else { filteredContributions.push(data); } }); });
+                    const contributionPromises = tasksSnapshot.docs.map(taskDoc => { 
+                        const contribsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified")); 
+                        return getDocs(contribsQuery); 
+                    });
+                    const allContributionsSnapshots = await Promise.all(contributionPromises);
+                    // Filter contributions by date range
+                    allContributionsSnapshots.forEach(snapshot => { 
+                        snapshot.forEach(doc => { 
+                            const data = doc.data(); 
+                            if (startDate) { 
+                                if (data.timestamp && data.timestamp.toDate() >= startDate) { 
+                                    filteredContributions.push(data); 
+                                } 
+                            } else { 
+                                filteredContributions.push(data); 
+                            } 
+                        }); 
+                    });
+
                     const fullData = {};
+
+                    // Calculate Overall Contributions
                     const overallScores = filteredContributions.reduce((acc, c) => { acc[c.userId] = (acc[c.userId] || 0) + 1; return acc; }, {});
                     fullData.overall = Object.entries(overallScores).sort((a, b) => b[1] - a[1]);
                     containers.overall.innerHTML = (await Promise.all(fullData.overall.slice(0, 5).map(async ([userId, score], index) => { const username = await getUsername(userId); return `<div data-user-id="${userId}" data-user-name="${username.toLowerCase()}" class="leaderboard-item flex justify-between items-center p-2 rounded-md transition-all ${index === 0 ? 'bg-yellow-100' : ''}"><span class="font-semibold">${index+1}. ${username}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>` }))).join('') || '<p class="text-gray-500">No data.</p>';
+                    
+                    // Calculate PokeYen Contributions
                     const pokeyenScores = filteredContributions.reduce((acc, c) => { const yen = c.items?.PokeYen || 0; if (yen > 0) { acc[c.userId] = (acc[c.userId] || 0) + yen; } return acc; }, {});
                     fullData.pokeyen = Object.entries(pokeyenScores).sort((a, b) => b[1] - a[1]);
                     containers.pokeyen.innerHTML = (await Promise.all(fullData.pokeyen.slice(0, 5).map(async ([userId, score], index) => { const username = await getUsername(userId); const title = getPokeyenTitle(index); const titleColor = ['text-yellow-500', 'text-gray-400', 'text-orange-400', 'text-green-500', 'text-blue-500'][index] || 'text-gray-500'; return `<div data-user-id="${userId}" data-user-name="${username.toLowerCase()}" class="leaderboard-item flex justify-between items-center p-2 rounded-md transition-all"><span class="font-semibold">${index+1}. ${username} - <em class="font-bold ${titleColor}">${title}</em></span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>` }))).join('') || '<p class="text-gray-500">No PokeYen data.</p>';
+                    
+                    // Calculate Community Inventory
                     const inventory = filteredContributions.reduce((acc, c) => { Object.entries(c.items || {}).forEach(([item, qty]) => { acc[item] = (acc[item] || 0) + qty; }); return acc; }, {});
                     fullData.inventory = Object.entries(inventory).sort((a, b) => b[1] - a[1]);
                     containers.inventory.innerHTML = fullData.inventory.slice(0, 10).map(([item, qty]) => `<div class="flex justify-between text-sm p-1"><span class="text-gray-600">${item}</span><span class="font-semibold">${qty.toLocaleString()}</span></div>`).join('') || '<p class="text-gray-500">No items contributed.</p>';
-                    containers.rising.innerHTML = '<p class="text-gray-500">Feature under development.</p>';
-                    renderLeaderboardCharts(inventory);
+                    
+                    containers.rising.innerHTML = '<p class="text-gray-500">Feature under development.</p>'; // Placeholder for rising stars
+
+                    renderLeaderboardCharts(inventory); // Update chart with current inventory data
+                    // Attach "See More" button listeners
                     document.querySelectorAll('[data-leaderboard-type]').forEach(btn => { btn.onclick = () => showLeaderboardDetailModal(btn.dataset.leaderboardType, fullData); });
-                } catch (error) { console.error("Error building leaderboard:", error); const contentContainer = document.getElementById('leaderboard-content'); if (contentContainer) { contentContainer.innerHTML = '<p class="text-red-500 col-span-full">Could not load leaderboard data. This may be due to a missing database index.</p>'; } } 
+                } catch (error) { 
+                    console.error("Error building leaderboard:", error); 
+                    const contentContainer = document.getElementById('leaderboard-content'); 
+                    if (contentContainer) { contentContainer.innerHTML = '<p class="text-red-500 col-span-full">Could not load leaderboard data. This may be due to a missing database index or network error.</p>'; } 
+                } 
                 finally { showLoading(false); }
             };
             
+            // Event listeners for period selector and search input
             document.getElementById('leaderboard-period-selector').onclick = (e) => { if(e.target.tagName === 'BUTTON') { processLeaderboardData(e.target.dataset.period); } };
-            document.getElementById('leaderboard-search').oninput = (e) => { const searchTerm = e.target.value.toLowerCase(); document.querySelectorAll('.leaderboard-item').forEach(item => { const userName = item.dataset.userName; if (searchTerm && userName.includes(searchTerm)) { item.classList.add('bg-yellow-200', 'ring-2', 'ring-yellow-500'); } else { item.classList.remove('bg-yellow-200', 'ring-2', 'ring-yellow-500'); } }); };
-            processLeaderboardData('all');
+            document.getElementById('leaderboard-search').oninput = (e) => { 
+                const searchTerm = e.target.value.toLowerCase(); 
+                document.querySelectorAll('.leaderboard-item').forEach(item => { 
+                    const userName = item.dataset.userName; 
+                    if (searchTerm && userName && userName.includes(searchTerm)) { // Check for userName existence
+                        item.classList.add('bg-yellow-200', 'ring-2', 'ring-yellow-500'); 
+                    } else { 
+                        item.classList.remove('bg-yellow-200', 'ring-2', 'ring-yellow-500'); 
+                    } 
+                }); 
+            };
+            processLeaderboardData('all'); // Initial load
         }
 
+        // Renders the pie chart for leaderboard inventory breakdown
         function renderLeaderboardCharts(inventoryData) {
             const ctx = document.getElementById('leaderboard-chart')?.getContext('2d');
             if (!ctx) return;
-            if (leaderboardChart) { leaderboardChart.destroy(); }
-            const otherCategoryThreshold = 0.03; const totalItems = Object.values(inventoryData).reduce((sum, val) => sum + val, 0);
-            const chartData = { labels: [], data: [] }; let otherValue = 0;
-            Object.entries(inventoryData).forEach(([item, qty]) => { if ((qty / totalItems) < otherCategoryThreshold) { otherValue += qty; } else { chartData.labels.push(item); chartData.data.push(qty); } });
-            if (otherValue > 0) { chartData.labels.push('Other Items'); chartData.data.push(otherValue); }
-            leaderboardChart = new Chart(ctx, { type: 'pie', data: { labels: chartData.labels, datasets: [{ label: 'Contribution Count', data: chartData.data, backgroundColor: [ '#10B981', '#3B82F6', '#EC4899', '#F59E0B', '#8B5CF6', '#6366F1', '#D946EF', '#0EA5E9', '#F43F5E', '#6B7280' ], hoverOffset: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', } } } });
+            if (leaderboardChart) { leaderboardChart.destroy(); } // Destroy existing chart
+
+            const otherCategoryThreshold = 0.03; // Items less than 3% of total go into 'Other'
+            const totalItems = Object.values(inventoryData).reduce((sum, val) => sum + val, 0);
+            
+            const chartData = { labels: [], data: [] }; 
+            let otherValue = 0;
+            // Aggregate small items into 'Other' category
+            Object.entries(inventoryData).forEach(([item, qty]) => { 
+                if (totalItems > 0 && (qty / totalItems) < otherCategoryThreshold) { 
+                    otherValue += qty; 
+                } else { 
+                    chartData.labels.push(item); 
+                    chartData.data.push(qty); 
+                } 
+            });
+            if (otherValue > 0) { 
+                chartData.labels.push('Other Items'); 
+                chartData.data.push(otherValue); 
+            }
+
+            leaderboardChart = new Chart(ctx, { 
+                type: 'pie', 
+                data: { 
+                    labels: chartData.labels, 
+                    datasets: [{ 
+                        label: 'Contribution Count', 
+                        data: chartData.data, 
+                        backgroundColor: [ // Predefined colors for variety
+                            '#10B981', '#3B82F6', '#EC4899', '#F59E0B', '#8B5CF6', '#6366F1', '#D946EF', '#0EA5E9', '#F43F5E', '#6B7280' 
+                        ], 
+                        hoverOffset: 4 
+                    }] 
+                }, 
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { position: 'right', } 
+                    } 
+                } 
+            });
         }
 
+        // Displays a modal with detailed leaderboard data
         async function showLeaderboardDetailModal(type, fullData) {
-            let title = ''; let data = []; let formatter = async (item, index) => '';
-            if (type === 'overall') { title = 'Overall Top Contributors (All)'; data = fullData.overall; formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>`; } 
-            else if (type === 'pokeyen') { title = 'Most PokeYen Contributed (All)'; data = fullData.pokeyen; formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>`; } 
-            else if (type === 'inventory') { title = 'Community Inventory (All)'; data = fullData.inventory; formatter = async ([item, qty], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${item.toLowerCase()}"><span class="font-semibold">${item}</span><span class="font-bold">${qty.toLocaleString()}</span></div>`; }
-            const listHtml = (await Promise.all(data.map(formatter))).join('');
-            const modalContent = ` <div class="relative mb-4"> <input type="text" id="leaderboard-modal-search" placeholder="Search..." class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-full text-sm"> <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg> </div> <div class="space-y-1 max-h-[50vh] overflow-y-auto pr-2" id="leaderboard-modal-list"> ${listHtml} </div> `;
-            showGenericModal(title, modalContent, null, '2xl');
-            document.getElementById('leaderboard-modal-search').oninput = (e) => { const searchTerm = e.target.value.toLowerCase(); document.querySelectorAll('.leaderboard-modal-item').forEach(item => { const name = item.dataset.userName; item.style.display = name.includes(searchTerm) ? 'flex' : 'none'; }); };
+            let title = ''; 
+            let data = []; 
+            let formatter = async (item, index) => ''; // Function to format each item in the list
+
+            // Determine modal title, data, and formatter based on type
+            if (type === 'overall') { 
+                title = 'Overall Top Contributors (All)'; 
+                data = fullData.overall; 
+                formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-teal-600">${score.toLocaleString()} contributions</span></div>`; 
+            } 
+            else if (type === 'pokeyen') { 
+                title = 'Most PokeYen Contributed (All)'; 
+                data = fullData.pokeyen; 
+                formatter = async ([userId, score], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${(await getUsername(userId)).toLowerCase()}"><span class="font-semibold">${index+1}. ${await getUsername(userId)}</span><span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span></div>`; 
+            } 
+            else if (type === 'inventory') { 
+                title = 'Community Inventory (All)'; 
+                data = fullData.inventory; 
+                formatter = async ([item, qty], index) => `<div class="leaderboard-modal-item flex justify-between items-center p-2" data-user-name="${item.toLowerCase()}"><span class="font-semibold">${item}</span><span class="font-bold">${qty.toLocaleString()}</span></div>`; 
+            }
+            
+            const listHtml = (await Promise.all(data.map(formatter))).join(''); // Generate HTML list
+
+            const modalContent = ` 
+                <div class="relative mb-4"> 
+                    <input type="text" id="leaderboard-modal-search" placeholder="Search..." class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-full text-sm"> 
+                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg> 
+                </div> 
+                <div class="space-y-1 max-h-[50vh] overflow-y-auto pr-2" id="leaderboard-modal-list"> 
+                    ${listHtml} 
+                </div> 
+            `;
+            showGenericModal(title, modalContent, null, '2xl'); // Display modal
+
+            // Add search functionality to the modal's list
+            document.getElementById('leaderboard-modal-search').oninput = (e) => { 
+                const searchTerm = e.target.value.toLowerCase(); 
+                document.querySelectorAll('.leaderboard-modal-item').forEach(item => { 
+                    const name = item.dataset.userName; 
+                    if (searchTerm && name && name.includes(searchTerm)) { // Check for name existence
+                        item.style.display = 'flex'; 
+                    } else { 
+                        item.style.display = 'none'; 
+                    } 
+                }); 
+            };
         }
         
+        // Placeholder for Breeding Projects
         function renderBreedingProjects() { mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Breeding Projects</h2><p class="text-gray-500">Feature coming soon.</p>`; }
+        // Placeholder for Shiny Hunts
         function renderShinyHunts() { mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Shiny Hunts</h2><p class="text-gray-500">Feature coming soon.</p>`; }
-        function renderPokedex() { mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Pokédex & Builds</h2><p class="text-gray-500">Feature coming soon.</p>`; }
         
+        // Renders the Pokedex & Builds view
+        function renderPokedex() {
+            mainContent.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800">Pokédex & Builds</h2>
+                    ${checkPermission('canManagePokedex') ? `<button id="add-pokedex-entry-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">Add Pokémon</button>` : ''}
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow mb-6 flex items-center gap-4">
+                    <div class="relative flex-grow">
+                        <input type="text" id="pokedex-search" placeholder="Search by name, type, or ability..." class="w-full pl-10 pr-4 py-2 border rounded-lg">
+                        <svg class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+                    <div class="flex rounded-md bg-gray-100 p-1" id="pokedex-type-filter">
+                        <button data-type="All" class="type-filter-btn px-3 py-1 text-sm font-semibold rounded-md bg-teal-500 text-white">All Types</button>
+                        ${['Normal', 'Fire', 'Water', 'Grass', 'Electric', 'Ice', 'Fighting', 'Poison', 'Ground', 'Flying', 'Psychic', 'Bug', 'Rock', 'Ghost', 'Dragon', 'Steel', 'Dark', 'Fairy'].map(type => `<button data-type="${type}" class="type-filter-btn px-3 py-1 text-sm font-semibold rounded-md">${type}</button>`).join('')}
+                    </div>
+                </div>
+                <div class="overflow-x-auto bg-white rounded-lg shadow">
+                    <table class="w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3">Pokémon</th>
+                                <th scope="col" class="px-6 py-3">Type</th>
+                                <th scope="col" class="px-6 py-3">Base Stats</th>
+                                <th scope="col" class="px-6 py-3">Abilities</th>
+                                <th scope="col" class="px-6 py-3">Common Builds</th>
+                                ${checkPermission('canManagePokedex') ? `<th scope="col" class="px-6 py-3"><span class="sr-only">Actions</span></th>` : ''}
+                            </tr>
+                        </thead>
+                        <tbody id="pokedex-table-body"></tbody>
+                    </table>
+                </div>
+            `;
+
+            // Fetch and render Pokedex entries
+            const pokedexDocRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`);
+            const unsub = onSnapshot(pokedexDocRef, (docSnap) => { 
+                if (docSnap.exists()) { 
+                    renderPokedexTable(docSnap.data().entries || []); 
+                } else {
+                    document.getElementById('pokedex-table-body').innerHTML = `<tr><td colspan="6" class="text-center py-8 text-gray-500">No Pokédex entries found.</td></tr>`;
+                }
+            });
+            unsubscribeListeners.push(unsub);
+
+            // Add/Edit button for Pokedex
+            if (checkPermission('canManagePokedex')) { 
+                document.getElementById('add-pokedex-entry-btn').onclick = () => showPokedexEntryForm(); 
+            }
+
+            // Search and filter event listeners
+            document.getElementById('pokedex-search').oninput = () => { renderPokedexTable(pokedexDocRef._cachedData?.entries || []); };
+            document.getElementById('pokedex-type-filter').onclick = (e) => { 
+                if (e.target.matches('.type-filter-btn')) { 
+                    document.querySelectorAll('.type-filter-btn').forEach(btn => { btn.classList.remove('bg-teal-500', 'text-white'); }); 
+                    e.target.classList.add('bg-teal-500', 'text-white'); 
+                    renderPokedexTable(pokedexDocRef._cachedData?.entries || []); 
+                } 
+            };
+        }
+
+        // Renders the Pokedex table rows
+        function renderPokedexTable(entries) {
+            const tbody = document.getElementById('pokedex-table-body'); 
+            if (!tbody) return;
+
+            const searchTerm = document.getElementById('pokedex-search').value.toLowerCase();
+            const activeTypeFilter = document.querySelector('.type-filter-btn.bg-teal-500').dataset.type;
+
+            const filteredEntries = entries.filter(entry => { 
+                const matchesSearch = entry.name.toLowerCase().includes(searchTerm) || 
+                                      entry.type1.toLowerCase().includes(searchTerm) || 
+                                      (entry.type2 && entry.type2.toLowerCase().includes(searchTerm)) ||
+                                      entry.abilities.toLowerCase().includes(searchTerm) ||
+                                      (entry.builds || []).some(b => b.name.toLowerCase().includes(searchTerm)); 
+                const matchesFilter = activeTypeFilter === 'All' || entry.type1 === activeTypeFilter || (entry.type2 && entry.type2 === activeTypeFilter); 
+                return matchesSearch && matchesFilter; 
+            });
+
+            if (filteredEntries.length === 0) { 
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-gray-500">No Pokédex entries found matching your criteria.</td></tr>`; 
+                return; 
+            }
+
+            tbody.innerHTML = filteredEntries.map(entry => ` 
+                <tr class="bg-white border-b hover:bg-gray-50"> 
+                    <td class="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">${entry.name}</td> 
+                    <td class="px-6 py-4">${entry.type1}${entry.type2 ? `, ${entry.type2}` : ''}</td> 
+                    <td class="px-6 py-4">${entry.stats}</td> 
+                    <td class="px-6 py-4">${entry.abilities}</td> 
+                    <td class="px-6 py-4">
+                        ${(entry.builds || []).map(b => `
+                            <div class="mb-1"><strong>${b.name}</strong> (${b.nature}, ${b.evs}): ${b.moves}</div>
+                        `).join('')}
+                    </td>
+                    ${checkPermission('canManagePokedex') ? ` 
+                        <td class="px-6 py-4 text-right"> 
+                            <button data-action="edit-pokedex-entry" data-id="${entry.id}" class="font-medium text-blue-600 hover:underline mr-4">Edit</button> 
+                            <button data-action="delete-pokedex-entry" data-id="${entry.id}" class="font-medium text-red-600 hover:underline">Delete</button> 
+                        </td>
+                    ` : ''} 
+                </tr> 
+            `).join('');
+
+            // Attach action listeners for edit/delete buttons
+            if (checkPermission('canManagePokedex')) { 
+                document.querySelectorAll('[data-action="edit-pokedex-entry"]').forEach(btn => btn.onclick = (e) => { 
+                    const entryId = e.target.dataset.id; 
+                    const entry = entries.find(item => item.id === entryId); 
+                    if (entry) showPokedexEntryForm(entry); 
+                }); 
+                document.querySelectorAll('[data-action="delete-pokedex-entry"]').forEach(btn => btn.onclick = (e) => { 
+                    const entryId = e.target.dataset.id; 
+                    showModal(`Are you sure you want to delete this Pokédex entry?`, async () => { 
+                        const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`); 
+                        const docSnap = await getDoc(docRef); 
+                        if (docSnap.exists()) { 
+                            const updatedEntries = docSnap.data().entries.filter(item => item.id !== entryId); 
+                            await updateDoc(docRef, { entries: updatedEntries }); 
+                        } 
+                    }); 
+                }); 
+            }
+        }
+
+        // Displays a form for adding or editing a Pokedex entry
+        function showPokedexEntryForm(entry = {}) {
+            const isEditing = !!entry.id;
+            const allTypes = ['Normal', 'Fire', 'Water', 'Grass', 'Electric', 'Ice', 'Fighting', 'Poison', 'Ground', 'Flying', 'Psychic', 'Bug', 'Rock', 'Ghost', 'Dragon', 'Steel', 'Dark', 'Fairy'];
+
+            const buildsHtml = (entry.builds || []).map((build, index) => `
+                <div class="space-y-2 border p-3 rounded-lg bg-gray-50 relative mt-2 build-item">
+                    <button type="button" class="remove-build-btn absolute top-2 right-2 text-red-500 hover:text-red-700 font-bold">&times;</button>
+                    <input type="text" name="buildName" placeholder="Build Name (e.g., Swords Dance Sweeper)" value="${build.name || ''}" class="w-full p-2 border rounded-lg text-sm">
+                    <input type="text" name="buildNature" placeholder="Nature (e.g., Jolly)" value="${build.nature || ''}" class="w-full p-2 border rounded-lg text-sm">
+                    <input type="text" name="buildEvs" placeholder="EVs (e.g., 252 Atk / 252 Spe)" value="${build.evs || ''}" class="w-full p-2 border rounded-lg text-sm">
+                    <input type="text" name="buildMoves" placeholder="Moves (comma-separated)" value="${(build.moves || []).join(', ') || ''}" class="w-full p-2 border rounded-lg text-sm">
+                </div>
+            `).join('');
+
+            const formHtml = ` 
+                <form class="space-y-4"> 
+                    <input type="hidden" name="id" value="${entry.id || `pkmn-${Date.now()}`}"> 
+                    <div> 
+                        <label class="block text-sm font-medium text-gray-700">Pokémon Name</label> 
+                        <input type="text" name="name" value="${entry.name || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" required> 
+                    </div> 
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Type 1</label> 
+                            <select name="type1" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm"> 
+                                ${allTypes.map(type => `<option value="${type}" ${entry.type1 === type ? 'selected' : ''}>${type}</option>`).join('')} 
+                            </select> 
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Type 2 (Optional)</label> 
+                            <select name="type2" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm"> 
+                                <option value="">None</option>
+                                ${allTypes.map(type => `<option value="${type}" ${entry.type2 === type ? 'selected' : ''}>${type}</option>`).join('')} 
+                            </select> 
+                        </div>
+                    </div>
+                    <div> 
+                        <label class="block text-sm font-medium text-gray-700">Base Stats (HP/Atk/Def/SpA/SpD/Spe)</label> 
+                        <input type="text" name="stats" value="${entry.stats || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., 100/100/100/100/100/100"> 
+                    </div> 
+                    <div> 
+                        <label class="block text-sm font-medium text-gray-700">Abilities (comma-separated, HA for Hidden Ability)</label> 
+                        <input type="text" name="abilities" value="${entry.abilities || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Torrent, Sheer Force (HA)"> 
+                    </div> 
+                    <div class="border-t pt-4">
+                        <h4 class="font-semibold text-gray-800 mb-2">Builds</h4>
+                        <div id="builds-container">${buildsHtml}</div>
+                        <button type="button" id="add-build-btn" class="mt-2 bg-gray-200 hover:bg-gray-300 text-gray-600 text-sm font-bold py-1 px-3 rounded-md">+ Add Build</button>
+                    </div>
+                    <div class="flex justify-end gap-4 pt-4 border-t"> 
+                        <button type="button" class="generic-modal-close-btn bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button> 
+                        <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Add Pokémon'}</button> 
+                    </div> 
+                </form> 
+            `;
+            showGenericModal(isEditing ? 'Edit Pokédex Entry' : 'Add New Pokédex Entry', formHtml, async (e) => {
+                const form = e.target;
+                const newEntry = { 
+                    id: form.id.value, 
+                    name: form.name.value, 
+                    type1: form.type1.value, 
+                    type2: form.type2.value || null, // Allow null for second type
+                    stats: form.stats.value,
+                    abilities: form.abilities.value,
+                    builds: []
+                };
+
+                // Collect builds from the form
+                document.querySelectorAll('.build-item').forEach(buildDiv => {
+                    const build = {
+                        name: buildDiv.querySelector('input[name="buildName"]').value,
+                        nature: buildDiv.querySelector('input[name="buildNature"]').value,
+                        evs: buildDiv.querySelector('input[name="buildEvs"]').value,
+                        moves: buildDiv.querySelector('input[name="buildMoves"]').value.split(',').map(m => m.trim()).filter(Boolean),
+                    };
+                    if (build.name) { // Only add if build name is provided
+                        newEntry.builds.push(build);
+                    }
+                });
+
+                const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) { 
+                    let entries = docSnap.data().entries || []; 
+                    if (isEditing) { 
+                        entries = entries.map(item => item.id === newEntry.id ? newEntry : item); 
+                    } else { 
+                        entries.push(newEntry); 
+                    } 
+                    await updateDoc(docRef, { entries }); 
+                } else {
+                    // If the pokedex document doesn't exist, create it with the first entry
+                    await setDoc(docRef, { entries: [newEntry] });
+                }
+                hideGenericModal();
+            }, '2xl');
+
+            // Add Build button listener
+            document.getElementById('add-build-btn').onclick = () => {
+                const buildsContainer = document.getElementById('builds-container');
+                const newBuildHtml = `
+                    <div class="space-y-2 border p-3 rounded-lg bg-gray-50 relative mt-2 build-item">
+                        <button type="button" class="remove-build-btn absolute top-2 right-2 text-red-500 hover:text-red-700 font-bold">&times;</button>
+                        <input type="text" name="buildName" placeholder="Build Name" class="w-full p-2 border rounded-lg text-sm">
+                        <input type="text" name="buildNature" placeholder="Nature" class="w-full p-2 border rounded-lg text-sm">
+                        <input type="text" name="buildEvs" placeholder="EVs" class="w-full p-2 border rounded-lg text-sm">
+                        <input type="text" name="buildMoves" placeholder="Moves (comma-separated)" class="w-full p-2 border rounded-lg text-sm">
+                    </div>
+                `;
+                buildsContainer.insertAdjacentHTML('beforeend', newBuildHtml);
+                // Re-attach remove build button listeners for newly added row
+                document.querySelectorAll('.remove-build-btn').forEach(btn => {
+                    btn.onclick = (e) => e.target.closest('.build-item').remove();
+                });
+            };
+            // Initial attachment for existing remove build buttons (when modal first opens)
+            document.querySelectorAll('.remove-build-btn').forEach(btn => {
+                btn.onclick = (e) => e.target.closest('.build-item').remove();
+            });
+
+            genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
+        }
+
+        // Renders the EV Hotspots view
         function renderEvHotspots() {
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
@@ -1530,38 +2328,142 @@
                     </table>
                 </div>`;
 
-            const unsub = onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => { if (docSnap.exists()) { renderEvHotspotsTable(docSnap.data().entries || []); } });
+            // Fetch and render EV Hotspot entries
+            const evDocRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`);
+            const unsub = onSnapshot(evDocRef, (docSnap) => { 
+                if (docSnap.exists()) { 
+                    renderEvHotspotsTable(docSnap.data().entries || []); 
+                } else {
+                    document.getElementById('ev-hotspots-table-body').innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-500">No EV hotspots found.</td></tr>`;
+                }
+            });
             unsubscribeListeners.push(unsub);
-            if (checkPermission('canEditResources')) { document.getElementById('add-ev-hotspot-btn').onclick = () => showEvHotspotForm(); }
-            document.getElementById('ev-search').oninput = () => { onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => { if (docSnap.exists()) renderEvHotspotsTable(docSnap.data().entries || []); }); };
-            document.getElementById('ev-stat-filter').onclick = (e) => { if (e.target.matches('.ev-filter-btn')) { document.querySelectorAll('.ev-filter-btn').forEach(btn => { btn.classList.remove('bg-teal-500', 'text-white'); }); e.target.classList.add('bg-teal-500', 'text-white'); onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`), (docSnap) => { if (docSnap.exists()) renderEvHotspotsTable(docSnap.data().entries || []); }); } };
+
+            // Add button for EV Hotspots
+            if (checkPermission('canEditResources')) { 
+                document.getElementById('add-ev-hotspot-btn').onclick = () => showEvHotspotForm(); 
+            }
+
+            // Search and filter event listeners
+            document.getElementById('ev-search').oninput = () => { renderEvHotspotsTable(evDocRef._cachedData?.entries || []); };
+            document.getElementById('ev-stat-filter').onclick = (e) => { 
+                if (e.target.matches('.ev-filter-btn')) { 
+                    document.querySelectorAll('.ev-filter-btn').forEach(btn => { btn.classList.remove('bg-teal-500', 'text-white'); }); 
+                    e.target.classList.add('bg-teal-500', 'text-white'); 
+                    renderEvHotspotsTable(evDocRef._cachedData?.entries || []); 
+                } 
+            };
         }
 
+        // Renders the EV Hotspots table rows
         function renderEvHotspotsTable(entries) {
-            const tbody = document.getElementById('ev-hotspots-table-body'); if (!tbody) return;
+            const tbody = document.getElementById('ev-hotspots-table-body'); 
+            if (!tbody) return;
+
             const searchTerm = document.getElementById('ev-search').value.toLowerCase();
             const activeFilter = document.querySelector('.ev-filter-btn.bg-teal-500').dataset.stat;
-            const filteredEntries = entries.filter(entry => { const matchesSearch = entry.pokemon.toLowerCase().includes(searchTerm) || entry.location.toLowerCase().includes(searchTerm); const matchesFilter = activeFilter === 'All' || entry.stat === activeFilter; return matchesSearch && matchesFilter; });
-            if (filteredEntries.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-500">No EV hotspots found matching your criteria.</td></tr>`; return; }
-            tbody.innerHTML = filteredEntries.map(entry => ` <tr class="bg-white border-b hover:bg-gray-50"> <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">${entry.stat}</td> <td class="px-6 py-4">${entry.pokemon}</td> <td class="px-6 py-4">${entry.location}</td> <td class="px-6 py-4 font-bold text-teal-600">${entry.yield}</td> ${checkPermission('canEditResources') ? ` <td class="px-6 py-4 text-right"> <button data-action="edit-ev-hotspot" data-id="${entry.id}" class="font-medium text-blue-600 hover:underline mr-4">Edit</button> <button data-action="delete-ev-hotspot" data-id="${entry.id}" class="font-medium text-red-600 hover:underline">Delete</button> </td>` : ''} </tr> `).join('');
-            if (checkPermission('canEditResources')) { document.querySelectorAll('[data-action="edit-ev-hotspot"]').forEach(btn => btn.onclick = (e) => { const entryId = e.target.dataset.id; const entry = entries.find(item => item.id === entryId); if (entry) showEvHotspotForm(entry); }); document.querySelectorAll('[data-action="delete-ev-hotspot"]').forEach(btn => btn.onclick = (e) => { const entryId = e.target.dataset.id; showModal(`Are you sure you want to delete this hotspot?`, async () => { const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`); const docSnap = await getDoc(docRef); if (docSnap.exists()) { const updatedEntries = docSnap.data().entries.filter(item => item.id !== entryId); await updateDoc(docRef, { entries: updatedEntries }); } }); }); }
+
+            const filteredEntries = entries.filter(entry => { 
+                const matchesSearch = entry.pokemon.toLowerCase().includes(searchTerm) || entry.location.toLowerCase().includes(searchTerm); 
+                const matchesFilter = activeFilter === 'All' || entry.stat === activeFilter; 
+                return matchesSearch && matchesFilter; 
+            });
+
+            if (filteredEntries.length === 0) { 
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-500">No EV hotspots found matching your criteria.</td></tr>`; 
+                return; 
+            }
+
+            tbody.innerHTML = filteredEntries.map(entry => ` 
+                <tr class="bg-white border-b hover:bg-gray-50"> 
+                    <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">${entry.stat}</td> 
+                    <td class="px-6 py-4">${entry.pokemon}</td> 
+                    <td class="px-6 py-4">${entry.location}</td> 
+                    <td class="px-6 py-4 font-bold text-teal-600">${entry.yield}</td> 
+                    ${checkPermission('canEditResources') ? ` 
+                        <td class="px-6 py-4 text-right"> 
+                            <button data-action="edit-ev-hotspot" data-id="${entry.id}" class="font-medium text-blue-600 hover:underline mr-4">Edit</button> 
+                            <button data-action="delete-ev-hotspot" data-id="${entry.id}" class="font-medium text-red-600 hover:underline">Delete</button> 
+                        </td>
+                    ` : ''} 
+                </tr> 
+            `).join('');
+
+            // Attach action listeners for edit/delete buttons
+            if (checkPermission('canEditResources')) { 
+                document.querySelectorAll('[data-action="edit-ev-hotspot"]').forEach(btn => btn.onclick = (e) => { 
+                    const entryId = e.target.dataset.id; 
+                    const entry = entries.find(item => item.id === entryId); 
+                    if (entry) showEvHotspotForm(entry); 
+                }); 
+                document.querySelectorAll('[data-action="delete-ev-hotspot"]').forEach(btn => btn.onclick = (e) => { 
+                    const entryId = e.target.dataset.id; 
+                    showModal(`Are you sure you want to delete this hotspot?`, async () => { 
+                        const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`); 
+                        const docSnap = await getDoc(docRef); 
+                        if (docSnap.exists()) { 
+                            const updatedEntries = docSnap.data().entries.filter(item => item.id !== entryId); 
+                            await updateDoc(docRef, { entries: updatedEntries }); 
+                        } 
+                    }); 
+                }); 
+            }
         }
 
+        // Displays a form for adding or editing an EV Hotspot
         function showEvHotspotForm(entry = {}) {
             const isEditing = !!entry.id;
-            const formHtml = ` <form class="space-y-4"> <input type="hidden" name="id" value="${entry.id || `ev-${Date.now()}`}"> <div> <label class="block text-sm font-medium text-gray-700">Stat</label> <select name="stat" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm"> ${['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed'].map(stat => `<option value="${stat}" ${entry.stat === stat ? 'selected' : ''}>${stat}</option>`).join('')} </select> </div> <div> <label class="block text-sm font-medium text-gray-700">Pokémon Horde</label> <input type="text" name="pokemon" value="${entry.pokemon || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Marill (x5)"> </div> <div> <label class="block text-sm font-medium text-gray-700">Location</label> <input type="text" name="location" value="${entry.location || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Route 114, Hoenn (Surf)"> </div> <div> <label class="block text-sm font-medium text-gray-700">EV Yield</label> <input type="text" name="yield" value="${entry.yield || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., 10 HP"> </div> <div class="flex justify-end gap-4 pt-4"> <button type="button" class="generic-modal-close-btn bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button> <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Add Hotspot'}</button> </div> </form> `;
+            const formHtml = ` 
+                <form class="space-y-4"> 
+                    <input type="hidden" name="id" value="${entry.id || `ev-${Date.now()}`}"> 
+                    <div> 
+                        <label class="block text-sm font-medium text-gray-700">Stat</label> 
+                        <select name="stat" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm"> 
+                            ${['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed'].map(stat => `<option value="${stat}" ${entry.stat === stat ? 'selected' : ''}>${stat}</option>`).join('')} 
+                        </select> 
+                    </div> 
+                    <div> 
+                        <label class="block text-sm font-medium text-gray-700">Pokémon Horde</label> 
+                        <input type="text" name="pokemon" value="${entry.pokemon || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Marill (x5)"> 
+                    </div> 
+                    <div> 
+                        <label class="block text-sm font-medium text-gray-700">Location</label> 
+                        <input type="text" name="location" value="${entry.location || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Route 114, Hoenn (Surf)"> 
+                    </div> 
+                    <div> 
+                        <label class="block text-sm font-medium text-gray-700">EV Yield</label> 
+                        <input type="text" name="yield" value="${entry.yield || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., 10 HP"> 
+                    </div> 
+                    <div class="flex justify-end gap-4 pt-4 border-t"> 
+                        <button type="button" class="generic-modal-close-btn bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button> 
+                        <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Add Hotspot'}</button> 
+                    </div> 
+                </form> 
+            `;
             showGenericModal(isEditing ? 'Edit EV Hotspot' : 'Add New EV Hotspot', formHtml, async (e) => {
                 const form = e.target;
                 const newEntry = { id: form.id.value, stat: form.stat.value, pokemon: form.pokemon.value, location: form.location.value, yield: form.yield.value };
                 const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`);
                 const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) { let entries = docSnap.data().entries || []; if (isEditing) { entries = entries.map(item => item.id === newEntry.id ? newEntry : item); } else { entries.push(newEntry); } await updateDoc(docRef, { entries }); }
+                if (docSnap.exists()) { 
+                    let entries = docSnap.data().entries || []; 
+                    if (isEditing) { 
+                        entries = entries.map(item => item.id === newEntry.id ? newEntry : item); 
+                    } else { 
+                        entries.push(newEntry); 
+                    } 
+                    await updateDoc(docRef, { entries }); 
+                } else {
+                    // If the evHotspots document doesn't exist, create it with the first entry
+                    await setDoc(docRef, { entries: [newEntry] });
+                }
                 hideGenericModal();
             }, 'md');
             genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
         }
 
-        // --- NEW MONEY GUIDE FUNCTIONS ---
+        // --- MONEY GUIDE FUNCTIONS ---
+        // Renders the Money Making Guides view
         function renderMoneyGuide() {
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
@@ -1587,9 +2489,10 @@
                 <div id="money-guides-container" class="space-y-4"></div>
             `;
 
-            let allGuides = []; // Cache all guides
+            let allGuides = []; // Cache all guides locally for filtering/sorting
             const q = query(collection(db, `team_spaces/${currentTeamSpaceId}/money_guides`));
             
+            // Function to render guides based on current filters and sort order
             const renderFilteredGuides = async () => {
                 const container = document.getElementById('money-guides-container');
                 if (!container) return;
@@ -1598,7 +2501,7 @@
                 const categoryFilter = document.getElementById('guide-category-filter').value;
                 const sortOrder = document.getElementById('guide-sort-order').value;
 
-                // Create a list of author names to search against
+                // Pre-fetch author names for search efficiency
                 const authorNames = {};
                 for (const guide of allGuides) {
                     if (!authorNames[guide.createdBy]) {
@@ -1612,6 +2515,7 @@
                     return matchesSearch && matchesCategory;
                 });
 
+                // Apply sorting
                 if (sortOrder === 'votes') {
                     guides.sort((a, b) => {
                         const scoreA = (a.upvotes?.length || 0) - (a.downvotes?.length || 0);
@@ -1628,32 +2532,35 @@
                 }
                 Promise.all(guides.map(guide => renderMoneyGuideCard(guide, authorNames[guide.createdBy]))).then(html => {
                     container.innerHTML = html.join('');
-                    attachMoneyGuideListeners();
+                    attachMoneyGuideListeners(); // Re-attach listeners for dynamically created cards
                 });
             };
 
+            // Real-time listener for money guides
             const unsub = onSnapshot(q, (snapshot) => {
                 allGuides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Populate category filter
+                // Populate category filter options dynamically
                 const categories = ['all', ...new Set(allGuides.map(g => g.category))];
                 const categoryFilterEl = document.getElementById('guide-category-filter');
                 if(categoryFilterEl) {
                     categoryFilterEl.innerHTML = categories.map(c => `<option value="${c}">${c === 'all' ? 'All Categories' : c}</option>`).join('');
                 }
-                renderFilteredGuides();
+                renderFilteredGuides(); // Initial render and whenever data changes
             });
             unsubscribeListeners.push(unsub);
 
+            // Event listeners for search, filter, and sort controls
             document.getElementById('guide-search-input').oninput = renderFilteredGuides;
             document.getElementById('guide-category-filter').onchange = renderFilteredGuides;
             document.getElementById('guide-sort-order').onchange = renderFilteredGuides;
 
+            // Add new guide button
             if (checkPermission('canManageMoneyGuides')) {
                 document.getElementById('add-money-guide-btn').onclick = () => showMoneyGuideForm();
             }
         }
         
-        // Helper to strip HTML and truncate text
+        // Helper to strip HTML tags and truncate text for snippets
         function getSnippet(html, length = 100) {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = html;
@@ -1661,15 +2568,16 @@
             return text.length > length ? text.substring(0, length) + '...' : text;
         }
 
+        // Renders a single money guide card for the main view
         async function renderMoneyGuideCard(guide, authorName) {
-            // If authorName is not pre-fetched, get it now.
+            // If authorName is not pre-fetched (e.g., from search/filter rendering), get it now.
             const finalAuthorName = authorName || await getUsername(guide.createdBy);
             const score = (guide.upvotes?.length || 0) - (guide.downvotes?.length || 0);
             const userVote = guide.upvotes?.includes(currentUserId) ? 'up' : guide.downvotes?.includes(currentUserId) ? 'down' : null;
-            const snippet = getSnippet(guide.description, 120);
+            const snippet = getSnippet(guide.description, 120); // Generate a short text snippet
 
             return `
-                <div class="bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer flex flex-col" data-action="view-guide" data-id="${guide.id}">
+                <div class="bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow flex flex-col" data-action="view-guide" data-id="${guide.id}">
                     <div class="flex justify-between items-start">
                         <div>
                             <h3 class="text-xl font-bold text-gray-800">${guide.title}</h3>
@@ -1694,10 +2602,11 @@
             `;
         }
 
+        // Displays a form for adding or editing a money guide
         function showMoneyGuideForm(guide = {}) {
             const isEditing = !!guide.id;
-            // Predetermined options based on research
-            const categories = ["Gym Rebattles", "Item Farming", "Berry Farming", "Pokemon Catching", "Pay Day Farming", "Shiny Hunting", "Breeding"];
+            // Predetermined options based on typical PokeMMO money making methods
+            const categories = ["Gym Rebattles", "Item Farming", "Berry Farming", "Pokemon Catching", "Pay Day Farming", "Shiny Hunting", "Breeding", "PvP"];
             const efforts = ["Very Low", "Low", "Medium", "High", "Very High"];
             const rewards = ["Low (~50-100k/hr)", "Medium (~100-200k/hr)", "High (~200-400k/hr)", "Very High (400k+/hr)"];
 
@@ -1734,7 +2643,7 @@
                     </div>
                     <div class="flex justify-end gap-4 pt-4 border-t">
                         <button type="button" class="generic-modal-close-btn bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancel</button>
-                        <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-6 rounded-lg">${isEditing ? 'Save Changes' : 'Create Guide'}</button>
+                        <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-6 rounded-lg">${isEditing ? 'Save Changes' : 'Create Guide'}</button>
                     </div>
                 </form>
             `;
@@ -1746,7 +2655,7 @@
                     category: form.category.value,
                     effort: form.effort.value,
                     reward: form.reward.value,
-                    description: quillEditor.root.innerHTML,
+                    description: quillEditor.root.innerHTML, // Get content from Quill
                     imageUrl: form.imageUrl.value,
                     videoUrl: form.videoUrl.value,
                 };
@@ -1764,21 +2673,35 @@
                         comments: [] // Initialize comments array
                     });
                 }
-                hideGenericModal();
+                hideGenericModal(); // Close modal after saving
             }, '4xl');
 
+            // Initialize Quill editor after modal content is rendered
             quillEditor = new Quill('#quill-editor', {
                 theme: 'snow',
-                modules: { toolbar: [ [{ 'header': [1, 2, 3, false] }], ['bold', 'italic', 'underline', 'strike'], [{ 'list': 'ordered'}, { 'list': 'bullet' }], ['link', 'image'], ['clean'] ] }
+                modules: { 
+                    toolbar: [ 
+                        [{ 'header': [1, 2, 3, false] }], 
+                        ['bold', 'italic', 'underline', 'strike'], 
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }], 
+                        ['link', 'image'], // Image button allows embedding image URLs
+                        ['clean'] 
+                    ] 
+                }
             });
+            // Set initial content for editing mode
             if (isEditing && guide.description) {
                 quillEditor.root.innerHTML = guide.description;
             }
             genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
         }
 
+        // Displays the full details of a money guide in a modal
         async function showGuideDetailModal(guide) {
             const authorName = await getUsername(guide.createdBy);
+            const isStaffPlus = ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
+
+            // Render media (image/video)
             let mediaHtml = '';
             if (guide.imageUrl) {
                 mediaHtml += `<img src="${guide.imageUrl}" class="w-full h-auto object-cover rounded-lg mb-4" alt="Guide Image">`;
@@ -1801,9 +2724,11 @@
                 }
             }
             
+            // Render comments
             const commentsHtml = (await Promise.all((guide.comments || []).map(async (comment, index) => {
                 const commentAuthor = await getUsername(comment.authorId);
-                const canDelete = currentUserRole === 'Superadmin' || currentUserRole === 'Admin' || currentUserRole === 'Staff' || comment.authorId === currentUserId;
+                // Staff+ can delete any comment, regular user can delete their own
+                const canDelete = isStaffPlus || comment.authorId === currentUserId; 
                 return `
                     <div class="bg-gray-200 p-3 rounded-md group relative">
                         <p class="text-sm"><strong class="text-gray-900">${commentAuthor}</strong>: ${comment.text}</p>
@@ -1847,13 +2772,16 @@
                     </div>
                 </div>
             `;
-            showGenericModal(guide.title, modalContent, null, '6xl');
-            attachMoneyGuideListeners();
+            showGenericModal(guide.title, modalContent, null, '6xl'); // Show in large modal
+            attachMoneyGuideListeners(); // Re-attach listeners for interactive elements in modal
         }
 
+        // Attaches event listeners for money guide cards and the detail modal
         function attachMoneyGuideListeners() {
+            // View guide details when card is clicked (unless it's a vote button)
             document.querySelectorAll('[data-action="view-guide"]').forEach(card => card.onclick = async e => {
-                if (e.target.closest('.vote-btn')) return;
+                // Prevent modal from opening if a vote button within the card was clicked
+                if (e.target.closest('[data-action="vote-guide"]')) return; 
                 const guideId = e.currentTarget.dataset.id;
                 const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId);
                 const guideSnap = await getDoc(guideRef);
@@ -1862,17 +2790,26 @@
                 }
             });
 
+            // Vote buttons for guides
             document.querySelectorAll('[data-action="vote-guide"]').forEach(btn => btn.onclick = async e => {
-                e.stopPropagation();
+                e.stopPropagation(); // Prevent opening the detail modal
                 const { id, vote } = e.currentTarget.dataset;
                 const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, id);
+                
+                // Voting logic with transaction to ensure atomicity
                 await runTransaction(db, async (transaction) => {
                     const guideDoc = await transaction.get(guideRef);
                     if (!guideDoc.exists()) return;
                     const data = guideDoc.data();
-                    const upvotes = data.upvotes || []; const downvotes = data.downvotes || [];
-                    const hasUpvoted = upvotes.includes(currentUserId); const hasDownvoted = downvotes.includes(currentUserId);
-                    let newUpvotes = [...upvotes]; let newDownvotes = [...downvotes];
+                    const upvotes = data.upvotes || []; 
+                    const downvotes = data.downvotes || [];
+                    
+                    const hasUpvoted = upvotes.includes(currentUserId); 
+                    const hasDownvoted = downvotes.includes(currentUserId);
+                    
+                    let newUpvotes = [...upvotes]; 
+                    let newDownvotes = [...downvotes];
+
                     if (vote === 'up') {
                         if (hasUpvoted) { newUpvotes = newUpvotes.filter(uid => uid !== currentUserId); } 
                         else { newUpvotes.push(currentUserId); newDownvotes = newDownvotes.filter(uid => uid !== currentUserId); }
@@ -1884,6 +2821,7 @@
                 });
             });
 
+            // Edit guide button (within detail modal)
             document.querySelectorAll('[data-action="edit-guide"]').forEach(btn => btn.onclick = async e => {
                 const guideId = e.currentTarget.dataset.id;
                 const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId);
@@ -1893,21 +2831,23 @@
                 }
             });
 
+            // Delete guide button (within detail modal)
             document.querySelectorAll('[data-action="delete-guide"]').forEach(btn => btn.onclick = e => {
                 const guideId = e.currentTarget.dataset.id;
                 showModal('Are you sure you want to delete this guide?', () => {
                     deleteDoc(doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId));
-                    hideGenericModal();
+                    hideGenericModal(); // Close the detail modal after deletion
                 });
             });
             
+            // Toggle Staff Pick for guides (within detail modal)
             document.querySelectorAll('[data-action="toggle-staff-pick-guide"]').forEach(box => box.onchange = async e => {
                 const guideId = e.currentTarget.dataset.id;
                 const isStaffPick = e.target.checked;
                 await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId), { isStaffPick });
             });
 
-            // Comment listeners
+            // Add comment to guide
             document.querySelectorAll('[data-action="add-guide-comment"]').forEach(btn => btn.onclick = async e => {
                 const guideId = e.target.dataset.id;
                 const input = document.getElementById('guide-comment-input');
@@ -1918,7 +2858,7 @@
                         createdAt: new Date().toISOString()
                     };
                     await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId), {
-                        comments: arrayUnion(commentData)
+                        comments: arrayUnion(commentData) // Atomically add comment
                     });
                     // Refresh modal content to show new comment
                     const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId);
@@ -1927,6 +2867,7 @@
                 }
             });
 
+            // Delete comment from guide
             document.querySelectorAll('[data-action="delete-guide-comment"]').forEach(btn => btn.onclick = async e => {
                 const { guideId, commentIndex } = e.currentTarget.dataset;
                 const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId);
@@ -1936,8 +2877,8 @@
                     const commentToRemove = guideData.comments[commentIndex];
                     if (commentToRemove) {
                         showModal('Delete this comment?', async () => {
-                            await updateDoc(guideRef, { comments: arrayRemove(commentToRemove) });
-                            // Refresh modal
+                            await updateDoc(guideRef, { comments: arrayRemove(commentToRemove) }); // Atomically remove comment
+                            // Refresh modal after deletion
                             const updatedSnap = await getDoc(guideRef);
                             if(updatedSnap.exists()) showGuideDetailModal({id: guideId, ...updatedSnap.data()});
                         });
@@ -1945,11 +2886,13 @@
                 }
             });
         }
-        // --- END NEW MONEY GUIDE FUNCTIONS ---
+        // --- END MONEY GUIDE FUNCTIONS ---
 
+        // Renders the Admin Panel view
         async function renderAdminPanel() {
+            // Access control for Admin Panel
             if (!['Superadmin', 'Admin'].includes(currentUserRole)) { 
-                mainContent.innerHTML = `<p class="text-red-500">Access Denied.</p>`; 
+                mainContent.innerHTML = `<p class="text-red-500 text-center p-8">Access Denied. You must be an Admin or Superadmin to view this page.</p>`; 
                 return; 
             }
             mainContent.innerHTML = `
@@ -1964,6 +2907,7 @@
                         <div id="permissions-container" class="space-y-4"></div>
                         <button id="save-perms-btn" class="mt-6 w-full bg-teal-500 text-white p-3 rounded-lg font-bold hover:bg-teal-600">Save Permissions</button>
                     </div>
+                    <!-- Superadmin Controls (only visible to Superadmin) -->
                     ${currentUserRole === 'Superadmin' ? `
                     <div class="bg-white p-6 rounded-lg shadow lg:col-span-2">
                         <h3 class="text-xl font-bold mb-4 text-red-600">Superadmin Controls</h3>
@@ -1986,8 +2930,9 @@
                     ` : ''}
                 </div>`;
             
+            // User Role Management
             const allUsersQuery = query(collection(db, "users"));
-            const allUsersSnapshot = await getDocs(allUsersQuery);
+            const allUsersSnapshot = await getDocs(allUsersQuery); // Fetch all users
             const allUsers = allUsersSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
             const usersContainer = document.getElementById('user-roles-container');
@@ -1996,22 +2941,27 @@
                     if (user.id === SUPERADMIN_UID) return `<div class="flex justify-between items-center"><p>${user.username} <span class="text-xs font-bold text-yellow-500">Superadmin</span></p></div>`;
                     return `<div class="flex justify-between items-center"><p>${user.username}</p><select data-uid="${user.id}" class="role-selector p-1 border rounded"><option value="Member" ${user.role === 'Member' ? 'selected' : ''}>Member</option><option value="Staff" ${user.role === 'Staff' ? 'selected' : ''}>Staff</option><option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option></select></div>`;
                 }).join('');
+                // Attach change listener for role selectors
                 document.querySelectorAll('.role-selector').forEach(sel => { sel.onchange = async (e) => await updateDoc(doc(db, "users", e.target.dataset.uid), { role: e.target.value }); });
             }
             
+            // Player Team Permission Settings
             const permsContainer = document.getElementById('permissions-container');
             const rolesToManage = ['Admin', 'Staff', 'Member'];
+            // Define all granular permissions
             const actions = { 
                 canManagePokemonTeams: "Manage Pokémon Teams", 
-                canManageProjects: "Manage Projects", 
+                canManageProjects: "Manage Breeding/Shiny Projects", // Combined
                 canManageTasks: "Manage Shared Tasks", 
-                canEditResources: "Edit Resources", 
-                canMarkStaffPick: "Mark Staff Picks",
+                canEditResources: "Edit EV Hotspots", // Renamed for clarity
+                canManagePokedex: "Manage Pokédex Entries", // New
+                canManageMoneyGuides: "Manage Money Guides", // New
+                canMarkStaffPick: "Mark Staff Picks (Teams/Guides)",
                 canCreatePublicTeams: "Create Public Pokémon Teams",
-                canVoteOnTeams: "Upvote/Downvote Pokémon Teams",
+                canVoteOnTeams: "Upvote/Downvote Teams/Guides",
                 canVerifyContributions: "Verify Task Contributions",
                 canDeletePublicTeams: "Delete Public Pokémon Teams",
-                canManageMoneyGuides: "Manage Money Guides" // New permission
+                canEditAnyTeamName: "Edit Any Team Name" // New
             };
             if(permsContainer) {
                 permsContainer.innerHTML = rolesToManage.map(role => `
@@ -2026,11 +2976,13 @@
                     </div>`).join('');
             }
             
+            // Save Permissions button handler
             const savePermsBtn = document.getElementById('save-perms-btn');
             if(savePermsBtn) {
                 savePermsBtn.onclick = async () => {
                     showLoading(true);
-                    const newPermissions = JSON.parse(JSON.stringify(teamSpacePermissions));
+                    const newPermissions = JSON.parse(JSON.stringify(teamSpacePermissions)); // Deep copy current permissions
+                    // Update permissions based on checkbox states
                     document.querySelectorAll('.perm-checkbox').forEach(box => {
                         const { role, action } = box.dataset;
                         if (!newPermissions[role]) newPermissions[role] = {};
@@ -2039,7 +2991,7 @@
 
                     try {
                         const teamSpaceDoc = doc(db, "team_spaces", currentTeamSpaceId);
-                        await updateDoc(teamSpaceDoc, { permissions: newPermissions });
+                        await updateDoc(teamSpaceDoc, { permissions: newPermissions }); // Save to Firestore
                         alert("Permissions saved successfully! The view will now update based on the new data from Firebase.");
                     } catch (error) {
                         alert("Error saving permissions: " + error.message);
@@ -2050,11 +3002,13 @@
                 };
             }
 
+            // Superadmin specific controls
             if (currentUserRole === 'Superadmin') {
+                // Mark Official Team Space button
                 document.getElementById('mark-official-btn').onclick = async () => {
-                    if (confirm(`Are you sure you want to mark "${currentTeamSpaceId}" as the official Team Space?`)) {
+                    if (confirm(`Are you sure you want to mark "${currentTeamSpaceId}" as the official Team Space? All users will see a button to join this space.`)) {
                         const teamSnap = await getDoc(doc(db, "team_spaces", currentTeamSpaceId));
-                        const teamName = teamSnap.exists() ? teamSnap.data().name || currentTeamSpaceId : currentTeamSpaceId;
+                        const teamName = teamSnap.exists() ? teamSnap.data().name || currentTeamSpaceId : currentTeamSpaceId; // Use existing name or ID
                         await setDoc(doc(db, "system_settings", "official_team_space"), {
                             id: currentTeamSpaceId,
                             name: teamName
@@ -2062,10 +3016,11 @@
                         alert("Official Team Space has been set.");
                     }
                 };
+                // Rename Team Space button
                 document.getElementById('rename-team-space-btn').onclick = async () => {
                     const newId = document.getElementById('new-team-space-id-input').value.trim();
                     if (newId && newId !== currentTeamSpaceId) {
-                        if (confirm(`This is a major action. Are you sure you want to rename '${currentTeamSpaceId}' to '${newId}'?`)) {
+                        if (confirm(`This is a major action. Are you sure you want to rename '${currentTeamSpaceId}' to '${newId}'? This will migrate all data. This operation is IRREVERSIBLE.`)) {
                             await renameTeamSpace(currentTeamSpaceId, newId);
                         }
                     } else {
@@ -2075,56 +3030,74 @@
             }
         }
 
+        // Function to rename an entire team space (Superadmin only)
         async function renameTeamSpace(oldId, newId) {
             showLoading(true);
             try {
+                // Check if new ID already exists
                 const newDocRef = doc(db, "team_spaces", newId);
                 const newDocSnap = await getDoc(newDocRef);
                 if (newDocSnap.exists()) {
-                    throw new Error(`Team Space with ID "${newId}" already exists.`);
+                    throw new Error(`Team Space with ID "${newId}" already exists. Please choose a different ID.`);
                 }
 
+                // Copy main team space document and delete old one in a transaction
                 await runTransaction(db, async (transaction) => {
                     const oldDocRef = doc(db, "team_spaces", oldId);
                     const oldDocSnap = await transaction.get(oldDocRef);
                     if (!oldDocSnap.exists()) {
-                        throw new Error("Original document not found.");
+                        throw new Error("Original Team Space document not found. This operation cannot proceed.");
                     }
                     transaction.set(newDocRef, oldDocSnap.data());
                     transaction.delete(oldDocRef);
                 });
 
-                const subcollections = ['pokemon_teams', 'tasks', 'breeding', 'hunts', 'resources', 'money_guides']; // Added money_guides
+                // Iterate through subcollections and move all documents
+                const subcollections = ['pokemon_teams', 'tasks', 'breeding', 'hunts', 'resources', 'money_guides']; 
                 for (const sub of subcollections) {
                     const oldSubCollectionRef = collection(db, `team_spaces/${oldId}/${sub}`);
                     const snapshot = await getDocs(oldSubCollectionRef);
-                    for (const d of snapshot.docs) {
-                        const oldDocRef = doc(db, `team_spaces/${oldId}/${sub}`, d.id);
-                        const newDocRef = doc(db, `team_spaces/${newId}/${sub}`, d.id);
-                        await setDoc(newDocRef, d.data());
-                        
-                        const nestedSubs = ['contributions'];
-                        for (const nested of nestedSubs) {
-                            const oldNestedRef = collection(oldDocRef, nested);
-                            const nestedSnapshot = await getDocs(oldNestedRef);
-                            for (const nestedDoc of nestedSnapshot.docs) {
-                                await setDoc(doc(newDocRef, nested, nestedDoc.id), nestedDoc.data());
-                                await deleteDoc(doc(oldDocRef, nested, nestedDoc.id));
-                            }
+
+                    // For resources, special handling is needed as 'resources' itself is a collection of documents (e.g., pokedex, evHotspots)
+                    if (sub === 'resources') {
+                        for (const d of snapshot.docs) {
+                            const oldResourceDocRef = doc(db, `team_spaces/${oldId}/resources`, d.id);
+                            const newResourceDocRef = doc(db, `team_spaces/${newId}/resources`, d.id);
+                            await setDoc(newResourceDocRef, d.data());
+                            await deleteDoc(oldResourceDocRef);
                         }
-                        await deleteDoc(oldDocRef);
+                    } else {
+                        // For other subcollections like 'pokemon_teams' or 'tasks'
+                        for (const d of snapshot.docs) {
+                            const oldDocRef = doc(db, `team_spaces/${oldId}/${sub}`, d.id);
+                            const newDocRef = doc(db, `team_spaces/${newId}/${sub}`, d.id);
+                            await setDoc(newDocRef, d.data());
+                            
+                            // Handle nested subcollections (e.g., 'contributions' within 'tasks')
+                            const nestedSubs = ['contributions', 'comments']; // 'comments' for money guides/pokedex if applicable
+                            for (const nested of nestedSubs) {
+                                const oldNestedRef = collection(oldDocRef, nested);
+                                const nestedSnapshot = await getDocs(oldNestedRef);
+                                for (const nestedDoc of nestedSnapshot.docs) {
+                                    await setDoc(doc(newDocRef, nested, nestedDoc.id), nestedDoc.data());
+                                    await deleteDoc(doc(oldDocRef, nested, nestedDoc.id));
+                                }
+                            }
+                            await deleteDoc(oldDocRef); // Delete the old document after moving its subcollections
+                        }
                     }
                 }
                 
+                // Update official team space setting if the old ID was the official one
                 const officialTeamRef = doc(db, "system_settings", "official_team_space");
                 const officialTeamSnap = await getDoc(officialTeamRef);
                 if (officialTeamSnap.exists() && officialTeamSnap.data().id === oldId) {
                     await updateDoc(officialTeamRef, { id: newId });
                 }
 
-                alert(`Team Space successfully renamed to ${newId}. The page will now reload.`);
-                localStorage.setItem('currentTeamSpaceId', newId);
-                location.reload();
+                alert(`Team Space successfully renamed to ${newId}. The page will now reload to apply changes.`);
+                localStorage.setItem('currentTeamSpaceId', newId); // Update local storage
+                location.reload(); // Reload the application
 
             } catch (error) {
                 console.error("Error renaming Team Space:", error);
@@ -2137,8 +3110,9 @@
 
         // --- Event Listeners ---
         document.addEventListener('DOMContentLoaded', () => {
-            initializeDOMElements();
+            initializeDOMElements(); // Initialize DOM elements once the document is ready
             
+            // Firebase Authentication State Listener
             onAuthStateChanged(auth, async (user) => {
                 try {
                     showLoading(true);
@@ -2147,19 +3121,30 @@
                         const userRef = doc(db, "users", currentUserId);
                         const userSnap = await getDoc(userRef);
                         if (userSnap.exists()) {
+                            // User document exists, retrieve profile
                             const userData = userSnap.data();
                             currentUsername = userData.username;
+                            // Superadmin role is hardcoded by UID for highest privilege
                             currentUserRole = user.uid === SUPERADMIN_UID ? 'Superadmin' : userData.role;
+                            // Auto-set Superadmin role in Firestore if UID matches
                             if (user.uid === SUPERADMIN_UID && userData.role !== 'Superadmin') { await updateDoc(userRef, { role: 'Superadmin' }); }
-                            userProfileDisplay.textContent = `${currentUsername} (${currentUserRole})`;
+                            
+                            userProfileDisplay.textContent = `${currentUsername} (${currentUserRole})`; // Update UI
+                            // Show/hide admin panel button based on role
                             document.getElementById('admin-panel-btn').style.display = ['Superadmin', 'Admin'].includes(currentUserRole) ? 'block' : 'none';
-                            authContainer.classList.add('hidden');
-                            appContainer.classList.remove('hidden');
-                            await setupTeamSpace(currentUserId);
-                            await renderOfficialTeamSpaceButton();
-                            switchView('dashboard');
-                        } else { await signOut(auth); }
+                            
+                            authContainer.classList.add('hidden'); // Hide auth container
+                            appContainer.classList.remove('hidden'); // Show app container
+                            
+                            await setupTeamSpace(currentUserId); // Setup team space for the logged-in user
+                            await renderOfficialTeamSpaceButton(); // Render official team space button
+                            switchView('dashboard'); // Go to dashboard after successful setup
+                        } else { 
+                            // If user object exists but no user document, sign out (data inconsistency)
+                            await signOut(auth); 
+                        }
                     } else {
+                        // No user logged in, show auth container
                         authContainer.classList.remove('hidden');
                         appContainer.classList.add('hidden');
                     }
@@ -2167,12 +3152,67 @@
                 finally { showLoading(false); }
             });
 
-            document.getElementById('login-form').onsubmit = async (e) => { e.preventDefault(); showLoading(true); const email = e.target.email.value; const password = e.target.password.value; try { await signInWithEmailAndPassword(auth, email, password); } catch (error) { alert(error.message); } finally { showLoading(false); } };
-            document.getElementById('signup-form').onsubmit = async (e) => { e.preventDefault(); showLoading(true); const email = e.target.signup_email.value; const password = e.target.signup_password.value; const username = e.target.signup_username.value; if (password.length < 6) { alert("Password must be at least 6 characters."); showLoading(false); return; } if (username.length < 3) { alert("Username must be at least 3 characters."); showLoading(false); return; } try { const userCredential = await createUserWithEmailAndPassword(auth, email, password); const user = userCredential.user; let role = user.uid === SUPERADMIN_UID ? 'Superadmin' : 'Member'; await setDoc(doc(db, "users", user.uid), { username, email, role }); } catch (error) { alert(error.message); } finally { showLoading(false); } };
+            // Login form submission
+            document.getElementById('login-form').onsubmit = async (e) => { 
+                e.preventDefault(); 
+                showLoading(true); 
+                const email = e.target.email.value; 
+                const password = e.target.password.value; 
+                try { 
+                    await signInWithEmailAndPassword(auth, email, password); 
+                } catch (error) { 
+                    alert(error.message); 
+                } finally { 
+                    showLoading(false); 
+                } 
+            };
+
+            // Signup form submission
+            document.getElementById('signup-form').onsubmit = async (e) => { 
+                e.preventDefault(); 
+                showLoading(true); 
+                const email = e.target.signup_email.value; 
+                const password = e.target.signup_password.value; 
+                const username = e.target.signup_username.value; 
+
+                if (password.length < 6) { alert("Password must be at least 6 characters."); showLoading(false); return; } 
+                if (username.length < 3) { alert("Username must be at least 3 characters."); showLoading(false); return; } 
+
+                try { 
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password); 
+                    const user = userCredential.user; 
+                    let role = user.uid === SUPERADMIN_UID ? 'Superadmin' : 'Member'; // Assign default role
+                    await setDoc(doc(db, "users", user.uid), { username, email, role }); // Create user document
+                } catch (error) { 
+                    alert(error.message); 
+                } finally { 
+                    showLoading(false); 
+                } 
+            };
+
+            // Logout button
             logoutBtn.onclick = () => signOut(auth);
+
+            // Sidebar navigation buttons
             document.querySelectorAll('.nav-button').forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
-            changeTeamSpaceBtn.addEventListener('click', () => { const newTeamSpaceId = teamSpaceIdInput.value.trim(); if (newTeamSpaceId && newTeamSpaceId !== currentTeamSpaceId) { localStorage.setItem('currentTeamSpaceId', newTeamSpaceId); location.reload(); } });
-            createTeamSpaceBtn.addEventListener('click', () => { const randomId = `team-${Math.random().toString(36).substring(2, 9)}`; localStorage.setItem('currentTeamSpaceId', randomId); location.reload(); });
+
+            // Change Team Space button
+            changeTeamSpaceBtn.addEventListener('click', () => { 
+                const newTeamSpaceId = teamSpaceIdInput.value.trim(); 
+                if (newTeamSpaceId && newTeamSpaceId !== currentTeamSpaceId) { 
+                    localStorage.setItem('currentTeamSpaceId', newTeamSpaceId); 
+                    location.reload(); // Reload page to apply new team space
+                } 
+            });
+
+            // Create New Private Space button
+            createTeamSpaceBtn.addEventListener('click', () => { 
+                const randomId = `team-${Math.random().toString(36).substring(2, 9)}`; // Generate random ID
+                localStorage.setItem('currentTeamSpaceId', randomId); 
+                location.reload(); // Reload page to create and join new space
+            });
+
+            // Confirmation modal cancel button
             modalCancelBtn.addEventListener('click', hideModal);
         });
     </script>
