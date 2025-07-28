@@ -1797,7 +1797,7 @@
                 } catch (e) { /* Invalid URL, do nothing */ }
                 
                 if (embedUrl) {
-                    mediaHtml += `<div class="aspect-w-16 aspect-h-9 mt-4"><iframe src="${embedUrl}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full rounded-lg"></iframe></div>`;
+                    mediaHtml += `<div class="relative mt-4" style="padding-bottom: 56.25%;"><iframe src="${embedUrl}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="absolute top-0 left-0 w-full h-full rounded-lg"></iframe></div>`;
                 }
             }
             
