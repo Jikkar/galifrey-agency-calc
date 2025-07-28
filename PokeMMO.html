@@ -97,6 +97,9 @@
             if (quillEditor) { 
                 quillEditor = null;
             }
+            // Ensure specific modal unsubscribe functions are called
+            unsubscribeListeners.forEach(unsub => unsub()); // Unsubscribe old listeners
+            unsubscribeListeners = []; // Clear the array
         }
         
         // Confirmation modal (simple yes/no dialog)
@@ -203,9 +206,9 @@
                 
                 // Define default permissions for different roles
                 const defaultPermissions = {
-                    Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true, canManageMoneyGuides: true, canManagePokedex: true, canEditAnyTeamName: true },
-                    Staff: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false, canManageMoneyGuides: true, canManagePokedex: false, canEditAnyTeamName: true },
-                    Member: { canCreatePublicTeams: true, canVoteOnTeams: true, canManagePokemonTeams: false, canManageTasks: false, canManageProjects: false, canEditResources: false, canMarkStaffPick: false, canVerifyContributions: false, canDeletePublicTeams: false, canManageMoneyGuides: false, canManagePokedex: false, canEditAnyTeamName: false }
+                    Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true, canManageMoneyGuides: true, canManagePokedex: true, canEditAnyTeamName: true, canAddPokedexBuilds: true },
+                    Staff: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false, canManageMoneyGuides: true, canManagePokedex: false, canEditAnyTeamName: true, canAddPokedexBuilds: true },
+                    Member: { canCreatePublicTeams: true, canVoteOnTeams: true, canManagePokemonTeams: false, canManageTasks: false, canManageProjects: false, canEditResources: false, canMarkStaffPick: false, canVerifyContributions: false, canDeletePublicTeams: false, canManageMoneyGuides: false, canManagePokedex: false, canEditAnyTeamName: false, canAddPokedexBuilds: true }
                 };
 
                 try {
@@ -694,146 +697,151 @@
         async function showPokemonTeamDetailModal(teamId) {
             showLoading(true);
             const teamRef = doc(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`, teamId);
-            const teamSnap = await getDoc(teamRef);
-            if (!teamSnap.exists()) {
-                alert("Team not found.");
-                showLoading(false);
-                return;
-            }
+            
+            // Unsubscribe existing listeners from previous modal, if any
+            unsubscribeListeners.forEach(unsub => unsub());
+            unsubscribeListeners = [];
 
-            const team = { id: teamSnap.id, ...teamSnap.data() };
-            const creatorName = await getUsername(team.createdBy);
-            const isStaffPlus = ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
-            const canManageTeam = team.createdBy === currentUserId || isStaffPlus;
-            const canTogglePublic = (team.createdBy === currentUserId && checkPermission('canCreatePublicTeams')) || isStaffPlus;
-
-            const pokemonHtml = (await Promise.all((team.pokemon || []).map(async (p, i) => {
-                const addedByName = await getUsername(p.addedBy);
-                const canEditPokemon = team.createdBy === currentUserId || isStaffPlus; // Owner or Staff+ can edit
-
-                let wrapperClasses = 'rounded-lg'; // Default wrapper for border/background
-                if (p.isShiny && p.isAlpha) {
-                    wrapperClasses += ' p-1 bg-gradient-to-r from-yellow-400 to-red-500';
-                } else if (p.isShiny) {
-                    wrapperClasses += ' p-1 bg-yellow-400';
-                } else if (p.isAlpha) {
-                    wrapperClasses += ' p-1 bg-red-500';
+            // Listen for real-time updates to THIS specific team document while modal is open
+            const unsubModal = onSnapshot(teamRef, async (teamSnap) => {
+                if (!teamSnap.exists()) {
+                    alert("Team not found or was deleted.");
+                    hideGenericModal(); // Close modal if team disappears
+                    showLoading(false);
+                    return;
                 }
 
-                // Inner content of the Pokemon card
-                const contentHtml = `
-                    <div class="bg-gray-50 p-4 rounded-md relative group h-full">
-                        ${canEditPokemon ? `
-                        <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button data-team-id="${teamId}" data-pokemon-index="${i}" class="edit-pokemon-btn text-blue-500 hover:text-blue-700 p-1 bg-white rounded-full shadow">✏️</button>
-                            <button data-team-id="${teamId}" data-pokemon-index="${i}" class="delete-pokemon-btn text-red-500 hover:text-red-700 p-1 bg-white rounded-full shadow font-bold">&times;</button>
-                        </div>` : ''}
-                        <div class="flex items-center gap-2">
-                            <h4 class="font-bold text-lg">${p.species || 'N/A'}</h4>
-                            ${p.isShiny ? `<span class="text-yellow-500 font-bold text-xs" title="Shiny">⭐</span>` : ''}
-                            ${p.isAlpha ? `<span class="text-red-500 font-bold text-xs" title="Alpha">α</span>` : ''}
-                        </div>
-                        <div class="grid grid-cols-2 gap-x-4 text-sm mt-2">
-                            <p><strong>Lvl:</strong> ${p.level || 'N/A'}</p>
-                            <p><strong>Nature:</strong> ${p.nature || 'N/A'}</p>
-                            <p><strong>Item:</strong> ${p.heldItem || 'None'}</p>
-                            <p><strong>Ability:</strong> ${p.hasHiddenAbility ? 'Hidden' : 'Standard'}</p>
-                        </div>
-                        <p class="text-sm mt-1"><strong>EVs:</strong> ${formatEVs(p.evs) || 'N/A'}</p>
-                        <p class="text-sm mt-1"><strong>IVs:</strong> ${formatIVs(p.ivs) || 'N/A'}</p>
-                        <p class="text-sm mt-1"><strong>Moves:</strong> ${(p.moves || []).join(', ') || 'N/A'}</p>
-                        <p class="text-xs text-gray-400 mt-2 pt-2 border-t">Added by ${addedByName}</p>
-                    </div>`;
+                const team = { id: teamSnap.id, ...teamSnap.data() };
+                const creatorName = await getUsername(team.createdBy);
+                const isStaffPlus = ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
+                const canManageTeam = team.createdBy === currentUserId || isStaffPlus;
+                const canTogglePublic = (team.createdBy === currentUserId && checkPermission('canCreatePublicTeams')) || isStaffPlus;
 
-                // Apply wrapper classes if Shiny/Alpha
-                if (p.isShiny || p.isAlpha) {
-                    return `<div class="${wrapperClasses}">${contentHtml}</div>`;
-                } else {
-                    return contentHtml; // No special wrapper if not Shiny/Alpha
-                }
-            }))).join('');
+                // Dynamically build Pokemon HTML for the modal
+                const pokemonHtml = (await Promise.all((team.pokemon || []).map(async (p, i) => {
+                    const addedByName = await getUsername(p.addedBy);
+                    const canEditPokemon = team.createdBy === currentUserId || isStaffPlus;
 
-            const commentsHtml = (await Promise.all((team.comments || []).map(async (comment, index) => {
-                const authorName = await getUsername(comment.authorId);
-                // Staff+ can delete any comment, owner can delete their own
-                const canDeleteComment = comment.authorId === currentUserId || isStaffPlus; 
-                const commentTimestamp = comment.createdAt ? new Date(comment.createdAt).toLocaleString() : '';
-                const isOp = comment.authorId === team.createdBy; // Check if comment author is team creator
+                    let wrapperClasses = 'rounded-lg'; 
+                    if (p.isShiny && p.isAlpha) { wrapperClasses += ' p-1 bg-gradient-to-r from-yellow-400 to-red-500'; } 
+                    else if (p.isShiny) { wrapperClasses += ' p-1 bg-yellow-400'; } 
+                    else if (p.isAlpha) { wrapperClasses += ' p-1 bg-red-500'; }
 
-                return `<div class="text-sm bg-gray-100 p-2 rounded group relative">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <strong>${authorName} ${isOp ? '<span class="text-xs bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded-full">OP</span>' : ''}</strong>: ${comment.text}
-                                </div>
-                                ${canDeleteComment ? `<button data-team-id="${teamId}" data-comment-index="${index}" class="delete-comment-btn absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>` : ''}
+                    const contentHtml = `
+                        <div class="bg-gray-50 p-4 rounded-md relative group h-full">
+                            ${canEditPokemon ? `
+                            <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button data-team-id="${teamId}" data-pokemon-index="${i}" class="edit-pokemon-btn text-blue-500 hover:text-blue-700 p-1 bg-white rounded-full shadow">✏️</button>
+                                <button data-team-id="${teamId}" data-pokemon-index="${i}" class="delete-pokemon-btn text-red-500 hover:text-red-700 p-1 bg-white rounded-full shadow font-bold">&times;</button>
+                            </div>` : ''}
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-bold text-lg">${p.species || 'N/A'}</h4>
+                                ${p.isShiny ? `<span class="text-yellow-500 font-bold text-xs" title="Shiny">⭐</span>` : ''}
+                                ${p.isAlpha ? `<span class="text-red-500 font-bold text-xs" title="Alpha">α</span>` : ''}
                             </div>
-                            <div class="text-xs text-gray-400 mt-1 text-right">${commentTimestamp}</div>
+                            <div class="grid grid-cols-2 gap-x-4 text-sm mt-2">
+                                <p><strong>Lvl:</strong> ${p.level || 'N/A'}</p>
+                                <p><strong>Nature:</strong> ${p.nature || 'N/A'}</p>
+                                <p><strong>Item:</strong> ${p.heldItem || 'None'}</p>
+                                <p><strong>Ability:</strong> ${p.hasHiddenAbility ? 'Hidden' : 'Standard'}</p>
+                            </div>
+                            <p class="text-sm mt-1"><strong>EVs:</strong> ${formatEVs(p.evs) || 'N/A'}</p>
+                            <p class="text-sm mt-1"><strong>IVs:</strong> ${formatIVs(p.ivs) || 'N/A'}</p>
+                            <p class="text-sm mt-1"><strong>Moves:</strong> ${(p.moves || []).join(', ') || 'N/A'}</p>
+                            <p class="text-xs text-gray-400 mt-2 pt-2 border-t">Added by ${addedByName}</p>
                         </div>`;
-            }))).join('');
+                    return (p.isShiny || p.isAlpha) ? `<div class="${wrapperClasses}">${contentHtml}</div>` : contentHtml;
+                }))).join('');
 
-            // Redacted view for extremely low-voted teams
-            if (team.score <= -15) { // Score threshold for redaction
-                showGenericModal(team.name, `
-                    <div class="bg-black p-6 rounded-lg text-center relative text-white">
-                        <h3 class="text-2xl font-bold text-gray-400 mb-2">[REDACTED BY ORDER OF STAFF]</h3>
-                        <p class="text-gray-500 mt-2">This team build was deemed a public nuisance.</p>
-                        <p class="text-600 mt-1 text-sm">Original creator: ${creatorName}</p>
-                    </div>`, null, 'md');
+                // Dynamically build Comments HTML
+                const commentsHtml = (await Promise.all((team.comments || []).map(async (comment, index) => {
+                    const authorName = await getUsername(comment.authorId);
+                    const canDeleteComment = comment.authorId === currentUserId || isStaffPlus; 
+                    const commentTimestamp = comment.createdAt ? new Date(comment.createdAt).toLocaleString() : '';
+                    const isOp = comment.authorId === team.createdBy;
+
+                    return `<div class="text-sm bg-gray-100 p-2 rounded group relative">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <strong>${authorName} ${isOp ? '<span class="text-xs bg-blue-500 text-white font-bold px-1.5 py-0.5 rounded-full">OP</span>' : ''}</strong>: ${comment.text}
+                                    </div>
+                                    ${canDeleteComment ? `<button data-team-id="${teamId}" data-comment-index="${index}" class="delete-comment-btn absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>` : ''}
+                                </div>
+                                <div class="text-xs text-gray-400 mt-1 text-right">${commentTimestamp}</div>
+                            </div>`;
+                }))).join('');
+
+                // Redacted view for extremely low-voted teams
+                const currentScore = (team.upvotes?.length || 0) - (team.downvotes?.length || 0);
+                if (currentScore <= -15) { 
+                    showGenericModal(team.name, `
+                        <div class="bg-black p-6 rounded-lg text-center relative text-white">
+                            <h3 class="text-2xl font-bold text-gray-400 mb-2">[REDACTED BY ORDER OF STAFF]</h3>
+                            <p class="text-gray-500 mt-2">This team build was deemed a public nuisance.</p>
+                            <p class="text-600 mt-1 text-sm">Original creator: ${creatorName}</p>
+                        </div>`, null, 'md');
+                    showLoading(false);
+                    return;
+                }
+
+                // Main modal content structure
+                const modalContentHtml = `
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-2xl font-bold text-gray-800" id="team-modal-name">${team.name}</h3>
+                            ${canManageTeam || checkPermission('canEditAnyTeamName') ? `
+                                <button data-team-id="${teamId}" class="edit-team-name-btn text-blue-500 hover:text-blue-700 text-sm">✏️ Edit</button>
+                            ` : ''}
+                        </div>
+                        <div class="flex items-center gap-4">
+                            ${canTogglePublic ? `
+                            <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                <input type="checkbox" data-team-id="${teamId}" class="public-toggle-checkbox" ${team.isPublic ? 'checked' : ''}> Public
+                            </label>` : ''}
+                            ${checkPermission('canMarkStaffPick') && team.isPublic ? `<label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" data-team-id="${teamId}" class="staff-pick-checkbox" ${team.isStaffPick ? 'checked' : ''}> Staff Pick</label>` : ''}
+                            ${canManageTeam || checkPermission('canDeletePublicTeams') ? `<button data-team-id="${teamId}" data-is-public="${team.isPublic}" class="delete-pokemon-team-btn text-red-500 hover:text-red-700">Delete Team</button>` : ''}
+                        </div>
+                    </div>
+                    ${team.purpose ? `<p class="text-md font-semibold text-teal-700 mb-4">${team.purpose}</p>` : ''}
+                    <p class="text-sm text-gray-500 mb-4">Created by ${creatorName}</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                        ${pokemonHtml}
+                        ${(team.pokemon || []).length < 6 && canManageTeam ? `<button data-team-id="${teamId}" class="add-pokemon-btn flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold p-3 rounded-md transition">+</button>` : ''}
+                    </div>
+                    <div class="border-t pt-4 flex flex-col lg:flex-row justify-between items-start gap-6">
+                        <div class="w-full lg:w-1/2">
+                            <div class="flex justify-between items-center mb-2">
+                                <h4 class="font-semibold text-gray-800">Creator's Notes</h4>
+                                ${canManageTeam ? `<button data-team-id="${teamId}" class="edit-creator-notes-btn text-sm text-blue-600 hover:underline">Edit</button>` : ''}
+                            </div>
+                            <div data-team-id="${teamId}" class="creator-notes-display text-sm bg-gray-50 p-3 rounded-md min-h-[100px] whitespace-pre-wrap">${team.creatorNotes || '<span class="text-gray-400">No notes from the creator yet.</span>'}</div>
+                        </div>
+                        <div class="w-full lg:w-1/2">
+                            <h4 class="font-semibold text-gray-800 mb-2">Comments</h4>
+                            <div class="space-y-2 max-h-40 overflow-y-auto mb-2 pr-2">${commentsHtml}</div>
+                            <div class="flex gap-2">
+                                <input type="text" data-team-id="${teamId}" class="comment-input flex-grow border rounded p-2 text-sm" placeholder="Add a comment...">
+                                <button data-team-id="${teamId}" class="add-comment-btn bg-gray-600 text-white px-4 rounded-lg text-sm">Post</button>
+                            </div>
+                        </div>
+                        ${checkPermission('canVoteOnTeams') ? `
+                        <div class="flex items-center gap-2 w-full lg:w-auto justify-center lg:justify-end border-t lg:border-t-0 lg:pt-0 pt-4">
+                            <button data-team-id="${teamId}" data-vote="up" class="vote-btn p-2 rounded-full ${team.upvotes?.includes(currentUserId) ? 'bg-green-500 text-white' : 'bg-gray-200 hover:bg-green-200'}">▲</button>
+                            <span id="vote-score-${teamId}" class="font-bold text-lg text-gray-800">${currentScore}</span>
+                            <button data-team-id="${teamId}" data-vote="down" class="vote-btn p-2 rounded-full ${team.downvotes?.includes(currentUserId) ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-red-200'}">▼</button>
+                        </div>` : ''}
+                    </div>
+                `;
+                showGenericModal(`${team.name} Details`, modalContentHtml, null, '4xl'); // Show modal with all details
+                attachPokemonTeamCardListeners(); // Re-attach listeners for dynamically loaded content
                 showLoading(false);
-                return;
-            }
-
-            // Main modal content structure
-            const modalContentHtml = `
-                <div class="flex justify-between items-center mb-4">
-                    <div class="flex items-center gap-2">
-                        <h3 class="text-2xl font-bold text-gray-800" id="team-modal-name">${team.name}</h3>
-                        ${canManageTeam || checkPermission('canEditAnyTeamName') ? `
-                            <button data-team-id="${teamId}" class="edit-team-name-btn text-blue-500 hover:text-blue-700 text-sm">✏️ Edit</button>
-                        ` : ''}
-                    </div>
-                    <div class="flex items-center gap-4">
-                        ${canTogglePublic ? `
-                        <label class="flex items-center gap-2 text-sm cursor-pointer">
-                            <input type="checkbox" data-team-id="${teamId}" class="public-toggle-checkbox" ${team.isPublic ? 'checked' : ''}> Public
-                        </label>` : ''}
-                        ${checkPermission('canMarkStaffPick') && team.isPublic ? `<label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" data-team-id="${teamId}" class="staff-pick-checkbox" ${team.isStaffPick ? 'checked' : ''}> Staff Pick</label>` : ''}
-                        ${canManageTeam || checkPermission('canDeletePublicTeams') ? `<button data-team-id="${teamId}" data-is-public="${team.isPublic}" class="delete-pokemon-team-btn text-red-500 hover:text-red-700">Delete Team</button>` : ''}
-                    </div>
-                </div>
-                ${team.purpose ? `<p class="text-md font-semibold text-teal-700 mb-4">${team.purpose}</p>` : ''}
-                <p class="text-sm text-gray-500 mb-4">Created by ${creatorName}</p>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                    ${pokemonHtml}
-                    ${(team.pokemon || []).length < 6 && canManageTeam ? `<button data-team-id="${teamId}" class="add-pokemon-btn flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold p-3 rounded-md transition">+</button>` : ''}
-                </div>
-                <div class="border-t pt-4 flex flex-col lg:flex-row justify-between items-start gap-6">
-                    <div class="w-full lg:w-1/2">
-                        <div class="flex justify-between items-center mb-2">
-                            <h4 class="font-semibold text-gray-800">Creator's Notes</h4>
-                            ${canManageTeam ? `<button data-team-id="${teamId}" class="edit-creator-notes-btn text-sm text-blue-600 hover:underline">Edit</button>` : ''}
-                        </div>
-                        <div data-team-id="${teamId}" class="creator-notes-display text-sm bg-gray-50 p-3 rounded-md min-h-[100px] whitespace-pre-wrap">${team.creatorNotes || '<span class="text-gray-400">No notes from the creator yet.</span>'}</div>
-                    </div>
-                    <div class="w-full lg:w-1/2">
-                        <h4 class="font-semibold text-gray-800 mb-2">Comments</h4>
-                        <div class="space-y-2 max-h-40 overflow-y-auto mb-2 pr-2">${commentsHtml}</div>
-                        <div class="flex gap-2">
-                            <input type="text" data-team-id="${teamId}" class="comment-input flex-grow border rounded p-2 text-sm" placeholder="Add a comment...">
-                            <button data-team-id="${teamId}" class="add-comment-btn bg-gray-600 text-white px-4 rounded-lg text-sm">Post</button>
-                        </div>
-                    </div>
-                    ${checkPermission('canVoteOnTeams') ? `
-                    <div class="flex items-center gap-2 w-full lg:w-auto justify-center lg:justify-end border-t lg:border-t-0 lg:pt-0 pt-4">
-                        <button data-team-id="${teamId}" data-vote="up" class="vote-btn p-2 rounded-full ${team.upvotes?.includes(currentUserId) ? 'bg-green-500 text-white' : 'bg-gray-200 hover:bg-green-200'}">▲</button>
-                        <span class="font-bold text-lg text-gray-800">${(team.upvotes?.length || 0) - (team.downvotes?.length || 0)}</span>
-                        <button data-team-id="${teamId}" data-vote="down" class="vote-btn p-2 rounded-full ${team.downvotes?.includes(currentUserId) ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-red-200'}">▼</button>
-                    </div>` : ''}
-                </div>
-            `;
-            showGenericModal(`${team.name} Details`, modalContentHtml, null, '4xl'); // Show modal with all details
-            attachPokemonTeamCardListeners(); // Re-attach listeners for dynamically loaded content
-            showLoading(false);
+            }, (error) => {
+                console.error("Error fetching team details for modal:", error);
+                alert("Could not load team details.");
+                hideGenericModal();
+                showLoading(false);
+            });
+            unsubscribeListeners.push(unsubModal); // Add this modal-specific listener to the cleanup array
         }
 
         // Handles adding or editing a Pokemon within a team
@@ -2075,8 +2083,8 @@
                                 <th scope="col" class="px-6 py-3">Type</th>
                                 <th scope="col" class="px-6 py-3">Base Stats</th>
                                 <th scope="col" class="px-6 py-3">Abilities</th>
-                                <th scope="col" class="px-6 py-3">Common Builds</th>
-                                ${checkPermission('canManagePokedex') ? `<th scope="col" class="px-6 py-3"><span class="sr-only">Actions</span></th>` : ''}
+                                <th scope="col" class="px-6 py-3">Builds</th>
+                                ${checkPermission('canManagePokedex') || checkPermission('canAddPokedexBuilds') ? `<th scope="col" class="px-6 py-3"><span class="sr-only">Actions</span></th>` : ''}
                             </tr>
                         </thead>
                         <tbody id="pokedex-table-body"></tbody>
@@ -2141,9 +2149,7 @@
                     <td class="px-6 py-4">${entry.stats}</td> 
                     <td class="px-6 py-4">${entry.abilities}</td> 
                     <td class="px-6 py-4">
-                        ${(entry.builds || []).map(b => `
-                            <div class="mb-1"><strong>${b.name}</strong> (${b.nature}, ${b.evs}): ${b.moves}</div>
-                        `).join('')}
+                        ${(entry.builds || []).length > 0 ? `<button data-action="view-pokedex-builds" data-id="${entry.id}" class="text-blue-600 hover:underline text-sm">View ${entry.builds.length} Build(s)</button>` : '<span class="text-gray-400 text-sm">No Builds</span>'}
                     </td>
                     ${checkPermission('canManagePokedex') ? ` 
                         <td class="px-6 py-4 text-right"> 
@@ -2155,6 +2161,13 @@
             `).join('');
 
             // Attach action listeners for edit/delete buttons
+            if (checkPermission('canManagePokedex') || checkPermission('canAddPokedexBuilds')) { 
+                document.querySelectorAll('[data-action="view-pokedex-builds"]').forEach(btn => btn.onclick = (e) => { 
+                    const entryId = e.target.dataset.id; 
+                    const entry = entries.find(item => item.id === entryId); 
+                    if (entry) showPokedexBuildsModal(entry); 
+                });
+            }
             if (checkPermission('canManagePokedex')) { 
                 document.querySelectorAll('[data-action="edit-pokedex-entry"]').forEach(btn => btn.onclick = (e) => { 
                     const entryId = e.target.dataset.id; 
@@ -2166,7 +2179,7 @@
                     showModal(`Are you sure you want to delete this Pokédex entry?`, async () => { 
                         const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`); 
                         const docSnap = await getDoc(docRef); 
-                        if (docSnap.exists()) { 
+                        if (Array.isArray(docSnap.data().entries)) { // Ensure it's an array before filtering
                             const updatedEntries = docSnap.data().entries.filter(item => item.id !== entryId); 
                             await updateDoc(docRef, { entries: updatedEntries }); 
                         } 
@@ -2178,15 +2191,18 @@
         // Displays a form for adding or editing a Pokedex entry
         function showPokedexEntryForm(entry = {}) {
             const isEditing = !!entry.id;
+            const isStaffPlus = ['Staff', 'Admin', 'Superadmin'].includes(currentUserRole);
+            const canEditBasicInfo = isStaffPlus; // Only Staff+ can edit basic info (name, types, stats, abilities)
+
             const allTypes = ['Normal', 'Fire', 'Water', 'Grass', 'Electric', 'Ice', 'Fighting', 'Poison', 'Ground', 'Flying', 'Psychic', 'Bug', 'Rock', 'Ghost', 'Dragon', 'Steel', 'Dark', 'Fairy'];
 
             const buildsHtml = (entry.builds || []).map((build, index) => `
                 <div class="space-y-2 border p-3 rounded-lg bg-gray-50 relative mt-2 build-item">
-                    <button type="button" class="remove-build-btn absolute top-2 right-2 text-red-500 hover:text-red-700 font-bold">&times;</button>
-                    <input type="text" name="buildName" placeholder="Build Name (e.g., Swords Dance Sweeper)" value="${build.name || ''}" class="w-full p-2 border rounded-lg text-sm">
-                    <input type="text" name="buildNature" placeholder="Nature (e.g., Jolly)" value="${build.nature || ''}" class="w-full p-2 border rounded-lg text-sm">
-                    <input type="text" name="buildEvs" placeholder="EVs (e.g., 252 Atk / 252 Spe)" value="${build.evs || ''}" class="w-full p-2 border rounded-lg text-sm">
-                    <input type="text" name="buildMoves" placeholder="Moves (comma-separated)" value="${(build.moves || []).join(', ') || ''}" class="w-full p-2 border rounded-lg text-sm">
+                    ${canEditBasicInfo ? `<button type="button" class="remove-build-btn absolute top-2 right-2 text-red-500 hover:text-red-700 font-bold">&times;</button>` : ''}
+                    <input type="text" name="buildName" placeholder="Build Name (e.g., Swords Dance Sweeper)" value="${build.name || ''}" class="w-full p-2 border rounded-lg text-sm" ${canEditBasicInfo ? '' : 'readonly'}>
+                    <input type="text" name="buildNature" placeholder="Nature (e.g., Jolly)" value="${build.nature || ''}" class="w-full p-2 border rounded-lg text-sm" ${canEditBasicInfo ? '' : 'readonly'}>
+                    <input type="text" name="buildEvs" placeholder="EVs (e.g., 252 Atk / 252 Spe)" value="${build.evs || ''}" class="w-full p-2 border rounded-lg text-sm" ${canEditBasicInfo ? '' : 'readonly'}>
+                    <input type="text" name="buildMoves" placeholder="Moves (comma-separated)" value="${(build.moves || []).join(', ') || ''}" class="w-full p-2 border rounded-lg text-sm" ${canEditBasicInfo ? '' : 'readonly'}>
                 </div>
             `).join('');
 
@@ -2195,18 +2211,18 @@
                     <input type="hidden" name="id" value="${entry.id || `pkmn-${Date.now()}`}"> 
                     <div> 
                         <label class="block text-sm font-medium text-gray-700">Pokémon Name</label> 
-                        <input type="text" name="name" value="${entry.name || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" required> 
+                        <input type="text" name="name" value="${entry.name || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" required ${canEditBasicInfo ? '' : 'readonly'}> 
                     </div> 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Type 1</label> 
-                            <select name="type1" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm"> 
+                            <select name="type1" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm" ${canEditBasicInfo ? '' : 'disabled'}> 
                                 ${allTypes.map(type => `<option value="${type}" ${entry.type1 === type ? 'selected' : ''}>${type}</option>`).join('')} 
                             </select> 
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Type 2 (Optional)</label> 
-                            <select name="type2" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm"> 
+                            <select name="type2" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm" ${canEditBasicInfo ? '' : 'disabled'}> 
                                 <option value="">None</option>
                                 ${allTypes.map(type => `<option value="${type}" ${entry.type2 === type ? 'selected' : ''}>${type}</option>`).join('')} 
                             </select> 
@@ -2214,16 +2230,16 @@
                     </div>
                     <div> 
                         <label class="block text-sm font-medium text-gray-700">Base Stats (HP/Atk/Def/SpA/SpD/Spe)</label> 
-                        <input type="text" name="stats" value="${entry.stats || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., 100/100/100/100/100/100"> 
+                        <input type="text" name="stats" value="${entry.stats || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., 100/100/100/100/100/100" ${canEditBasicInfo ? '' : 'readonly'}> 
                     </div> 
                     <div> 
                         <label class="block text-sm font-medium text-gray-700">Abilities (comma-separated, HA for Hidden Ability)</label> 
-                        <input type="text" name="abilities" value="${entry.abilities || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Torrent, Sheer Force (HA)"> 
+                        <input type="text" name="abilities" value="${entry.abilities || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-teal-500 focus:border-teal-500" placeholder="e.g., Torrent, Sheer Force (HA)" ${canEditBasicInfo ? '' : 'readonly'}> 
                     </div> 
                     <div class="border-t pt-4">
                         <h4 class="font-semibold text-gray-800 mb-2">Builds</h4>
                         <div id="builds-container">${buildsHtml}</div>
-                        <button type="button" id="add-build-btn" class="mt-2 bg-gray-200 hover:bg-gray-300 text-gray-600 text-sm font-bold py-1 px-3 rounded-md">+ Add Build</button>
+                        ${canEditBasicInfo ? `<button type="button" id="add-build-btn" class="mt-2 bg-gray-200 hover:bg-gray-300 text-gray-600 text-sm font-bold py-1 px-3 rounded-md">+ Add Build</button>` : ''}
                     </div>
                     <div class="flex justify-end gap-4 pt-4 border-t"> 
                         <button type="button" class="generic-modal-close-btn bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button> 
@@ -2234,9 +2250,23 @@
             showGenericModal(isEditing ? 'Edit Pokédex Entry' : 'Add New Pokédex Entry', formHtml, async (e) => {
                 console.log("Pokedex form submitted."); // Debugging line
                 const form = e.target;
+                
+                const pokemonName = form.name.value;
+                if (!isEditing) { // Only check for uniqueness on new entries
+                    const pokedexDocRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`);
+                    const docSnap = await getDoc(pokedexDocRef);
+                    if (Array.isArray(docSnap.data().entries)) {
+                        const existingNames = docSnap.data().entries.map(p => p.name.toLowerCase());
+                        if (existingNames.includes(pokemonName.toLowerCase())) {
+                            alert(`A Pokémon named "${pokemonName}" already exists in the Pokédex. Please edit the existing entry or use a unique name.`);
+                            return; // Stop form submission
+                        }
+                    }
+                }
+
                 const newEntry = { 
                     id: form.id.value, 
-                    name: form.name.value, 
+                    name: pokemonName, 
                     type1: form.type1.value, 
                     type2: form.type2.value || null, // Allow null for second type
                     stats: form.stats.value,
@@ -2259,21 +2289,21 @@
 
                 console.log("New Pokedex entry data:", newEntry); // Debugging line
 
-                const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`);
+                const pokedexDocRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`);
                 try {
-                    const docSnap = await getDoc(docRef);
+                    const docSnap = await getDoc(pokedexDocRef);
                     if (docSnap.exists()) { 
-                        let entries = docSnap.data().entries || []; 
+                        let entries = Array.isArray(docSnap.data().entries) ? docSnap.data().entries : []; // Ensure it's an array
                         if (isEditing) { 
                             entries = entries.map(item => item.id === newEntry.id ? newEntry : item); 
                         } else { 
                             entries.push(newEntry); 
                         } 
-                        await updateDoc(docRef, { entries }); 
+                        await updateDoc(pokedexDocRef, { entries }); 
                         console.log("Pokedex entry updated/added successfully!"); // Log success
                     } else {
                         // If the pokedex document doesn't exist, create it with the first entry
-                        await setDoc(docRef, { entries: [newEntry] });
+                        await setDoc(pokedexDocRef, { entries: [newEntry] });
                         console.log("Pokedex document created and entry added successfully!"); // Log success
                     }
                     hideGenericModal(); // Close modal on success
@@ -2308,6 +2338,156 @@
 
             genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
         }
+
+        // NEW: Displays a modal with details and management for a Pokemon's builds
+        async function showPokedexBuildsModal(pokemonEntry) {
+            const canManagePokedex = checkPermission('canManagePokedex'); // For full edit/delete of builds
+            const canAddPokedexBuilds = checkPermission('canAddPokedexBuilds'); // For adding new builds
+
+            const buildsHtml = (pokemonEntry.builds || []).map((build, index) => `
+                <div class="p-4 bg-gray-100 rounded-lg relative build-display-item">
+                    <h5 class="font-bold text-lg">${build.name || 'Unnamed Build'}</h5>
+                    <p class="text-sm mt-1"><strong>Nature:</strong> ${build.nature || 'N/A'}</p>
+                    <p class="text-sm"><strong>EVs:</strong> ${formatEVs(build.evs) || 'N/A'}</p>
+                    <p class="text-sm"><strong>Moves:</strong> ${(build.moves || []).join(', ') || 'N/A'}</p>
+                    ${canManagePokedex ? `
+                    <div class="absolute top-2 right-2 flex gap-1">
+                        <button data-action="edit-single-build" data-pokemon-id="${pokemonEntry.id}" data-build-index="${index}" class="text-blue-500 hover:text-blue-700 text-sm">✏️ Edit</button>
+                        <button data-action="delete-single-build" data-pokemon-id="${pokemonEntry.id}" data-build-index="${index}" class="text-red-500 hover:text-red-700 text-sm font-bold">&times;</button>
+                    </div>
+                    ` : ''}
+                </div>
+            `).join('');
+
+            const modalContent = `
+                <div class="space-y-4">
+                    <div class="p-4 bg-gray-50 rounded-lg border text-sm">
+                        <h4 class="font-bold text-gray-800">Basic Info:</h4>
+                        <p><strong>Type:</strong> ${pokemonEntry.type1}${pokemonEntry.type2 ? `, ${pokemonEntry.type2}` : ''}</p>
+                        <p><strong>Base Stats:</strong> ${pokemonEntry.stats}</p>
+                        <p><strong>Abilities:</strong> ${pokemonEntry.abilities}</p>
+                    </div>
+                    <h4 class="font-bold text-gray-800 text-xl">Builds</h4>
+                    <div id="pokedex-builds-list" class="space-y-4 max-h-80 overflow-y-auto pr-2">
+                        ${buildsHtml || '<p class="text-gray-500">No builds added for this Pokémon yet.</p>'}
+                    </div>
+                    ${canAddPokedexBuilds ? `
+                    <div class="pt-4 border-t">
+                        <button data-action="add-new-build" data-pokemon-id="${pokemonEntry.id}" class="w-full bg-teal-500 text-white p-2 rounded-lg font-bold hover:bg-teal-600">+ Add New Build</button>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+
+            showGenericModal(`${pokemonEntry.name} Builds`, modalContent, null, '2xl');
+            attachPokedexBuildsListeners(); // Attach listeners for the dynamically generated content
+        }
+
+        // NEW: Displays a modal for adding/editing a single build for a Pokedex entry
+        async function showAddEditBuildModal(pokedexId, build = {}, buildIndex = -1) {
+            const isEditing = buildIndex > -1;
+            const modalTitle = isEditing ? `Edit Build for ${pokedexId}` : `Add New Build for ${pokedexId}`;
+
+            const formHtml = `
+                <form class="space-y-4">
+                    <input type="hidden" name="pokedexId" value="${pokedexId}">
+                    <input type="hidden" name="buildIndex" value="${buildIndex}">
+                    <input type="text" name="buildName" placeholder="Build Name (e.g., Special Attacker)" value="${build.name || ''}" class="w-full p-2 border rounded-lg" required>
+                    <input type="text" name="buildNature" placeholder="Nature (e.g., Timid)" value="${build.nature || ''}" class="w-full p-2 border rounded-lg">
+                    <input type="text" name="buildEvs" placeholder="EVs (e.g., 252 SpA / 252 Spe)" value="${build.evs || ''}" class="w-full p-2 border rounded-lg">
+                    <input type="text" name="buildMoves" placeholder="Moves (comma-separated)" value="${(build.moves || []).join(', ')}" class="w-full p-2 border rounded-lg">
+                    <div class="flex justify-end gap-4 pt-4 border-t">
+                        <button type="button" class="generic-modal-close-btn bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancel</button>
+                        <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-6 rounded-lg">${isEditing ? 'Save Changes' : 'Add Build'}</button>
+                    </div>
+                </form>
+            `;
+            showGenericModal(modalTitle, formHtml, async (e) => {
+                const form = e.target;
+                const updatedBuild = {
+                    name: form.buildName.value,
+                    nature: form.buildNature.value,
+                    evs: form.buildEvs.value,
+                    moves: form.buildMoves.value.split(',').map(m => m.trim()).filter(Boolean),
+                };
+
+                const pokedexDocRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`);
+                await runTransaction(db, async (transaction) => {
+                    const docSnap = await transaction.get(pokedexDocRef);
+                    if (!docSnap.exists()) return;
+
+                    let entries = Array.isArray(docSnap.data().entries) ? docSnap.data().entries : [];
+                    const pokemonIndex = entries.findIndex(p => p.id === pokedexId);
+
+                    if (pokemonIndex > -1) {
+                        const pokemon = { ...entries[pokemonIndex] };
+                        if (!pokemon.builds) pokemon.builds = [];
+
+                        if (isEditing) {
+                            pokemon.builds[buildIndex] = updatedBuild;
+                        } else {
+                            pokemon.builds.push(updatedBuild);
+                        }
+                        entries[pokemonIndex] = pokemon; // Update the entry in the array
+                        transaction.update(pokedexDocRef, { entries: entries });
+                    }
+                });
+                hideGenericModal(); // Close the add/edit build modal
+                // Refresh the builds list in the background by re-opening the main builds modal
+                const pokedexEntryRefreshed = await getDoc(doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`));
+                const entryData = pokedexEntryRefreshed.data().entries.find(e => e.id === pokedexId);
+                if (entryData) showPokedexBuildsModal(entryData);
+            }, 'md');
+            genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
+        }
+
+        // NEW: Attaches event listeners for the Pokédex Builds modal
+        function attachPokedexBuildsListeners() {
+            document.querySelectorAll('[data-action="add-new-build"]').forEach(btn => btn.onclick = (e) => {
+                const pokemonId = e.currentTarget.dataset.pokemonId;
+                showAddEditBuildModal(pokemonId);
+            });
+
+            document.querySelectorAll('[data-action="edit-single-build"]').forEach(btn => btn.onclick = async (e) => {
+                const { pokemonId, buildIndex } = e.currentTarget.dataset;
+                const pokedexDocRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`);
+                const docSnap = await getDoc(pokedexDocRef);
+                if (docSnap.exists()) {
+                    const entry = docSnap.data().entries.find(p => p.id === pokemonId);
+                    if (entry && entry.builds && entry.builds[buildIndex]) {
+                        showAddEditBuildModal(pokemonId, entry.builds[buildIndex], parseInt(buildIndex, 10));
+                    }
+                }
+            });
+
+            document.querySelectorAll('[data-action="delete-single-build"]').forEach(btn => btn.onclick = (e) => {
+                const { pokemonId, buildIndex } = e.currentTarget.dataset;
+                showModal('Are you sure you want to delete this build?', async () => {
+                    const pokedexDocRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`);
+                    await runTransaction(db, async (transaction) => {
+                        const docSnap = await transaction.get(pokedexDocRef);
+                        if (!docSnap.exists()) return;
+
+                        let entries = Array.isArray(docSnap.data().entries) ? docSnap.data().entries : [];
+                        const pokemonIndex = entries.findIndex(p => p.id === pokemonId);
+
+                        if (pokemonIndex > -1) {
+                            const pokemon = { ...entries[pokemonIndex] };
+                            if (pokemon.builds) {
+                                pokemon.builds.splice(parseInt(buildIndex, 10), 1); // Remove the build
+                            }
+                            entries[pokemonIndex] = pokemon;
+                            transaction.update(pokedexDocRef, { entries: entries });
+                        }
+                    });
+                    // Refresh the builds list in the background
+                    const pokedexEntryRefreshed = await getDoc(doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`));
+                    const entryData = pokedexEntryRefreshed.data().entries.find(e => e.id === pokemonId);
+                    if (entryData) showPokedexBuildsModal(entryData);
+                });
+            });
+        }
+
 
         // Renders the EV Hotspots view
         function renderEvHotspots() {
@@ -2415,7 +2595,7 @@
                         const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`); 
                         const docSnap = await getDoc(docRef); 
                         if (docSnap.exists()) { 
-                            const updatedEntries = docSnap.data().entries.filter(item => item.id !== entryId); 
+                            const updatedEntries = Array.isArray(docSnap.data().entries) ? docSnap.data().entries.filter(item => item.id !== entryId) : []; 
                             await updateDoc(docRef, { entries: updatedEntries }); 
                         } 
                     }); 
@@ -2459,7 +2639,7 @@
                 const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/evHotspots`);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) { 
-                    let entries = docSnap.data().entries || []; 
+                    let entries = Array.isArray(docSnap.data().entries) ? docSnap.data().entries : []; // Ensure it's an array
                     if (isEditing) { 
                         entries = entries.map(item => item.id === newEntry.id ? newEntry : item); 
                     } else { 
@@ -2656,7 +2836,7 @@
                     </div>
                     <div class="flex justify-end gap-4 pt-4 border-t">
                         <button type="button" class="generic-modal-close-btn bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancel</button>
-                        <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-6 rounded-lg">${isEditing ? 'Save Changes' : 'Create Guide'}</button>
+                        <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-6 rounded-lg">${isEditing ? 'Save Changes' : 'Create Guide'}</button>
                     </div>
                 </form>
             `;
@@ -2974,7 +3154,8 @@
                 canVoteOnTeams: "Upvote/Downvote Teams/Guides",
                 canVerifyContributions: "Verify Task Contributions",
                 canDeletePublicTeams: "Delete Public Pokémon Teams",
-                canEditAnyTeamName: "Edit Any Team Name" // New
+                canEditAnyTeamName: "Edit Any Team Name", // New
+                canAddPokedexBuilds: "Add Pokédex Builds" // New
             };
             if(permsContainer) {
                 permsContainer.innerHTML = rolesToManage.map(role => `
