@@ -276,7 +276,7 @@
                 </div>
 
                 <!-- KPIs -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8">
                     <div class="bg-white p-6 rounded-lg shadow-md text-center">
                         <h4 class="text-sm font-semibold text-gray-500 uppercase">Active Members</h4>
                         <p id="kpi-members" class="text-4xl font-bold text-teal-600">--</p>
@@ -284,6 +284,10 @@
                     <div class="bg-white p-6 rounded-lg shadow-md text-center">
                         <h4 class="text-sm font-semibold text-gray-500 uppercase">Public Teams</h4>
                         <p id="kpi-teams" class="text-4xl font-bold text-blue-600">--</p>
+                    </div>
+                     <div class="bg-white p-6 rounded-lg shadow-md text-center">
+                        <h4 class="text-sm font-semibold text-gray-500 uppercase">Private Teams</h4>
+                        <p id="kpi-private-teams" class="text-4xl font-bold text-indigo-600">--</p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-md text-center">
                         <h4 class="text-sm font-semibold text-gray-500 uppercase">Active Tasks</h4>
@@ -313,7 +317,7 @@
                         </div>
                     </div>
 
-                    <!-- Right Column: Teams & Members -->
+                    <!-- Right Column: Teams, Guides & Members -->
                     <div class="space-y-8">
                         <div class="bg-white p-6 rounded-lg shadow-md">
                             <div class="flex justify-between items-center mb-4">
@@ -321,6 +325,13 @@
                                 <button onclick="document.querySelector('[data-view=pokemon-teams]').click()" class="text-sm text-teal-600 hover:underline">View Team Locker &rarr;</button>
                             </div>
                             <div id="dashboard-teams-list" class="space-y-4"></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-xl font-bold text-gray-800">New Money Guides</h3>
+                                <button onclick="document.querySelector('[data-view=money-guide]').click()" class="text-sm text-teal-600 hover:underline">View All Guides &rarr;</button>
+                            </div>
+                            <div id="dashboard-guides-list" class="space-y-4"></div>
                         </div>
                         <div class="bg-white p-6 rounded-lg shadow-md">
                             <h3 class="text-xl font-bold text-gray-800 mb-4">Top Contributors (All Time)</h3>
@@ -340,11 +351,17 @@
             });
             unsubscribeListeners.push(teamSpaceUnsub);
 
-            const teamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), where("isPublic", "==", true));
-            const teamsUnsub = onSnapshot(teamsQuery, (snap) => {
+            const publicTeamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), where("isPublic", "==", true));
+            const publicTeamsUnsub = onSnapshot(publicTeamsQuery, (snap) => {
                 document.getElementById('kpi-teams').textContent = snap.size;
             });
-            unsubscribeListeners.push(teamsUnsub);
+            unsubscribeListeners.push(publicTeamsUnsub);
+            
+            const privateTeamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), where("isPublic", "==", false));
+            const privateTeamsUnsub = onSnapshot(privateTeamsQuery, (snap) => {
+                document.getElementById('kpi-private-teams').textContent = snap.size;
+            });
+            unsubscribeListeners.push(privateTeamsUnsub);
 
             const tasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", false));
             const tasksUnsub = onSnapshot(tasksQuery, (snap) => {
@@ -415,6 +432,26 @@
                 }))).join('');
             });
             unsubscribeListeners.push(recentTeamsUnsub);
+
+            // Dashboard Money Guides List
+            const moneyGuideUnsub = onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/moneyGuide`), (docSnap) => {
+                const container = document.getElementById('dashboard-guides-list');
+                if (!container) return;
+                if (docSnap.exists()) {
+                    const guides = (docSnap.data().entries || []).slice(-3).reverse(); // Get last 3, newest first
+                    if (guides.length === 0) {
+                        container.innerHTML = `<p class="text-gray-500">No money guides added yet.</p>`;
+                        return;
+                    }
+                    container.innerHTML = guides.map(guide => `
+                        <div class="border-b pb-3">
+                            <p class="font-bold text-gray-900">${guide.name}</p>
+                            <p class="text-sm text-gray-600">${guide.potential}</p>
+                        </div>
+                    `).join('');
+                }
+            });
+            unsubscribeListeners.push(moneyGuideUnsub);
             
             // Dashboard Leaderboard (Top 5)
             const overallScores = allContributions.reduce((acc, c) => { acc[c.userId] = (acc[c.userId] || 0) + 1; return acc; }, {});
@@ -2027,9 +2064,116 @@
         }
         // --- MODIFICATION END ---
 
+        // --- NEW MONEY GUIDE FUNCTIONS ---
         function renderMoneyGuide() {
-             mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800">Money Guide</h2><p class="text-gray-500">Feature coming soon.</p>`; 
+            mainContent.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800">Money Making Guide</h2>
+                    ${checkPermission('canEditResources') ? `<button id="add-money-guide-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">Add Guide</button>` : ''}
+                </div>
+                <div id="money-guide-container" class="space-y-6">
+                    <!-- Guides will be rendered here -->
+                </div>
+            `;
+
+            const unsub = onSnapshot(doc(db, `team_spaces/${currentTeamSpaceId}/resources/moneyGuide`), (docSnap) => {
+                if (docSnap.exists()) {
+                    const entries = docSnap.data().entries || [];
+                    const container = document.getElementById('money-guide-container');
+                    if (!container) return;
+                    if (entries.length === 0) {
+                        container.innerHTML = `<p class="text-gray-500">No money-making guides have been added yet.</p>`;
+                        return;
+                    }
+                    container.innerHTML = entries.map(entry => `
+                        <div class="bg-white p-6 rounded-lg shadow-md relative group">
+                            ${checkPermission('canEditResources') ? `
+                            <div class="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button data-action="edit-money-guide" data-id="${entry.id}" class="text-blue-500 hover:text-blue-700 p-1">✏️ Edit</button>
+                                <button data-action="delete-money-guide" data-id="${entry.id}" class="text-red-500 hover:text-red-700 p-1">🗑️ Delete</button>
+                            </div>` : ''}
+                            <h3 class="text-2xl font-bold text-gray-800">${entry.name}</h3>
+                            <p class="text-lg font-semibold text-yellow-600 mt-1">${entry.potential}</p>
+                            <p class="text-gray-600 mt-4 whitespace-pre-wrap">${entry.details}</p>
+                        </div>
+                    `).join('');
+
+                    if (checkPermission('canEditResources')) {
+                        document.querySelectorAll('[data-action="edit-money-guide"]').forEach(btn => btn.onclick = (e) => {
+                            const entryId = e.currentTarget.dataset.id;
+                            const entry = entries.find(item => item.id === entryId);
+                            if (entry) showMoneyGuideForm(entry);
+                        });
+                        document.querySelectorAll('[data-action="delete-money-guide"]').forEach(btn => btn.onclick = (e) => {
+                            const entryId = e.currentTarget.dataset.id;
+                            showModal(`Are you sure you want to delete this guide?`, async () => {
+                                const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/moneyGuide`);
+                                const docSnap = await getDoc(docRef);
+                                if (docSnap.exists()) {
+                                    const updatedEntries = docSnap.data().entries.filter(item => item.id !== entryId);
+                                    await updateDoc(docRef, { entries: updatedEntries });
+                                }
+                            });
+                        });
+                    }
+                }
+            });
+            unsubscribeListeners.push(unsub);
+
+            if (checkPermission('canEditResources')) {
+                document.getElementById('add-money-guide-btn').onclick = () => showMoneyGuideForm();
+            }
         }
+
+        function showMoneyGuideForm(entry = {}) {
+            const isEditing = !!entry.id;
+            const formHtml = `
+                <form class="space-y-4">
+                    <input type="hidden" name="id" value="${entry.id || `guide-${Date.now()}`}">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Guide Name</label>
+                        <input type="text" name="name" value="${entry.name || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Potential Earnings</label>
+                        <input type="text" name="potential" value="${entry.potential || ''}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" placeholder="e.g., High (~400k/hr)">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Details & Instructions</label>
+                        <textarea name="details" rows="6" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3">${entry.details || ''}</textarea>
+                    </div>
+                    <div class="flex justify-end gap-4 pt-4">
+                         <button type="button" class="generic-modal-close-btn bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                         <button type="submit" class="bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">${isEditing ? 'Save Changes' : 'Add Guide'}</button>
+                    </div>
+                </form>
+            `;
+            showGenericModal(isEditing ? 'Edit Money Guide' : 'Add New Money Guide', formHtml, async (e) => {
+                const form = e.target;
+                const newEntry = {
+                    id: form.id.value,
+                    name: form.name.value,
+                    potential: form.potential.value,
+                    details: form.details.value
+                };
+
+                const docRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/moneyGuide`);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    let entries = docSnap.data().entries || [];
+                    if (isEditing) {
+                        entries = entries.map(item => item.id === newEntry.id ? newEntry : item);
+                    } else {
+                        entries.push(newEntry);
+                    }
+                    await updateDoc(docRef, { entries });
+                }
+                hideGenericModal();
+            }, '2xl');
+            genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
+        }
+        // --- END NEW MONEY GUIDE FUNCTIONS ---
+
         async function renderAdminPanel() {
             if (!['Superadmin', 'Admin'].includes(currentUserRole)) { 
                 mainContent.innerHTML = `<p class="text-red-500">Access Denied.</p>`; 
