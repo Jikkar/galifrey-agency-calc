@@ -317,10 +317,12 @@
             document.getElementById('kpi-contributions').textContent = allContributions.length;
             renderDashboardChart(allContributions);
 
-            const activeTasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", false), orderBy("createdAt", "desc"));
+            // FIX: Removed orderBy from this query to prevent index error. Sorting is now done client-side.
+            const activeTasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", false));
             const activeTasksUnsub = onSnapshot(activeTasksQuery, async (snapshot) => {
                 const container = document.getElementById('dashboard-tasks-list'); if (!container) return;
-                const tasks = snapshot.docs.slice(0, 5);
+                // Client-side sorting
+                const tasks = snapshot.docs.sort((a,b) => (b.data().createdAt?.toDate() || 0) - (a.data().createdAt?.toDate() || 0)).slice(0, 5);
                 if (tasks.length === 0) { container.innerHTML = `<p class="text-gray-500">No active tasks on the board.</p>`; return; }
                 container.innerHTML = (await Promise.all(tasks.map(async doc => { const task = doc.data(); const creator = await getUsername(task.createdBy); return `<div class="p-3 bg-gray-50 rounded-md border"><p class="font-semibold text-gray-800">${task.text}</p><p class="text-xs text-gray-500">Added by ${creator} ${task.reward ? `| Reward: <span class="font-bold text-yellow-600">${task.reward}</span>` : ''}</p></div>`; }))).join('');
             });
@@ -1566,28 +1568,49 @@
                     <h2 class="text-3xl font-bold text-gray-800">Money Making Guides</h2>
                     ${checkPermission('canManageMoneyGuides') ? `<button id="add-money-guide-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg">New Guide</button>` : ''}
                 </div>
-                <div class="mb-4 border-b border-gray-200">
-                    <nav class="flex justify-between items-center" id="guides-filter-nav">
-                        <div class="flex space-x-4">
-                            <!-- Filter buttons can be added here later -->
+                <div class="mb-6 bg-white p-4 rounded-lg shadow-md">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="md:col-span-2">
+                            <input type="text" id="guide-search-input" placeholder="Search by title or author..." class="w-full p-2 border rounded-lg">
                         </div>
                         <div>
-                            <span class="text-sm font-semibold mr-2">Sort by:</span>
-                            <button data-sort="votes" class="sort-btn bg-teal-500 text-white px-3 py-1 rounded-l-md text-sm">Top Voted</button>
-                            <button data-sort="latest" class="sort-btn bg-gray-200 text-gray-700 px-3 py-1 rounded-r-md text-sm">Latest</button>
+                            <select id="guide-category-filter" class="w-full p-2 border rounded-lg bg-white"></select>
                         </div>
-                    </nav>
+                        <div>
+                            <select id="guide-sort-order" class="w-full p-2 border rounded-lg bg-white">
+                                <option value="votes">Sort by: Top Voted</option>
+                                <option value="latest">Sort by: Latest</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 <div id="money-guides-container" class="space-y-4"></div>
             `;
 
-            let sortOrder = 'votes';
+            let allGuides = []; // Cache all guides
             const q = query(collection(db, `team_spaces/${currentTeamSpaceId}/money_guides`));
-
-            const renderFilteredGuides = (snapshot) => {
+            
+            const renderFilteredGuides = async () => {
                 const container = document.getElementById('money-guides-container');
                 if (!container) return;
-                let guides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                const searchTerm = document.getElementById('guide-search-input').value.toLowerCase();
+                const categoryFilter = document.getElementById('guide-category-filter').value;
+                const sortOrder = document.getElementById('guide-sort-order').value;
+
+                // Create a list of author names to search against
+                const authorNames = {};
+                for (const guide of allGuides) {
+                    if (!authorNames[guide.createdBy]) {
+                        authorNames[guide.createdBy] = await getUsername(guide.createdBy);
+                    }
+                }
+
+                let guides = [...allGuides].filter(guide => {
+                    const matchesSearch = guide.title.toLowerCase().includes(searchTerm) || (authorNames[guide.createdBy] && authorNames[guide.createdBy].toLowerCase().includes(searchTerm));
+                    const matchesCategory = categoryFilter === 'all' || guide.category === categoryFilter;
+                    return matchesSearch && matchesCategory;
+                });
 
                 if (sortOrder === 'votes') {
                     guides.sort((a, b) => {
@@ -1600,47 +1623,59 @@
                 }
 
                 if (guides.length === 0) {
-                    container.innerHTML = `<p class="text-gray-500 text-center mt-8">No money-making guides have been added yet.</p>`;
+                    container.innerHTML = `<p class="text-gray-500 text-center mt-8">No guides match your criteria.</p>`;
                     return;
                 }
-                Promise.all(guides.map(renderMoneyGuideCard)).then(html => {
+                Promise.all(guides.map(guide => renderMoneyGuideCard(guide, authorNames[guide.createdBy]))).then(html => {
                     container.innerHTML = html.join('');
                     attachMoneyGuideListeners();
                 });
             };
 
-            const unsub = onSnapshot(q, renderFilteredGuides);
+            const unsub = onSnapshot(q, (snapshot) => {
+                allGuides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Populate category filter
+                const categories = ['all', ...new Set(allGuides.map(g => g.category))];
+                const categoryFilterEl = document.getElementById('guide-category-filter');
+                if(categoryFilterEl) {
+                    categoryFilterEl.innerHTML = categories.map(c => `<option value="${c}">${c === 'all' ? 'All Categories' : c}</option>`).join('');
+                }
+                renderFilteredGuides();
+            });
             unsubscribeListeners.push(unsub);
 
-            document.querySelectorAll('.sort-btn').forEach(btn => btn.onclick = (e) => {
-                sortOrder = e.target.dataset.sort;
-                document.querySelectorAll('.sort-btn').forEach(b => {
-                    b.classList.toggle('bg-teal-500', b.dataset.sort === sortOrder);
-                    b.classList.toggle('text-white', b.dataset.sort === sortOrder);
-                    b.classList.toggle('bg-gray-200', b.dataset.sort !== sortOrder);
-                    b.classList.toggle('text-gray-700', b.dataset.sort !== sortOrder);
-                });
-                onSnapshot(q, renderFilteredGuides);
-            });
+            document.getElementById('guide-search-input').oninput = renderFilteredGuides;
+            document.getElementById('guide-category-filter').onchange = renderFilteredGuides;
+            document.getElementById('guide-sort-order').onchange = renderFilteredGuides;
 
             if (checkPermission('canManageMoneyGuides')) {
                 document.getElementById('add-money-guide-btn').onclick = () => showMoneyGuideForm();
             }
         }
+        
+        // Helper to strip HTML and truncate text
+        function getSnippet(html, length = 100) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const text = tempDiv.textContent || tempDiv.innerText || "";
+            return text.length > length ? text.substring(0, length) + '...' : text;
+        }
 
-        async function renderMoneyGuideCard(guide) {
-            const authorName = await getUsername(guide.createdBy);
+        async function renderMoneyGuideCard(guide, authorName) {
+            // If authorName is not pre-fetched, get it now.
+            const finalAuthorName = authorName || await getUsername(guide.createdBy);
             const score = (guide.upvotes?.length || 0) - (guide.downvotes?.length || 0);
             const userVote = guide.upvotes?.includes(currentUserId) ? 'up' : guide.downvotes?.includes(currentUserId) ? 'down' : null;
+            const snippet = getSnippet(guide.description, 120);
 
             return `
-                <div class="bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer" data-action="view-guide" data-id="${guide.id}">
+                <div class="bg-white p-5 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer flex flex-col" data-action="view-guide" data-id="${guide.id}">
                     <div class="flex justify-between items-start">
                         <div>
                             <h3 class="text-xl font-bold text-gray-800">${guide.title}</h3>
-                            <p class="text-sm text-gray-500">By ${authorName}</p>
+                            <p class="text-sm text-gray-500">By ${finalAuthorName}</p>
                         </div>
-                        <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-4 flex-shrink-0">
                             ${guide.isStaffPick ? `<span class="text-xs font-bold bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full">⭐ Staff Pick</span>` : ''}
                             <div class="flex items-center gap-2">
                                 <button data-action="vote-guide" data-id="${guide.id}" data-vote="up" class="vote-btn p-1 rounded-full ${userVote === 'up' ? 'bg-green-500 text-white' : 'bg-gray-200 hover:bg-green-200'}">▲</button>
@@ -1649,7 +1684,8 @@
                             </div>
                         </div>
                     </div>
-                    <div class="mt-4 grid grid-cols-3 gap-4 text-center">
+                    <p class="text-sm text-gray-600 mt-3 flex-grow">${snippet}</p>
+                    <div class="mt-4 pt-4 border-t border-gray-200 grid grid-cols-3 gap-4 text-center">
                         <div><p class="text-xs text-gray-500 uppercase">Category</p><p class="font-semibold">${guide.category}</p></div>
                         <div><p class="text-xs text-gray-500 uppercase">Effort</p><p class="font-semibold">${guide.effort}</p></div>
                         <div><p class="text-xs text-gray-500 uppercase">Reward</p><p class="font-semibold text-green-600">${guide.reward}</p></div>
@@ -1660,13 +1696,33 @@
 
         function showMoneyGuideForm(guide = {}) {
             const isEditing = !!guide.id;
+            // Predetermined options based on research
+            const categories = ["Gym Rebattles", "Item Farming", "Berry Farming", "Pokemon Catching", "Pay Day Farming", "Shiny Hunting", "Breeding"];
+            const efforts = ["Very Low", "Low", "Medium", "High", "Very High"];
+            const rewards = ["Low (~50-100k/hr)", "Medium (~100-200k/hr)", "High (~200-400k/hr)", "Very High (400k+/hr)"];
+
             const formHtml = `
                 <form class="space-y-4">
                     <input type="text" name="title" placeholder="Guide Title" class="w-full p-2 border rounded-lg text-lg font-bold" value="${guide.title || ''}" required>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input type="text" name="category" placeholder="Category (e.g., Farming)" class="w-full p-2 border rounded-lg" value="${guide.category || ''}" required>
-                        <input type="text" name="effort" placeholder="Effort (e.g., Low, Medium, High)" class="w-full p-2 border rounded-lg" value="${guide.effort || ''}" required>
-                        <input type="text" name="reward" placeholder="Reward (e.g., ~400k/hr)" class="w-full p-2 border rounded-lg" value="${guide.reward || ''}" required>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                            <select name="category" class="w-full p-2 border rounded-lg bg-white" required>
+                                ${categories.map(c => `<option value="${c}" ${guide.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Effort</label>
+                            <select name="effort" class="w-full p-2 border rounded-lg bg-white" required>
+                                ${efforts.map(e => `<option value="${e}" ${guide.effort === e ? 'selected' : ''}>${e}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Reward</label>
+                            <select name="reward" class="w-full p-2 border rounded-lg bg-white" required>
+                                ${rewards.map(r => `<option value="${r}" ${guide.reward === r ? 'selected' : ''}>${r}</option>`).join('')}
+                            </select>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Detailed Description</label>
@@ -1674,7 +1730,7 @@
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input type="url" name="imageUrl" placeholder="Image URL (optional)" class="w-full p-2 border rounded-lg" value="${guide.imageUrl || ''}">
-                        <input type="url" name="videoUrl" placeholder="YouTube/Video URL (optional)" class="w-full p-2 border rounded-lg" value="${guide.videoUrl || ''}">
+                        <input type="url" name="videoUrl" placeholder="YouTube URL (optional)" class="w-full p-2 border rounded-lg" value="${guide.videoUrl || ''}">
                     </div>
                     <div class="flex justify-end gap-4 pt-4 border-t">
                         <button type="button" class="generic-modal-close-btn bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancel</button>
@@ -1690,7 +1746,7 @@
                     category: form.category.value,
                     effort: form.effort.value,
                     reward: form.reward.value,
-                    description: quillEditor.root.innerHTML, // Get HTML content from Quill
+                    description: quillEditor.root.innerHTML,
                     imageUrl: form.imageUrl.value,
                     videoUrl: form.videoUrl.value,
                 };
@@ -1704,29 +1760,20 @@
                         createdAt: serverTimestamp(),
                         isStaffPick: false,
                         upvotes: [],
-                        downvotes: []
+                        downvotes: [],
+                        comments: [] // Initialize comments array
                     });
                 }
                 hideGenericModal();
             }, '4xl');
 
-            // Initialize Quill Editor
             quillEditor = new Quill('#quill-editor', {
                 theme: 'snow',
-                modules: {
-                    toolbar: [
-                        [{ 'header': [1, 2, 3, false] }],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        ['link', 'image'],
-                        ['clean']
-                    ]
-                }
+                modules: { toolbar: [ [{ 'header': [1, 2, 3, false] }], ['bold', 'italic', 'underline', 'strike'], [{ 'list': 'ordered'}, { 'list': 'bullet' }], ['link', 'image'], ['clean'] ] }
             });
             if (isEditing && guide.description) {
                 quillEditor.root.innerHTML = guide.description;
             }
-
             genericModal.querySelector('.generic-modal-close-btn').onclick = hideGenericModal;
         }
 
@@ -1737,22 +1784,47 @@
                 mediaHtml += `<img src="${guide.imageUrl}" class="w-full h-auto object-cover rounded-lg mb-4" alt="Guide Image">`;
             }
             if (guide.videoUrl) {
-                // Basic YouTube embed logic
-                let embedUrl = guide.videoUrl;
-                if (guide.videoUrl.includes('youtube.com/watch?v=')) {
-                    const videoId = new URL(guide.videoUrl).searchParams.get('v');
-                    embedUrl = `https://www.youtube.com/embed/${videoId}`;
-                } else if (guide.videoUrl.includes('youtu.be/')) {
-                    const videoId = new URL(guide.videoUrl).pathname.substring(1);
-                    embedUrl = `https://www.youtube.com/embed/${videoId}`;
+                let embedUrl = '';
+                try {
+                    const url = new URL(guide.videoUrl);
+                    if (url.hostname === 'www.youtube.com' || url.hostname === 'youtube.com') {
+                        const videoId = url.searchParams.get('v');
+                        if (videoId) embedUrl = `https://www.youtube.com/embed/${videoId}`;
+                    } else if (url.hostname === 'youtu.be') {
+                        const videoId = url.pathname.substring(1);
+                        if (videoId) embedUrl = `https://www.youtube.com/embed/${videoId}`;
+                    }
+                } catch (e) { /* Invalid URL, do nothing */ }
+                
+                if (embedUrl) {
+                    mediaHtml += `<div class="aspect-w-16 aspect-h-9 mt-4"><iframe src="${embedUrl}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full rounded-lg"></iframe></div>`;
                 }
-                mediaHtml += `<div class="aspect-w-16 aspect-h-9"><iframe src="${embedUrl}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full rounded-lg"></iframe></div>`;
             }
+            
+            const commentsHtml = (await Promise.all((guide.comments || []).map(async (comment, index) => {
+                const commentAuthor = await getUsername(comment.authorId);
+                const canDelete = currentUserRole === 'Superadmin' || currentUserRole === 'Admin' || currentUserRole === 'Staff' || comment.authorId === currentUserId;
+                return `
+                    <div class="bg-gray-200 p-3 rounded-md group relative">
+                        <p class="text-sm"><strong class="text-gray-900">${commentAuthor}</strong>: ${comment.text}</p>
+                        <p class="text-xs text-gray-500 text-right mt-1">${new Date(comment.createdAt).toLocaleString()}</p>
+                        ${canDelete ? `<button data-action="delete-guide-comment" data-guide-id="${guide.id}" data-comment-index="${index}" class="absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>` : ''}
+                    </div>
+                `;
+            }))).join('');
 
             const modalContent = `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div class="lg:col-span-2">
                         <div class="prose max-w-none text-gray-800">${guide.description}</div>
+                        <div class="mt-8 border-t pt-6">
+                            <h4 class="text-xl font-bold mb-4">Comments</h4>
+                            <div id="guide-comments-container" class="space-y-4 max-h-64 overflow-y-auto pr-2 mb-4">${commentsHtml}</div>
+                            <div class="flex gap-2">
+                                <input type="text" id="guide-comment-input" class="flex-grow border rounded p-2 text-sm" placeholder="Add a comment...">
+                                <button data-action="add-guide-comment" data-id="${guide.id}" class="bg-gray-600 text-white px-4 rounded-lg text-sm">Post</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="space-y-6">
                         <div class="bg-gray-100 p-4 rounded-lg">
@@ -1781,7 +1853,6 @@
 
         function attachMoneyGuideListeners() {
             document.querySelectorAll('[data-action="view-guide"]').forEach(card => card.onclick = async e => {
-                // Prevent vote clicks from triggering the modal
                 if (e.target.closest('.vote-btn')) return;
                 const guideId = e.currentTarget.dataset.id;
                 const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId);
@@ -1792,7 +1863,7 @@
             });
 
             document.querySelectorAll('[data-action="vote-guide"]').forEach(btn => btn.onclick = async e => {
-                e.stopPropagation(); // Prevent modal from opening
+                e.stopPropagation();
                 const { id, vote } = e.currentTarget.dataset;
                 const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, id);
                 await runTransaction(db, async (transaction) => {
@@ -1834,6 +1905,44 @@
                 const guideId = e.currentTarget.dataset.id;
                 const isStaffPick = e.target.checked;
                 await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId), { isStaffPick });
+            });
+
+            // Comment listeners
+            document.querySelectorAll('[data-action="add-guide-comment"]').forEach(btn => btn.onclick = async e => {
+                const guideId = e.target.dataset.id;
+                const input = document.getElementById('guide-comment-input');
+                if (input && input.value.trim()) {
+                    const commentData = {
+                        text: input.value,
+                        authorId: currentUserId,
+                        createdAt: new Date().toISOString()
+                    };
+                    await updateDoc(doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId), {
+                        comments: arrayUnion(commentData)
+                    });
+                    // Refresh modal content to show new comment
+                    const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId);
+                    const guideSnap = await getDoc(guideRef);
+                    if(guideSnap.exists()) showGuideDetailModal({id: guideId, ...guideSnap.data()});
+                }
+            });
+
+            document.querySelectorAll('[data-action="delete-guide-comment"]').forEach(btn => btn.onclick = async e => {
+                const { guideId, commentIndex } = e.currentTarget.dataset;
+                const guideRef = doc(db, `team_spaces/${currentTeamSpaceId}/money_guides`, guideId);
+                const guideSnap = await getDoc(guideRef);
+                if (guideSnap.exists()) {
+                    const guideData = guideSnap.data();
+                    const commentToRemove = guideData.comments[commentIndex];
+                    if (commentToRemove) {
+                        showModal('Delete this comment?', async () => {
+                            await updateDoc(guideRef, { comments: arrayRemove(commentToRemove) });
+                            // Refresh modal
+                            const updatedSnap = await getDoc(guideRef);
+                            if(updatedSnap.exists()) showGuideDetailModal({id: guideId, ...updatedSnap.data()});
+                        });
+                    }
+                }
             });
         }
         // --- END NEW MONEY GUIDE FUNCTIONS ---
