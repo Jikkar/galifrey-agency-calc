@@ -40,6 +40,7 @@
         const usernameCache = {};
         const SUPERADMIN_UID = "G9MP7oe0cTQsu92SEXB6wqy1nQs1";
         let leaderboardChart = null; // To hold the chart instance
+        let dashboardChart = null; // For the new dashboard chart
 
         // --- DOM Elements ---
         let authContainer, appContainer, teamSpaceIdDisplay, teamSpaceIdInput, changeTeamSpaceBtn, createTeamSpaceBtn, mainContent, loadingOverlay, userProfileDisplay, logoutBtn, genericModal, genericModalTitle, genericModalContent, genericModalCloseBtn, officialTeamSpaceContainer, confirmationModal;
@@ -265,40 +266,247 @@
 
 
         // --- Render Functions ---
+        
+        // --- NEW DASHBOARD RENDER FUNCTION ---
         async function renderDashboard() {
-            mainContent.innerHTML = `<h2 class="text-3xl font-bold text-gray-800 mb-6">Player Team Dashboard</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"><div class="bg-white p-6 rounded-lg shadow"><h3 class="font-bold text-xl mb-3">Active Breeding Projects</h3><div id="dashboard-breeding" class="space-y-2"></div></div><div class="bg-white p-6 rounded-lg shadow"><h3 class="font-bold text-xl mb-3">Active Shiny Hunts</h3><div id="dashboard-hunts" class="space-y-2"></div></div><div class="bg-white p-6 rounded-lg shadow"><h3 class="font-bold text-xl mb-3">Player Team Members</h3><div id="dashboard-members" class="space-y-2"></div></div></div>`;
-            const renderList = async (q, containerId, formatter) => {
-                const unsub = onSnapshot(q, async (snapshot) => {
-                    const container = document.getElementById(containerId);
-                    if (!container) return;
-                    container.innerHTML = snapshot.empty ? `<p class="text-gray-500">Nothing here yet.</p>` : (await Promise.all(snapshot.docs.map(doc => formatter(doc.data(), doc.id)))).join('');
-                });
-                unsubscribeListeners.push(unsub);
-            };
-            await renderList(query(collection(db, `team_spaces/${currentTeamSpaceId}/breeding`), orderBy("createdAt", "desc")), 'dashboard-breeding', async (data) => `<p>${data.targetPokemon} <span class="text-xs text-gray-400">by ${await getUsername(data.createdBy)}</span></p>`);
-            await renderList(query(collection(db, `team_spaces/${currentTeamSpaceId}/hunts`), orderBy("createdAt", "desc")), 'dashboard-hunts', async (data) => `<div class="flex justify-between"><span>${data.target} <span class="text-xs text-gray-400">by ${await getUsername(data.createdBy)}</span></span><span class="font-mono font-bold">${(data.count || 0).toLocaleString()}</span></div>`);
-            
-            const teamSpaceUnsub = onSnapshot(doc(db, "team_spaces", currentTeamSpaceId), async (teamSpaceSnap) => {
-                const membersContainer = document.getElementById('dashboard-members');
-                if (!membersContainer || !teamSpaceSnap.exists()) return;
-                const memberIds = teamSpaceSnap.data().members || [];
-                const memberNames = await Promise.all(memberIds.map(id => getUsername(id)));
-                
-                let membersHtml = memberNames.slice(0, 5).map(name => `<p class="text-gray-700">${name}</p>`).join('');
-                if (memberNames.length > 5) {
-                    membersHtml += `<button id="see-all-members-btn" class="text-sm text-teal-600 hover:underline mt-2">See all ${memberNames.length} members...</button>`;
-                }
-                membersContainer.innerHTML = membersHtml;
+            mainContent.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800">Team Dashboard</h2>
+                    <span class="text-sm font-semibold text-gray-500">${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                </div>
 
-                if (memberNames.length > 5) {
-                    document.getElementById('see-all-members-btn').onclick = () => {
-                        const allMembersHtml = `<div class="grid grid-cols-2 md:grid-cols-3 gap-4">${memberNames.map(name => `<p class="p-2 bg-gray-100 rounded">${name}</p>`).join('')}</div>`;
-                        showGenericModal('All Team Members', allMembersHtml, null, '4xl');
-                    };
+                <!-- KPIs -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-md text-center">
+                        <h4 class="text-sm font-semibold text-gray-500 uppercase">Active Members</h4>
+                        <p id="kpi-members" class="text-4xl font-bold text-teal-600">--</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md text-center">
+                        <h4 class="text-sm font-semibold text-gray-500 uppercase">Public Teams</h4>
+                        <p id="kpi-teams" class="text-4xl font-bold text-blue-600">--</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md text-center">
+                        <h4 class="text-sm font-semibold text-gray-500 uppercase">Active Tasks</h4>
+                        <p id="kpi-tasks" class="text-4xl font-bold text-purple-600">--</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md text-center">
+                        <h4 class="text-sm font-semibold text-gray-500 uppercase">Total Contributions</h4>
+                        <p id="kpi-contributions" class="text-4xl font-bold text-pink-600">--</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Left Column: Chart & Tasks -->
+                    <div class="lg:col-span-2 space-y-8">
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-bold text-gray-800 mb-4">Weekly Contribution Breakdown</h3>
+                            <div class="relative h-80">
+                                <canvas id="dashboard-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-xl font-bold text-gray-800">Active Task Board</h3>
+                                <button onclick="document.querySelector('[data-view=tasks]').click()" class="text-sm text-teal-600 hover:underline">View All Tasks &rarr;</button>
+                            </div>
+                            <div id="dashboard-tasks-list" class="space-y-3"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Teams & Members -->
+                    <div class="space-y-8">
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-xl font-bold text-gray-800">Recently Added Teams</h3>
+                                <button onclick="document.querySelector('[data-view=pokemon-teams]').click()" class="text-sm text-teal-600 hover:underline">View Team Locker &rarr;</button>
+                            </div>
+                            <div id="dashboard-teams-list" class="space-y-4"></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-bold text-gray-800 mb-4">Top Contributors (All Time)</h3>
+                            <div id="dashboard-leaderboard" class="space-y-3"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // --- Data Fetching and Rendering Logic ---
+
+            // KPIs
+            const teamSpaceUnsub = onSnapshot(doc(db, "team_spaces", currentTeamSpaceId), (snap) => {
+                if (snap.exists()) {
+                    document.getElementById('kpi-members').textContent = snap.data().members?.length || 0;
                 }
             });
             unsubscribeListeners.push(teamSpaceUnsub);
+
+            const teamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), where("isPublic", "==", true));
+            const teamsUnsub = onSnapshot(teamsQuery, (snap) => {
+                document.getElementById('kpi-teams').textContent = snap.size;
+            });
+            unsubscribeListeners.push(teamsUnsub);
+
+            const tasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", false));
+            const tasksUnsub = onSnapshot(tasksQuery, (snap) => {
+                document.getElementById('kpi-tasks').textContent = snap.size;
+            });
+            unsubscribeListeners.push(tasksUnsub);
+
+            // Fetch all contributions for KPI and Chart
+            const tasksSnapshot = await getDocs(query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`)));
+            const contributionPromises = tasksSnapshot.docs.map(taskDoc => 
+                getDocs(query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks/${taskDoc.id}/contributions`), where("status", "==", "verified")))
+            );
+            const allContributionsSnapshots = await Promise.all(contributionPromises);
+            const allContributions = allContributionsSnapshots.flatMap(snap => snap.docs.map(d => d.data()));
+            
+            document.getElementById('kpi-contributions').textContent = allContributions.length;
+
+            // Dashboard Chart
+            renderDashboardChart(allContributions);
+
+            // Dashboard Tasks List (Top 5 active)
+            const activeTasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", false), orderBy("createdAt", "desc"));
+            const activeTasksUnsub = onSnapshot(activeTasksQuery, async (snapshot) => {
+                const container = document.getElementById('dashboard-tasks-list');
+                if (!container) return;
+                const tasks = snapshot.docs.slice(0, 5);
+                if (tasks.length === 0) {
+                    container.innerHTML = `<p class="text-gray-500">No active tasks on the board.</p>`;
+                    return;
+                }
+                container.innerHTML = (await Promise.all(tasks.map(async doc => {
+                    const task = doc.data();
+                    const creator = await getUsername(task.createdBy);
+                    return `
+                        <div class="p-3 bg-gray-50 rounded-md border">
+                            <p class="font-semibold text-gray-800">${task.text}</p>
+                            <p class="text-xs text-gray-500">Added by ${creator} ${task.reward ? `| Reward: <span class="font-bold text-yellow-600">${task.reward}</span>` : ''}</p>
+                        </div>
+                    `;
+                }))).join('');
+            });
+            unsubscribeListeners.push(activeTasksUnsub);
+
+            // Dashboard Teams List (Top 3 recent)
+            const recentTeamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), orderBy("createdAt", "desc"));
+            const recentTeamsUnsub = onSnapshot(recentTeamsQuery, async (snapshot) => {
+                const container = document.getElementById('dashboard-teams-list');
+                if (!container) return;
+                const teams = snapshot.docs.slice(0, 3);
+                 if (teams.length === 0) {
+                    container.innerHTML = `<p class="text-gray-500">No teams have been created yet.</p>`;
+                    return;
+                }
+                container.innerHTML = (await Promise.all(teams.map(async doc => {
+                    const team = doc.data();
+                    const creator = await getUsername(team.createdBy);
+                    const score = (team.upvotes?.length || 0) - (team.downvotes?.length || 0);
+                    return `
+                        <div class="border-b pb-3">
+                            <div class="flex justify-between items-center">
+                                <p class="font-bold text-gray-900">${team.name}</p>
+                                <span class="text-sm font-bold ${score >= 0 ? 'text-green-600' : 'text-red-600'}">${score > 0 ? '+' : ''}${score}</span>
+                            </div>
+                            <p class="text-sm text-gray-600">${team.purpose}</p>
+                            <p class="text-xs text-gray-400 mt-1">By ${creator}</p>
+                        </div>
+                    `;
+                }))).join('');
+            });
+            unsubscribeListeners.push(recentTeamsUnsub);
+            
+            // Dashboard Leaderboard (Top 5)
+            const overallScores = allContributions.reduce((acc, c) => { acc[c.userId] = (acc[c.userId] || 0) + 1; return acc; }, {});
+            const sortedContributors = Object.entries(overallScores).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const leaderboardContainer = document.getElementById('dashboard-leaderboard');
+            if (leaderboardContainer) {
+                 if (sortedContributors.length === 0) {
+                    leaderboardContainer.innerHTML = `<p class="text-gray-500">No contributions have been verified yet.</p>`;
+                } else {
+                    leaderboardContainer.innerHTML = (await Promise.all(sortedContributors.map(async ([userId, score], index) => {
+                        const username = await getUsername(userId);
+                        return `
+                            <div class="flex items-center justify-between text-sm p-2 rounded-md ${index === 0 ? 'bg-yellow-100' : ''}">
+                                <span class="font-semibold text-gray-700">${index + 1}. ${username}</span>
+                                <span class="font-bold text-teal-700">${score.toLocaleString()} contributions</span>
+                            </div>
+                        `;
+                    }))).join('');
+                }
+            }
         }
+
+        function renderDashboardChart(contributions) {
+            const ctx = document.getElementById('dashboard-chart')?.getContext('2d');
+            if (!ctx) return;
+            if (dashboardChart) dashboardChart.destroy();
+
+            const now = new Date();
+            const lastWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+            
+            const weeklyData = {};
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(lastWeek);
+                d.setDate(d.getDate() + i);
+                const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+                weeklyData[label] = { PokeYen: 0, Items: 0 };
+            }
+
+            contributions.forEach(c => {
+                if (c.timestamp) {
+                    const contribDate = c.timestamp.toDate();
+                    if (contribDate >= lastWeek && contribDate <= now) {
+                        const label = contribDate.toLocaleDateString('en-US', { weekday: 'short' });
+                        if (weeklyData[label]) {
+                            weeklyData[label].PokeYen += c.items?.PokeYen || 0;
+                            weeklyData[label].Items += Object.values(c.items).reduce((sum, val, key) => key !== 'PokeYen' ? sum + val : sum, 0);
+                        }
+                    }
+                }
+            });
+
+            dashboardChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(weeklyData),
+                    datasets: [
+                        {
+                            label: 'PokeYen Contributed',
+                            data: Object.values(weeklyData).map(d => d.PokeYen),
+                            backgroundColor: '#F59E0B', // Amber 500
+                            borderColor: '#D97706', // Amber 600
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Items Contributed (Count)',
+                            data: Object.values(weeklyData).map(d => d.Items),
+                            backgroundColor: '#10B981', // Emerald 500
+                            borderColor: '#059669', // Emerald 600
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: { stacked: true, beginAtZero: true }
+                    },
+                    plugins: {
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        legend: {
+                            position: 'bottom',
+                        }
+                    }
+                }
+            });
+        }
+        // --- END NEW DASHBOARD ---
 
         // --- POKEMON TEAMS MODULE ---
         // --- MODIFICATION START: IV/EV Formatting Helpers ---
