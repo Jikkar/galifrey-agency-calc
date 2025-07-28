@@ -35,7 +35,7 @@
         // --- App State ---
         let currentUserId = null;
         let currentUsername = null;
-        let currentUserRole = 'Guest';
+        let currentUserRole = 'Guest'; // Default to Guest
         let currentTeamSpaceId = null;
         let teamSpacePermissions = {};
         let unsubscribeListeners = [];
@@ -46,7 +46,7 @@
         let quillEditor = null; // For the WYSIWYG editor instance
 
         // --- DOM Elements ---
-        let authContainer, appContainer, teamSpaceIdDisplay, teamSpaceIdInput, changeTeamSpaceBtn, createTeamSpaceBtn, mainContent, loadingOverlay, userProfileDisplay, logoutBtn, genericModal, genericModalTitle, genericModalContent, genericModalCloseBtn, officialTeamSpaceContainer, confirmationModal;
+        let authContainer, appContainer, teamSpaceIdDisplay, teamSpaceIdInput, changeTeamSpaceBtn, createTeamSpaceBtn, mainContent, loadingOverlay, genericModal, genericModalTitle, genericModalContent, genericModalCloseBtn, officialTeamSpaceContainer, confirmationModal;
 
         function initializeDOMElements() {
             authContainer = document.getElementById('auth-container');
@@ -57,8 +57,7 @@
             createTeamSpaceBtn = document.getElementById('create-team-space-btn');
             mainContent = document.getElementById('main-content');
             loadingOverlay = document.getElementById('loading-overlay');
-            userProfileDisplay = document.getElementById('user-profile-display');
-            logoutBtn = document.getElementById('logout-btn');
+            // Removed userProfileDisplay and logoutBtn
             genericModal = document.getElementById('generic-modal');
             genericModalTitle = document.getElementById('generic-modal-title');
             genericModalContent = document.getElementById('generic-modal-content');
@@ -165,6 +164,11 @@
         }
 
         function switchView(viewName) {
+            // Remove event listeners from nav buttons before re-adding for guests
+            document.querySelectorAll('.nav-button').forEach(btn => {
+                btn.removeEventListener('click', handleNavButtonClick);
+            });
+
             document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('bg-teal-600', 'text-white'));
             const button = document.querySelector(`.nav-button[data-view="${viewName}"]`);
             if (button) button.classList.add('bg-teal-600', 'text-white');
@@ -180,10 +184,32 @@
                 'pokedex': renderPokedex, 
                 'ev-hotspots': renderEvHotspots, 
                 'money-guide': renderMoneyGuide,
+                'profile': renderProfilePage, // New profile page
                 'admin-panel': renderAdminPanel 
             };
             if (viewRenderers[viewName]) viewRenderers[viewName]();
+
+            // Re-attach listeners for nav buttons AFTER current view has been rendered
+            document.querySelectorAll('.nav-button').forEach(btn => {
+                btn.addEventListener('click', handleNavButtonClick);
+            });
         }
+
+        // Centralized handler for nav button clicks to ensure proper role-based access
+        function handleNavButtonClick(event) {
+            const viewName = event.currentTarget.dataset.view;
+            // Guests can only see the dashboard, which will show "Pending verification"
+            if (currentUserRole === 'Guest' && viewName !== 'dashboard' && viewName !== 'profile') {
+                return; // Do nothing if guest tries to navigate elsewhere
+            }
+            // Admin panel is restricted by permission, not just by role check here
+            if (viewName === 'admin-panel' && !checkPermission('canManageUsers')) {
+                 alert("You don't have permission to access the Admin Panel.");
+                 return;
+            }
+            switchView(viewName);
+        }
+
 
         function refreshCurrentView() {
             const activeNav = document.querySelector('.nav-button.bg-teal-600');
@@ -206,9 +232,10 @@
                 
                 // Define default permissions for different roles
                 const defaultPermissions = {
-                    Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true, canManageMoneyGuides: true, canManagePokedex: true, canEditAnyTeamName: true, canAddPokedexBuilds: true },
-                    Staff: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false, canManageMoneyGuides: true, canManagePokedex: false, canEditAnyTeamName: true, canAddPokedexBuilds: true },
-                    Member: { canCreatePublicTeams: true, canVoteOnTeams: true, canManagePokemonTeams: false, canManageTasks: false, canManageProjects: false, canEditResources: false, canMarkStaffPick: false, canVerifyContributions: false, canDeletePublicTeams: false, canManageMoneyGuides: false, canManagePokedex: false, canEditAnyTeamName: false, canAddPokedexBuilds: true }
+                    Guest: { canManagePokemonTeams: false, canManageTasks: false, canManageProjects: false, canEditResources: false, canMarkStaffPick: false, canCreatePublicTeams: false, canVoteOnTeams: false, canVerifyContributions: false, canDeletePublicTeams: false, canManageMoneyGuides: false, canManagePokedex: false, canEditAnyTeamName: false, canAddPokedexBuilds: false, canManageUsers: false },
+                    Member: { canCreatePublicTeams: true, canVoteOnTeams: true, canManagePokemonTeams: false, canManageTasks: false, canManageProjects: false, canEditResources: false, canMarkStaffPick: false, canVerifyContributions: false, canDeletePublicTeams: false, canManageMoneyGuides: false, canManagePokedex: false, canEditAnyTeamName: false, canAddPokedexBuilds: true, canManageUsers: false },
+                    Staff: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: false, canManageMoneyGuides: true, canManagePokedex: false, canEditAnyTeamName: true, canAddPokedexBuilds: true, canManageUsers: false },
+                    Admin: { canManagePokemonTeams: true, canManageTasks: true, canManageProjects: true, canEditResources: true, canMarkStaffPick: true, canCreatePublicTeams: true, canVoteOnTeams: true, canVerifyContributions: true, canDeletePublicTeams: true, canManageMoneyGuides: true, canManagePokedex: true, canEditAnyTeamName: true, canAddPokedexBuilds: true, canManageUsers: true } // Added canManageUsers
                 };
 
                 try {
@@ -242,6 +269,7 @@
                             
                             // Merge loaded permissions with default permissions to ensure all actions are defined
                             const finalPermissions = {
+                                Guest: { ...defaultPermissions.Guest, ...loadedPermissions.Guest },
                                 Admin: { ...defaultPermissions.Admin, ...loadedPermissions.Admin },
                                 Staff: { ...defaultPermissions.Staff, ...loadedPermissions.Staff },
                                 Member: { ...defaultPermissions.Member, ...loadedPermissions.Member }
@@ -250,6 +278,7 @@
                             teamSpacePermissions = finalPermissions; // Update global permissions state
 
                             // Self-heal permissions if there's a mismatch (e.g., new permissions added to default config)
+                            // Deep compare to avoid unnecessary writes
                             if (JSON.stringify(finalPermissions) !== JSON.stringify(loadedPermissions)) {
                                 console.log("Permissions mismatch detected. Healing Firestore document.");
                                 await updateDoc(teamSpaceRef, { permissions: finalPermissions }).catch(err => console.error("Error self-healing permissions:", err));
@@ -311,11 +340,44 @@
             });
         }
 
+        // NEW: Render the Profile Page
+        function renderProfilePage() {
+            mainContent.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800">Your Profile</h2>
+                </div>
+                <div class="bg-white p-8 rounded-lg shadow-md space-y-4">
+                    <p class="text-xl font-semibold text-gray-800">Username: <span class="font-bold text-teal-600">${currentUsername}</span></p>
+                    <p class="text-xl font-semibold text-gray-800">Role: <span class="font-bold text-blue-600">${currentUserRole}</span></p>
+                    <div class="pt-4 border-t border-gray-200">
+                        <button id="logout-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg">Logout</button>
+                    </div>
+                    <div class="pt-4 border-t border-gray-200 text-gray-500">
+                        <p>This section is under development. More profile features will be added here soon!</p>
+                    </div>
+                </div>
+            `;
+             // Attach logout button listener
+            document.getElementById('logout-btn').onclick = () => signOut(auth);
+        }
 
         // --- Render Functions ---
         
         // Renders the main dashboard view
         async function renderDashboard() {
+            if (currentUserRole === 'Guest') {
+                mainContent.innerHTML = `
+                    <div class="flex items-center justify-center h-full min-h-[50vh]">
+                        <div class="text-center p-8 bg-white rounded-lg shadow-lg">
+                            <h2 class="text-4xl font-bold text-gray-500 mb-4">Account Pending Verification</h2>
+                            <p class="text-lg text-gray-600">Your account is currently in 'Guest' mode. A staff member will verify your account and promote you to 'Member' soon.</p>
+                            <p class="text-md text-gray-400 mt-4">Please check back later.</p>
+                        </div>
+                    </div>
+                `;
+                return; // Stop rendering dashboard content for guests
+            }
+
             mainContent.innerHTML = `
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-3xl font-bold text-gray-800">Team Dashboard</h2>
@@ -324,7 +386,7 @@
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8">
                     <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Active Members</h4><p id="kpi-members" class="text-4xl font-bold text-teal-600">--</p></div>
                     <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Public Teams</h4><p id="kpi-teams" class="text-4xl font-bold text-blue-600">--</p></div>
-                    <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Private Teams</h4><p id="kpi-private-teams" class="text-4xl font-bold text-indigo-600">--</p></div>
+                    <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Pokedex / Builds</h4><p id="kpi-pokedex-builds" class="text-4xl font-bold text-indigo-600">--</p></div>
                     <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Active Tasks</h4><p id="kpi-tasks" class="text-4xl font-bold text-purple-600">--</p></div>
                     <div class="bg-white p-6 rounded-lg shadow-md text-center"><h4 class="text-sm font-semibold text-gray-500 uppercase">Total Contributions</h4><p id="kpi-contributions" class="text-4xl font-bold text-pink-600">--</p></div>
                 </div>
@@ -336,20 +398,31 @@
                     <div class="space-y-8">
                         <div class="bg-white p-6 rounded-lg shadow-md"><div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-gray-800">Recently Added Teams</h3><button onclick="document.querySelector('[data-view=pokemon-teams]').click()" class="text-sm text-teal-600 hover:underline">View Team Locker &rarr;</button></div><div id="dashboard-teams-list" class="space-y-4"></div></div>
                         <div class="bg-white p-6 rounded-lg shadow-md"><div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-gray-800">New Money Guides</h3><button onclick="document.querySelector('[data-view=money-guide]').click()" class="text-sm text-teal-600 hover:underline">View All Guides &rarr;</button></div><div id="dashboard-guides-list" class="space-y-4"></div></div>
-                        <div class="bg-white p-6 rounded-lg shadow-md"><h3 class="text-xl font-bold text-gray-800 mb-4">Top Contributors (All Time)</h3><div id="dashboard-leaderboard" class="space-y-3"></div></div>
+                        <div class="bg-white p-6 rounded-lg shadow-md"><h3 class="text-xl font-bold text-gray-800 mb-4">Top Pokeyen Contributors (All Time)</h3><div id="dashboard-leaderboard" class="space-y-3"></div></div>
                     </div>
                 </div>
             `;
 
-            // KPI Listeners (Active Members, Public/Private Teams, Active Tasks)
+            // KPI Listeners (Active Members, Public Teams, Active Tasks)
             const teamSpaceUnsub = onSnapshot(doc(db, "team_spaces", currentTeamSpaceId), (snap) => { if (snap.exists()) { document.getElementById('kpi-members').textContent = snap.data().members?.length || 0; } });
             unsubscribeListeners.push(teamSpaceUnsub);
             const publicTeamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), where("isPublic", "==", true));
             const publicTeamsUnsub = onSnapshot(publicTeamsQuery, (snap) => { document.getElementById('kpi-teams').textContent = snap.size; });
             unsubscribeListeners.push(publicTeamsUnsub);
-            const privateTeamsQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/pokemon_teams`), where("isPublic", "==", false));
-            const privateTeamsUnsub = onSnapshot(privateTeamsQuery, (snap) => { document.getElementById('kpi-private-teams').textContent = snap.size; });
-            unsubscribeListeners.push(privateTeamsUnsub);
+            
+            // KPI for Pokedex / Builds (XX/YY)
+            const pokedexRef = doc(db, `team_spaces/${currentTeamSpaceId}/resources/pokedex`);
+            const pokedexUnsub = onSnapshot(pokedexRef, (docSnap) => {
+                let totalPokemon = 0;
+                let totalBuilds = 0;
+                if (docSnap.exists() && Array.isArray(docSnap.data().entries)) {
+                    totalPokemon = docSnap.data().entries.length;
+                    totalBuilds = docSnap.data().entries.reduce((sum, entry) => sum + (entry.builds?.length || 0), 0);
+                }
+                document.getElementById('kpi-pokedex-builds').textContent = `${totalPokemon}/${totalBuilds}`;
+            });
+            unsubscribeListeners.push(pokedexUnsub);
+
             const tasksQuery = query(collection(db, `team_spaces/${currentTeamSpaceId}/tasks`), where("completed", "==", false));
             const tasksUnsub = onSnapshot(tasksQuery, (snap) => { document.getElementById('kpi-tasks').textContent = snap.size; });
             unsubscribeListeners.push(tasksUnsub);
@@ -393,13 +466,38 @@
             });
             unsubscribeListeners.push(moneyGuideUnsub);
             
-            // Top Contributors Leaderboard
-            const overallScores = allContributions.reduce((acc, c) => { acc[c.userId] = (acc[c.userId] || 0) + 1; return acc; }, {});
-            const sortedContributors = Object.entries(overallScores).sort((a, b) => b[1] - a[1]).slice(0, 5); // Top 5 contributors
+            // Top Pokeyen Contributors Leaderboard
+            const pokeyenScores = allContributions.reduce((acc, c) => {
+                const yen = c.items?.PokeYen || 0;
+                if (yen > 0) {
+                    acc[c.userId] = (acc[c.userId] || 0) + yen;
+                }
+                return acc;
+            }, {});
+            const sortedPokeyenContributors = Object.entries(pokeyenScores).sort((a, b) => b[1] - a[1]).slice(0, 5); // Top 5 Pokeyen contributors
+
+            // Helper to get Pokeyen contribution titles and colors based on rank
+            const getPokeyenTitleAndColor = (rank) => {
+                const titles = [ "Poké Tycoon", "GTL Baron", "Item Magnate", "Berry Boss", "Charm Collector" ];
+                const colors = ['text-yellow-500', 'text-gray-400', 'text-orange-400', 'text-green-500', 'text-blue-500'];
+                return {
+                    title: titles[rank] || "Contributor",
+                    color: colors[rank] || 'text-gray-500'
+                };
+            };
+
             const leaderboardContainer = document.getElementById('dashboard-leaderboard');
             if (leaderboardContainer) {
-                if (sortedContributors.length === 0) { leaderboardContainer.innerHTML = `<p class="text-gray-500">No contributions have been verified yet.</p>`; } 
-                else { leaderboardContainer.innerHTML = (await Promise.all(sortedContributors.map(async ([userId, score], index) => { const username = await getUsername(userId); return `<div class="flex items-center justify-between text-sm p-2 rounded-md ${index === 0 ? 'bg-yellow-100' : ''}"><span class="font-semibold text-gray-700">${index + 1}. ${username}</span><span class="font-bold text-teal-700">${score.toLocaleString()} contributions</span></div>`; }))).join(''); }
+                if (sortedPokeyenContributors.length === 0) { leaderboardContainer.innerHTML = `<p class="text-gray-500">No Pokeyen contributions yet.</p>`; } 
+                else { leaderboardContainer.innerHTML = (await Promise.all(sortedPokeyenContributors.map(async ([userId, score], index) => { 
+                    const username = await getUsername(userId); 
+                    const { title, color } = getPokeyenTitleAndColor(index);
+                    return `<div class="flex items-center justify-between text-sm p-2 rounded-md ${index === 0 ? 'bg-yellow-100' : ''}">
+                                <span class="font-semibold text-gray-700">${index + 1}. ${username}</span>
+                                <span class="font-bold ${color}">${title}</span>
+                                <span class="font-bold text-yellow-600">${score.toLocaleString()} ¥</span>
+                            </div>`; 
+                }))).join(''); }
             }
         }
 
@@ -3084,7 +3182,7 @@
         // Renders the Admin Panel view
         async function renderAdminPanel() {
             // Access control for Admin Panel
-            if (!['Superadmin', 'Admin'].includes(currentUserRole)) { 
+            if (!checkPermission('canManageUsers')) { // Using the new permission for clarity
                 mainContent.innerHTML = `<p class="text-red-500 text-center p-8">Access Denied. You must be an Admin or Superadmin to view this page.</p>`; 
                 return; 
             }
@@ -3125,22 +3223,31 @@
             
             // User Role Management
             const allUsersQuery = query(collection(db, "users"));
-            const allUsersSnapshot = await getDocs(allUsersQuery); // Fetch all users
-            const allUsers = allUsersSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-
-            const usersContainer = document.getElementById('user-roles-container');
-            if(usersContainer) {
-                usersContainer.innerHTML = allUsers.map(user => {
-                    if (user.id === SUPERADMIN_UID) return `<div class="flex justify-between items-center"><p>${user.username} <span class="text-xs font-bold text-yellow-500">Superadmin</span></p></div>`;
-                    return `<div class="flex justify-between items-center"><p>${user.username}</p><select data-uid="${user.id}" class="role-selector p-1 border rounded"><option value="Member" ${user.role === 'Member' ? 'selected' : ''}>Member</option><option value="Staff" ${user.role === 'Staff' ? 'selected' : ''}>Staff</option><option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option></select></div>`;
-                }).join('');
-                // Attach change listener for role selectors
-                document.querySelectorAll('.role-selector').forEach(sel => { sel.onchange = async (e) => await updateDoc(doc(db, "users", e.target.dataset.uid), { role: e.target.value }); });
-            }
+            // Listen for real-time updates to user roles
+            const usersUnsub = onSnapshot(allUsersQuery, async (snapshot) => {
+                const allUsers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                const usersContainer = document.getElementById('user-roles-container');
+                if(usersContainer) {
+                    usersContainer.innerHTML = (await Promise.all(allUsers.map(async user => {
+                        const isSuperadmin = user.id === SUPERADMIN_UID;
+                        const username = await getUsername(user.id); // Ensure username is fetched
+                        if (isSuperadmin) return `<div class="flex justify-between items-center"><p>${username} <span class="text-xs font-bold text-yellow-500">Superadmin</span></p></div>`;
+                        return `<div class="flex justify-between items-center"><p>${username}</p><select data-uid="${user.id}" class="role-selector p-1 border rounded">
+                                    <option value="Guest" ${user.role === 'Guest' ? 'selected' : ''}>Guest</option>
+                                    <option value="Member" ${user.role === 'Member' ? 'selected' : ''}>Member</option>
+                                    <option value="Staff" ${user.role === 'Staff' ? 'selected' : ''}>Staff</option>
+                                    <option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option>
+                                </select></div>`;
+                    }))).join('');
+                    // Attach change listener for role selectors
+                    document.querySelectorAll('.role-selector').forEach(sel => { sel.onchange = async (e) => await updateDoc(doc(db, "users", e.target.dataset.uid), { role: e.target.value }); });
+                }
+            });
+            unsubscribeListeners.push(usersUnsub); // Add listener to unsubscribe list
             
             // Player Team Permission Settings
             const permsContainer = document.getElementById('permissions-container');
-            const rolesToManage = ['Admin', 'Staff', 'Member'];
+            const rolesToManage = ['Admin', 'Staff', 'Member', 'Guest']; // Include Guest role
             // Define all granular permissions
             const actions = { 
                 canManagePokemonTeams: "Manage Pokémon Teams", 
@@ -3155,7 +3262,8 @@
                 canVerifyContributions: "Verify Task Contributions",
                 canDeletePublicTeams: "Delete Public Pokémon Teams",
                 canEditAnyTeamName: "Edit Any Team Name", // New
-                canAddPokedexBuilds: "Add Pokédex Builds" // New
+                canAddPokedexBuilds: "Add Pokédex Builds", // New
+                canManageUsers: "Manage User Roles (Admin Panel)" // New
             };
             if(permsContainer) {
                 permsContainer.innerHTML = rolesToManage.map(role => `
@@ -3320,19 +3428,31 @@
                             currentUsername = userData.username;
                             // Superadmin role is hardcoded by UID for highest privilege
                             currentUserRole = user.uid === SUPERADMIN_UID ? 'Superadmin' : userData.role;
+                            
                             // Auto-set Superadmin role in Firestore if UID matches
                             if (user.uid === SUPERADMIN_UID && userData.role !== 'Superadmin') { await updateDoc(userRef, { role: 'Superadmin' }); }
                             
-                            userProfileDisplay.textContent = `${currentUsername} (${currentUserRole})`; // Update UI
-                            // Show/hide admin panel button based on role
-                            document.getElementById('admin-panel-btn').style.display = ['Superadmin', 'Admin'].includes(currentUserRole) ? 'block' : 'none';
-                            
+                            // Hide/show navigation buttons based on role
+                            document.querySelectorAll('.nav-button').forEach(btn => {
+                                // Admin Panel button
+                                if (btn.dataset.view === 'admin-panel') {
+                                    btn.style.display = (currentUserRole === 'Superadmin' || currentUserRole === 'Admin') ? 'block' : 'none';
+                                } else if (currentUserRole === 'Guest') {
+                                    // Hide all other nav items for Guest, except Profile/Dashboard
+                                    if (btn.dataset.view !== 'dashboard' && btn.dataset.view !== 'profile') {
+                                        btn.style.display = 'none';
+                                    }
+                                } else {
+                                    btn.style.display = 'block'; // Show all for Member, Staff, Admin
+                                }
+                            });
+
                             authContainer.classList.add('hidden'); // Hide auth container
                             appContainer.classList.remove('hidden'); // Show app container
                             
                             await setupTeamSpace(currentUserId); // Setup team space for the logged-in user
                             await renderOfficialTeamSpaceButton(); // Render official team space button
-                            switchView('dashboard'); // Go to dashboard after successful setup
+                            switchView('dashboard'); // Go to dashboard after successful setup (Guest will see pending message)
                         } else { 
                             // If user object exists but no user document, sign out (data inconsistency)
                             await signOut(auth); 
@@ -3341,6 +3461,13 @@
                         // No user logged in, show auth container
                         authContainer.classList.remove('hidden');
                         appContainer.classList.add('hidden');
+                        // Reset nav buttons to default visible state if logged out
+                         document.querySelectorAll('.nav-button').forEach(btn => {
+                            btn.style.display = 'block'; 
+                            // Re-attach event listeners on logout to clear any guest-specific restrictions
+                            btn.removeEventListener('click', handleNavButtonClick); 
+                            btn.addEventListener('click', handleNavButtonClick);
+                        });
                     }
                 } catch (error) { console.error("Authentication Error:", error); } 
                 finally { showLoading(false); }
@@ -3375,7 +3502,7 @@
                 try { 
                     const userCredential = await createUserWithEmailAndPassword(auth, email, password); 
                     const user = userCredential.user; 
-                    let role = user.uid === SUPERADMIN_UID ? 'Superadmin' : 'Member'; // Assign default role
+                    let role = user.uid === SUPERADMIN_UID ? 'Superadmin' : 'Guest'; // Assign default role as Guest
                     await setDoc(doc(db, "users", user.uid), { username, email, role }); // Create user document
                 } catch (error) { 
                     alert(error.message); 
@@ -3384,11 +3511,8 @@
                 } 
             };
 
-            // Logout button
-            logoutBtn.onclick = () => signOut(auth);
-
-            // Sidebar navigation buttons
-            document.querySelectorAll('.nav-button').forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
+            // Sidebar navigation buttons - now use the centralized handler
+            document.querySelectorAll('.nav-button').forEach(btn => btn.addEventListener('click', handleNavButtonClick));
 
             // Change Team Space button
             changeTeamSpaceBtn.addEventListener('click', () => { 
@@ -3508,11 +3632,11 @@
                     <button data-view="pokedex" class="nav-button w-full text-left font-semibold px-4 py-2 rounded-lg hover:bg-gray-100 transition">Pokédex & Builds</button>
                     <button data-view="ev-hotspots" class="nav-button w-full text-left font-semibold px-4 py-2 rounded-lg hover:bg-gray-100 transition">EV Hotspots</button>
                     <button data-view="money-guide" class="nav-button w-full text-left font-semibold px-4 py-2 rounded-lg hover:bg-gray-100 transition">Money Guide</button>
+                    <button data-view="profile" class="nav-button w-full text-left font-semibold px-4 py-2 rounded-lg hover:bg-gray-100 transition">Profile</button>
                     <button data-view="admin-panel" id="admin-panel-btn" class="nav-button w-full text-left font-semibold px-4 py-2 rounded-lg hover:bg-gray-100 transition" style="display: none;">Admin Panel</button>
                 </nav>
                 <div class="sidebar-bottom p-4 border-t space-y-3">
-                    <div id="user-profile-display" class="text-sm text-center text-gray-600 font-semibold"></div>
-                    <button id="logout-btn" class="w-full text-sm text-red-500 hover:underline">Logout</button>
+                    <!-- Removed userProfileDisplay and logoutBtn -->
                     <div id="official-team-space-container" class="border-t pt-3"></div>
                     <div class="border-t pt-3">
                         <h4 class="font-bold mb-2">My Team Spaces</h4>
